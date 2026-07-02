@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Package } from 'lucide-react'
+import { Reorder } from 'framer-motion'
+import { GripVertical, Loader2, Package } from 'lucide-react'
 import { StatusBadge } from '../../components/ui/Badge'
 import Card from '../../components/ui/Card'
 import { api, ApiError } from '../../lib/api'
@@ -49,6 +50,9 @@ export default function AdminPedidos() {
   const [confirmingOrder, setConfirmingOrder] = useState<Order | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Local drag-and-drop order for the currently visible filter — purely a
+  // front-end display convenience, never persisted to the backend.
+  const [visible, setVisible] = useState<Order[]>([])
 
   const load = () => {
     setLoading(true)
@@ -56,6 +60,10 @@ export default function AdminPedidos() {
   }
 
   useEffect(load, [])
+
+  useEffect(() => {
+    setVisible(orders.filter((o) => filter === 'all' || o.status === filter))
+  }, [orders, filter])
 
   const advance = async (order: Order, requirePayment: boolean) => {
     if (requirePayment) {
@@ -93,8 +101,6 @@ export default function AdminPedidos() {
     }
   }
 
-  const visible = orders.filter((o) => filter === 'all' || o.status === filter)
-
   return (
     <div>
       <h1 className="text-2xl font-black mb-6">Pedidos</h1>
@@ -125,7 +131,7 @@ export default function AdminPedidos() {
           <p>Nenhum pedido aqui.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Reorder.Group axis="y" values={visible} onReorder={setVisible} className="space-y-4">
           {visible.map((order) => {
             const next = nextStatusFor(order)
             const canAdvance = !!next
@@ -133,44 +139,47 @@ export default function AdminPedidos() {
               order.status === 'retiradas' && order.payment_method !== 'pix' && order.payment_status !== 'pago'
 
             return (
-              <Card key={order.id} className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-son-silver-dim">#{order.id.slice(0, 8)}</span>
-                  <StatusBadge status={order.status} />
-                </div>
-                <p className="font-semibold text-white">{order.customer_name}</p>
-                <p className="text-xs text-son-silver-dim mb-2">{order.customer_whatsapp}</p>
-                <ul className="text-sm text-son-silver space-y-0.5 mb-2">
-                  {order.items.map((item) => (
-                    <li key={item.product_id}>
-                      {item.quantity}x {item.product_name}
-                    </li>
-                  ))}
-                </ul>
-                <div className="flex items-center justify-between text-sm mb-3">
-                  <span className="text-son-silver-dim">
-                    {order.delivery_type === 'retirada' ? 'Retirada' : `Entrega · ${order.neighborhood}`} ·{' '}
-                    {order.payment_method}
-                  </span>
-                  <span className="sunset-text font-bold">{currency(order.total)}</span>
-                </div>
-                {canAdvance && (
-                  <button
-                    onClick={() => advance(order, requiresPaymentConfirm)}
-                    disabled={busyId === order.id}
-                    className="btn-secondary w-full text-sm py-2"
-                  >
-                    {busyId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                    {NEXT_LABEL[order.status]}
-                  </button>
-                )}
-                {order.status === 'pedido_pronto' && order.delivery_type === 'entrega' && (
-                  <p className="text-xs text-son-silver-dim text-center">Aguardando motoboy</p>
-                )}
-              </Card>
+              <Reorder.Item key={order.id} value={order}>
+                <Card className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <GripVertical className="w-4 h-4 text-son-silver-dim flex-shrink-0 cursor-grab active:cursor-grabbing" />
+                    <span className="text-xs text-son-silver-dim flex-1">#{order.id.slice(0, 8)}</span>
+                    <StatusBadge status={order.status} />
+                  </div>
+                  <p className="font-semibold text-white">{order.customer_name}</p>
+                  <p className="text-xs text-son-silver-dim mb-2">{order.customer_whatsapp}</p>
+                  <ul className="text-sm text-son-silver space-y-0.5 mb-2">
+                    {order.items.map((item) => (
+                      <li key={item.product_id}>
+                        {item.quantity}x {item.product_name}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex items-center justify-between text-sm mb-3">
+                    <span className="text-son-silver-dim">
+                      {order.delivery_type === 'retirada' ? 'Retirada' : `Entrega · ${order.neighborhood}`} ·{' '}
+                      {order.payment_method}
+                    </span>
+                    <span className="sunset-text font-bold">{currency(order.total)}</span>
+                  </div>
+                  {canAdvance && (
+                    <button
+                      onClick={() => advance(order, requiresPaymentConfirm)}
+                      disabled={busyId === order.id}
+                      className="btn-secondary w-full text-sm py-2"
+                    >
+                      {busyId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                      {NEXT_LABEL[order.status]}
+                    </button>
+                  )}
+                  {order.status === 'pedido_pronto' && order.delivery_type === 'entrega' && (
+                    <p className="text-xs text-son-silver-dim text-center">Aguardando motoboy</p>
+                  )}
+                </Card>
+              </Reorder.Item>
             )
           })}
-        </div>
+        </Reorder.Group>
       )}
 
       {confirmingOrder && (
