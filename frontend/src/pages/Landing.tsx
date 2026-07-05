@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import heroBanner from '../assets/hero-banner.png'
 import WhatsAppFab from '../components/WhatsAppFab'
+import CartFab from '../components/CartFab'
 
 export default function Landing() {
   return (
@@ -19,6 +20,7 @@ export default function Landing() {
       </Link>
 
       <WhatsAppFab />
+      <CartFab />
 
       <section className="relative z-10 max-w-4xl mx-auto px-6 sm:px-10 pt-8 sm:pt-10 pb-20 text-center">
         <motion.h1
