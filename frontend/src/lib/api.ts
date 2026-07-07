@@ -3,6 +3,7 @@ import { useMotoboyAuth } from '../store/motoboyAuth'
 import { ApiError } from './apiError'
 import { localApi } from './localApi'
 import { supabasePublicApi } from './supabasePublicApi'
+import { supabase } from './supabaseClient'
 import type { Category, FinanceiroSummary, Motoboy, Order, Product, ShippingRate } from './types'
 
 // Ainda usado só pro login admin/motoboy e Pix, que continuam no backend
@@ -70,17 +71,20 @@ const remoteApi = {
     simulatePixPaid: (id: string) =>
       request<Order>(`/api/orders/${id}/simulate-pix-paid`, { method: 'POST' }),
   },
+  // Login fala direto com o Supabase (RPC sunset.admin_login/motoboy_login —
+  // ver supabase/sunset_admin_auth.sql), sem passar pelo Railway. O token
+  // retornado é uma sessão opaca guardada em sunset.sessions, não um JWT.
   auth: {
-    adminLogin: (email: string, password: string) =>
-      request<{ token: string; name: string }>('/api/auth/admin/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      }),
-    motoboyLogin: (email: string, password: string) =>
-      request<{ token: string; name: string }>('/api/auth/motoboy/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      }),
+    adminLogin: async (email: string, password: string) => {
+      const { data, error } = await supabase.rpc('admin_login', { p_email: email, p_password: password })
+      if (error) throw new ApiError(401, 'Credenciais inválidas.')
+      return data as { token: string; name: string }
+    },
+    motoboyLogin: async (email: string, password: string) => {
+      const { data, error } = await supabase.rpc('motoboy_login', { p_email: email, p_password: password })
+      if (error) throw new ApiError(401, 'Credenciais inválidas.')
+      return data as { token: string; name: string }
+    },
   },
   admin: {
     categories: {
