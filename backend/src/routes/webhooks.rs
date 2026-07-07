@@ -26,8 +26,19 @@ async fn handle(state: &AppState, payload: &Value) -> anyhow::Result<()> {
         payload.get("event").and_then(Value::as_str).unwrap_or("?"),
         payload.get("instance").and_then(Value::as_str).unwrap_or("?"),
     );
+    // TEMP: dumping the full payload while we pin down the exact shape this
+    // Evolution API version sends — remove once location capture is confirmed
+    // working end-to-end.
+    tracing::info!("evolution webhook payload: {payload}");
 
     let data = payload.get("data").unwrap_or(&Value::Null);
+    // Some Evolution API versions nest messages.upsert events under
+    // data.messages[0] instead of putting key/message directly on data —
+    // handle both shapes.
+    let data = data
+        .get("messages")
+        .and_then(|m| m.get(0))
+        .unwrap_or(data);
     let message = data.get("message").unwrap_or(&Value::Null);
 
     // WhatsApp has two distinct share types: a fixed pin ("locationMessage")
