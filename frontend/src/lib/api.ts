@@ -52,6 +52,12 @@ function motoboyToken() {
   return useMotoboyAuth.getState().token ?? undefined
 }
 
+async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.rpc(fn, args)
+  if (error) throw new ApiError(error.message === 'unauthorized' ? 401 : 400, error.message)
+  return data as T
+}
+
 const remoteApi = {
   // Catálogo, checkout e consulta de pedido falam direto com o Supabase
   // (RLS + RPCs) — ver frontend/src/lib/supabasePublicApi.ts e
@@ -96,95 +102,101 @@ const remoteApi = {
       return data as { email: string; name: string }
     },
   },
+  // CRUD do admin e fila do motoboy falam direto com o Supabase via RPC
+  // (ver supabase/sunset_admin_crud.sql), passando o token de
+  // sunset.sessions como primeiro parâmetro em vez de header Authorization.
   admin: {
     categories: {
-      list: () => request<Category[]>('/api/admin/categories', { token: adminToken() }),
-      create: (name: string) =>
-        request<Category>('/api/admin/categories', {
-          method: 'POST',
-          body: JSON.stringify({ name }),
-          token: adminToken(),
-        }),
-      delete: (id: string) =>
-        request<void>(`/api/admin/categories/${id}`, { method: 'DELETE', token: adminToken() }),
+      list: () => rpc<Category[]>('admin_list_categories', { p_token: adminToken() }),
+      create: (name: string) => rpc<Category>('admin_create_category', { p_token: adminToken(), p_name: name }),
+      delete: (id: string) => rpc<void>('admin_delete_category', { p_token: adminToken(), p_id: id }),
     },
     products: {
-      list: () => request<Product[]>('/api/admin/products', { token: adminToken() }),
+      list: () => rpc<Product[]>('admin_list_products', { p_token: adminToken() }),
       create: (payload: Partial<Product>) =>
-        request<Product>('/api/admin/products', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-          token: adminToken(),
+        rpc<Product>('admin_create_product', {
+          p_token: adminToken(),
+          p_name: payload.name,
+          p_description: payload.description ?? null,
+          p_price: payload.price,
+          p_quantity: payload.quantity,
+          p_image_url: payload.image_url ?? null,
+          p_category_id: payload.category_id ?? null,
+          p_active: payload.active ?? true,
         }),
       update: (id: string, payload: Partial<Product>) =>
-        request<Product>(`/api/admin/products/${id}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-          token: adminToken(),
+        rpc<Product>('admin_update_product', {
+          p_token: adminToken(),
+          p_id: id,
+          p_name: payload.name,
+          p_description: payload.description ?? null,
+          p_price: payload.price,
+          p_quantity: payload.quantity,
+          p_image_url: payload.image_url ?? null,
+          p_category_id: payload.category_id ?? null,
+          p_active: payload.active ?? true,
         }),
-      delete: (id: string) =>
-        request<void>(`/api/admin/products/${id}`, { method: 'DELETE', token: adminToken() }),
+      delete: (id: string) => rpc<void>('admin_delete_product', { p_token: adminToken(), p_id: id }),
     },
     motoboys: {
-      list: () => request<Motoboy[]>('/api/admin/motoboys', { token: adminToken() }),
+      list: () => rpc<Motoboy[]>('admin_list_motoboys', { p_token: adminToken() }),
       create: (payload: { name: string; phone: string; email: string; password: string }) =>
-        request<Motoboy>('/api/admin/motoboys', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-          token: adminToken(),
+        rpc<Motoboy>('admin_create_motoboy', {
+          p_token: adminToken(),
+          p_name: payload.name,
+          p_phone: payload.phone,
+          p_email: payload.email,
+          p_password: payload.password,
         }),
       update: (id: string, payload: Partial<Motoboy> & { password?: string }) =>
-        request<Motoboy>(`/api/admin/motoboys/${id}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-          token: adminToken(),
+        rpc<Motoboy>('admin_update_motoboy', {
+          p_token: adminToken(),
+          p_id: id,
+          p_name: payload.name,
+          p_phone: payload.phone,
+          p_email: payload.email,
+          p_password: payload.password || null,
+          p_active: payload.active ?? true,
         }),
-      delete: (id: string) =>
-        request<void>(`/api/admin/motoboys/${id}`, { method: 'DELETE', token: adminToken() }),
+      delete: (id: string) => rpc<void>('admin_delete_motoboy', { p_token: adminToken(), p_id: id }),
     },
     orders: {
-      list: (status?: string) =>
-        request<Order[]>(`/api/admin/orders${status ? `?status=${status}` : ''}`, {
-          token: adminToken(),
-        }),
+      list: (status?: string) => rpc<Order[]>('admin_list_orders', { p_token: adminToken(), p_status: status ?? null }),
       updateStatus: (id: string, status: string, paymentConfirmed?: boolean) =>
-        request<Order>(`/api/admin/orders/${id}/status`, {
-          method: 'PATCH',
-          body: JSON.stringify({ status, payment_confirmed: paymentConfirmed }),
-          token: adminToken(),
+        rpc<Order>('admin_update_order_status', {
+          p_token: adminToken(),
+          p_order_id: id,
+          p_status: status,
+          p_payment_confirmed: paymentConfirmed ?? null,
         }),
     },
     shippingRates: {
-      list: () => request<ShippingRate[]>('/api/admin/shipping-rates', { token: adminToken() }),
+      list: () => rpc<ShippingRate[]>('admin_list_shipping_rates', { p_token: adminToken() }),
       update: (neighborhood: string, price: number) =>
-        request<ShippingRate>(`/api/admin/shipping-rates/${encodeURIComponent(neighborhood)}`, {
-          method: 'PUT',
-          body: JSON.stringify({ price }),
-          token: adminToken(),
+        rpc<ShippingRate>('admin_update_shipping_rate', {
+          p_token: adminToken(),
+          p_neighborhood: neighborhood,
+          p_price: price,
         }),
     },
     financeiro: {
-      get: () => request<FinanceiroSummary>('/api/admin/financeiro', { token: adminToken() }),
+      get: () => rpc<FinanceiroSummary>('admin_financeiro', { p_token: adminToken() }),
     },
   },
   motoboy: {
     orders: {
-      list: (status: string) =>
-        request<Order[]>(`/api/motoboy/orders?status=${status}`, { token: motoboyToken() }),
+      list: (status: string) => rpc<Order[]>('motoboy_list_orders', { p_token: motoboyToken(), p_status: status }),
       requestLocation: (orderIds: string[]) =>
-        request<{ updated: Order[]; skipped: { id: string; reason: string }[] }>(
-          '/api/motoboy/orders/request-location',
-          {
-            method: 'POST',
-            body: JSON.stringify({ order_ids: orderIds }),
-            token: motoboyToken(),
-          }
-        ),
+        rpc<{ updated: Order[]; skipped: { id: string; reason: string }[] }>('motoboy_request_location', {
+          p_token: motoboyToken(),
+          p_order_ids: orderIds,
+        }),
       updateStatus: (id: string, status: string, paymentConfirmed?: boolean) =>
-        request<Order>(`/api/motoboy/orders/${id}/status`, {
-          method: 'PATCH',
-          body: JSON.stringify({ status, payment_confirmed: paymentConfirmed }),
-          token: motoboyToken(),
+        rpc<Order>('motoboy_update_order_status', {
+          p_token: motoboyToken(),
+          p_order_id: id,
+          p_status: status,
+          p_payment_confirmed: paymentConfirmed ?? null,
         }),
     },
   },
