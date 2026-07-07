@@ -91,15 +91,12 @@ const remoteApi = {
       if (error) throw new ApiError(401, 'Credenciais inválidas.')
       return data as { token: string; name: string }
     },
-    updateAdminProfile: async (currentPassword: string, newEmail?: string, newPassword?: string) => {
-      const { data, error } = await supabase.rpc('admin_update_profile', {
+    setAdminPassword: async (newPassword: string) => {
+      const { error } = await supabase.rpc('admin_set_password', {
         p_token: adminToken(),
-        p_current_password: currentPassword,
-        p_new_email: newEmail || null,
-        p_new_password: newPassword || null,
+        p_new_password: newPassword,
       })
       if (error) throw new ApiError(400, error.message)
-      return data as { email: string; name: string }
     },
   },
   // CRUD do admin e fila do motoboy falam direto com o Supabase via RPC

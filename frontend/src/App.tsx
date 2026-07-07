@@ -38,7 +38,7 @@ export default function App() {
           <Route path="motoboys" element={<AdminMotoboys />} />
           <Route path="frete" element={<AdminFrete />} />
           <Route path="financeiro" element={<AdminFinanceiro />} />
-          <Route path="conta" element={<AdminSenha />} />
+          <Route path="senha" element={<AdminSenha />} />
         </Route>
 
         <Route path="/motoboy/login" element={<MotoboyLogin />} />

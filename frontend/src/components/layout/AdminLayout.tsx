@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { href: '/admin/motoboys', label: 'Motoboys', icon: Truck },
   { href: '/admin/frete', label: 'Frete', icon: MapPinned },
   { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet },
-  { href: '/admin/conta', label: 'Conta', icon: KeyRound },
+  { href: '/admin/senha', label: 'Senha', icon: KeyRound },
 ]
 
 export default function AdminLayout() {

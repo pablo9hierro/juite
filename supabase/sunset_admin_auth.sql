@@ -164,45 +164,26 @@ END;
 $$;
 
 -- ─────────────────────────────────────────────────────
--- 4. Trocar o próprio e-mail e/ou senha (painel admin →
---    /admin/conta). Os dois parâmetros novos são opcionais —
---    manda só o que quer trocar, deixa o outro em branco/NULL.
+-- 4. Trocar a própria senha (painel admin → /admin/senha).
+--    O token já prova que é o admin logado, não pede senha atual
+--    de novo — é só um usuário admin único, sem e-mail trocável
+--    por aqui (fixo no seed).
 -- ─────────────────────────────────────────────────────
 
-CREATE OR REPLACE FUNCTION sunset.admin_update_profile(
-  p_token text,
-  p_current_password text,
-  p_new_email text DEFAULT NULL,
-  p_new_password text DEFAULT NULL
-)
-RETURNS jsonb
+CREATE OR REPLACE FUNCTION sunset.admin_set_password(p_token text, p_new_password text)
+RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = sunset, public, extensions
 AS $$
 DECLARE
   v_admin_id text := sunset._require_admin(p_token);
-  v_admin sunset.admins%ROWTYPE;
 BEGIN
-  SELECT * INTO v_admin FROM sunset.admins WHERE id = v_admin_id;
-  IF v_admin.password_hash <> crypt(p_current_password, v_admin.password_hash) THEN
-    RAISE EXCEPTION 'current password is incorrect';
+  IF length(trim(p_new_password)) < 6 THEN
+    RAISE EXCEPTION 'new password must be at least 6 characters';
   END IF;
-
-  IF p_new_email IS NOT NULL AND trim(p_new_email) <> '' THEN
-    UPDATE sunset.admins SET email = trim(p_new_email) WHERE id = v_admin_id;
-  END IF;
-
-  IF p_new_password IS NOT NULL AND trim(p_new_password) <> '' THEN
-    IF length(trim(p_new_password)) < 6 THEN
-      RAISE EXCEPTION 'new password must be at least 6 characters';
-    END IF;
-    UPDATE sunset.admins SET password_hash = crypt(p_new_password, gen_salt('bf')) WHERE id = v_admin_id;
-  END IF;
-
-  SELECT * INTO v_admin FROM sunset.admins WHERE id = v_admin_id;
-  RETURN jsonb_build_object('email', v_admin.email, 'name', v_admin.name);
+  UPDATE sunset.admins SET password_hash = crypt(p_new_password, gen_salt('bf')) WHERE id = v_admin_id;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION sunset.admin_update_profile(text, text, text, text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION sunset.admin_set_password(text, text) TO anon, authenticated;
