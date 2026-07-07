@@ -269,6 +269,20 @@ async function motoboyLogin(email: string, password: string): Promise<{ token: s
   return { token: `local-motoboy:${m.id}`, name: m.name }
 }
 
+async function updateAdminProfile(
+  currentPassword: string,
+  newEmail?: string,
+  newPassword?: string
+): Promise<{ email: string; name: string }> {
+  if (currentPassword !== ADMIN_CREDENTIALS.password) throw new ApiError(400, 'current password is incorrect')
+  if (newEmail && newEmail.trim()) ADMIN_CREDENTIALS.email = newEmail.trim()
+  if (newPassword && newPassword.trim()) {
+    if (newPassword.trim().length < 6) throw new ApiError(400, 'new password must be at least 6 characters')
+    ADMIN_CREDENTIALS.password = newPassword
+  }
+  return { email: ADMIN_CREDENTIALS.email, name: ADMIN_CREDENTIALS.name }
+}
+
 // ---------- admin ----------
 
 async function adminListCategories(): Promise<Category[]> {
@@ -569,7 +583,7 @@ export const localApi = {
     refreshPayment,
     simulatePixPaid,
   },
-  auth: { adminLogin, motoboyLogin },
+  auth: { adminLogin, motoboyLogin, updateAdminProfile },
   admin: {
     categories: { list: adminListCategories, create: createCategory, delete: deleteCategory },
     products: { list: adminListProducts, create: createProduct, update: updateProduct, delete: deleteProduct },

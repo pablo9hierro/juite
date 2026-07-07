@@ -12,6 +12,7 @@ import AdminProdutos from './pages/admin/AdminProdutos'
 import AdminMotoboys from './pages/admin/AdminMotoboys'
 import AdminFrete from './pages/admin/AdminFrete'
 import AdminFinanceiro from './pages/admin/AdminFinanceiro'
+import AdminSenha from './pages/admin/AdminSenha'
 import MotoboyLogin from './pages/motoboy/MotoboyLogin'
 import MotoboyFila from './pages/motoboy/MotoboyFila'
 import AdminLayout from './components/layout/AdminLayout'
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="motoboys" element={<AdminMotoboys />} />
           <Route path="frete" element={<AdminFrete />} />
           <Route path="financeiro" element={<AdminFinanceiro />} />
+          <Route path="conta" element={<AdminSenha />} />
         </Route>
 
         <Route path="/motoboy/login" element={<MotoboyLogin />} />

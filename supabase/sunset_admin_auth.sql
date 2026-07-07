@@ -40,12 +40,12 @@ ALTER TABLE sunset.sessions ENABLE ROW LEVEL SECURITY;
 -- tabela só é lida/escrita pelas funções SECURITY DEFINER abaixo,
 -- nunca diretamente pela API REST.
 
--- Re-hash das credenciais de teste seedadas pelo backend Rust em
--- argon2 (que o Postgres não verifica nativamente) pra bcrypt via
--- pgcrypto. Se você criou outras contas de admin/motoboy além das
--- duas de teste, a senha delas precisa ser resetada também.
-UPDATE sunset.admins SET password_hash = crypt('admin123', gen_salt('bf'))
-  WHERE email = 'admin@sonset.com';
+-- Re-hash das credenciais seedadas pelo backend Rust em argon2 (que o
+-- Postgres não verifica nativamente) pra bcrypt via pgcrypto, e troca o
+-- admin de teste pro e-mail/senha reais. WHERE cobre os e-mails antigos e o
+-- novo pra esse UPDATE poder ser re-executado sem erro.
+UPDATE sunset.admins SET email = 'pablo@gmail.com', password_hash = crypt('123456', gen_salt('bf'))
+  WHERE email IN ('admin@sonset.com', 'sunset@gmail.com', 'pablo@gmail.com');
 UPDATE sunset.motoboys SET password_hash = crypt('motoboy123', gen_salt('bf'))
   WHERE email = 'motoboy@sonset.com';
 
@@ -152,3 +152,47 @@ BEGIN
   RETURN v_subject;
 END;
 $$;
+
+-- ─────────────────────────────────────────────────────
+-- 4. Trocar o próprio e-mail e/ou senha (painel admin →
+--    /admin/conta). Os dois parâmetros novos são opcionais —
+--    manda só o que quer trocar, deixa o outro em branco/NULL.
+-- ─────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION sunset.admin_update_profile(
+  p_token text,
+  p_current_password text,
+  p_new_email text DEFAULT NULL,
+  p_new_password text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = sunset, public
+AS $$
+DECLARE
+  v_admin_id text := sunset._require_admin(p_token);
+  v_admin sunset.admins%ROWTYPE;
+BEGIN
+  SELECT * INTO v_admin FROM sunset.admins WHERE id = v_admin_id;
+  IF v_admin.password_hash <> crypt(p_current_password, v_admin.password_hash) THEN
+    RAISE EXCEPTION 'current password is incorrect';
+  END IF;
+
+  IF p_new_email IS NOT NULL AND trim(p_new_email) <> '' THEN
+    UPDATE sunset.admins SET email = trim(p_new_email) WHERE id = v_admin_id;
+  END IF;
+
+  IF p_new_password IS NOT NULL AND trim(p_new_password) <> '' THEN
+    IF length(trim(p_new_password)) < 6 THEN
+      RAISE EXCEPTION 'new password must be at least 6 characters';
+    END IF;
+    UPDATE sunset.admins SET password_hash = crypt(p_new_password, gen_salt('bf')) WHERE id = v_admin_id;
+  END IF;
+
+  SELECT * INTO v_admin FROM sunset.admins WHERE id = v_admin_id;
+  RETURN jsonb_build_object('email', v_admin.email, 'name', v_admin.name);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION sunset.admin_update_profile(text, text, text, text) TO anon, authenticated;

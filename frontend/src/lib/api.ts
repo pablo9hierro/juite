@@ -85,6 +85,16 @@ const remoteApi = {
       if (error) throw new ApiError(401, 'Credenciais inválidas.')
       return data as { token: string; name: string }
     },
+    updateAdminProfile: async (currentPassword: string, newEmail?: string, newPassword?: string) => {
+      const { data, error } = await supabase.rpc('admin_update_profile', {
+        p_token: adminToken(),
+        p_current_password: currentPassword,
+        p_new_email: newEmail || null,
+        p_new_password: newPassword || null,
+      })
+      if (error) throw new ApiError(400, error.message)
+      return data as { email: string; name: string }
+    },
   },
   admin: {
     categories: {
