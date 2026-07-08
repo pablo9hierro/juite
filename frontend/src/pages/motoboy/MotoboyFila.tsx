@@ -84,6 +84,17 @@ export default function MotoboyFila() {
     }
   }
 
+  const advanceSelected = async () => {
+    if (selected.length === 0) return
+    setRequesting(true)
+    try {
+      await Promise.all(selected.map((id) => api.motoboy.orders.updateStatus(id, 'em_rota_de_entrega')))
+      load()
+    } finally {
+      setRequesting(false)
+    }
+  }
+
   const advance = async (order: Order, requirePayment: boolean) => {
     const next = NEXT_STATUS[order.status]
     if (!next) return
@@ -147,6 +158,13 @@ export default function MotoboyFila() {
         </button>
       )}
 
+      {tab === 'aguardando_localizacao' && selected.length > 0 && (
+        <button onClick={advanceSelected} disabled={requesting} className="btn-primary w-full mb-4 text-sm py-3">
+          {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+          Saiu para entrega ({selected.length})
+        </button>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
@@ -175,7 +193,7 @@ export default function MotoboyFila() {
                 className="bg-son-surface border border-white/5 rounded-2xl p-4 flex items-start gap-3"
               >
                 <GripVertical className="w-4 h-4 text-son-silver-dim mt-1 flex-shrink-0 cursor-grab active:cursor-grabbing" />
-                {tab === 'pedido_pronto' && (
+                {(tab === 'pedido_pronto' || tab === 'aguardando_localizacao') && (
                   <input
                     type="checkbox"
                     checked={selected.includes(order.id)}
@@ -184,30 +202,30 @@ export default function MotoboyFila() {
                   />
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center justify-between mb-1 gap-2">
                     <span className="font-semibold text-white truncate">{order.customer_name}</span>
-                    <StatusBadge status={order.status} />
+                    {order.customer_lat != null && order.customer_lng != null ? (
+                      <a
+                        href={`https://www.google.com/maps?q=${order.customer_lat},${order.customer_lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors flex-shrink-0"
+                      >
+                        <MapPinned className="w-3 h-3" />
+                        Localização recebida
+                      </a>
+                    ) : (
+                      <StatusBadge status={order.status} />
+                    )}
                   </div>
-                  <p className="text-xs text-son-silver-dim">
-                    <WhatsAppLink phone={order.customer_whatsapp} className="hover:text-son-pink hover:underline inline-flex items-center gap-1" />
+                  <p className="text-xs text-son-silver-dim mb-1">
+                    <WhatsAppLink phone={order.customer_whatsapp} />
                   </p>
-                  <p className="text-sm text-son-silver mt-1">
+                  <p className="text-sm text-son-silver-dim mt-1">
                     <MapPin className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
                     {order.neighborhood}
-                    {order.address ? ` · ${order.address}` : ''}
                   </p>
-                  {order.customer_lat != null && order.customer_lng != null && (
-                    <a
-                      href={`https://www.google.com/maps?q=${order.customer_lat},${order.customer_lng}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1.5 mt-1.5 text-xs font-semibold text-green-500 hover:underline"
-                    >
-                      <MapPinned className="w-3.5 h-3.5" />
-                      Localização recebida — abrir no mapa
-                    </a>
-                  )}
                   <div className="flex items-center justify-between text-sm mt-2">
                     <span className="text-son-silver-dim">{order.payment_method}</span>
                     <span className="sunset-text font-bold">{currency(order.total)}</span>

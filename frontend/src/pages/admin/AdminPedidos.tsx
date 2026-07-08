@@ -149,10 +149,7 @@ export default function AdminPedidos() {
                   </div>
                   <p className="font-semibold text-white">{order.customer_name}</p>
                   <p className="mb-2">
-                    <WhatsAppLink
-                      phone={order.customer_whatsapp}
-                      className="text-xs text-son-silver-dim hover:text-son-pink hover:underline inline-flex items-center gap-1"
-                    />
+                    <WhatsAppLink phone={order.customer_whatsapp} />
                   </p>
                   <ul className="text-sm text-son-silver space-y-0.5 mb-2">
                     {order.items.map((item) => (

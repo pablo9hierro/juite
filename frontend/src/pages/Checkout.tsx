@@ -78,7 +78,6 @@ export default function Checkout() {
         customer_whatsapp: `55${digits}`,
         delivery_type: pickupAtStore ? 'retirada' : 'entrega',
         neighborhood: pickupAtStore ? undefined : customer.neighborhood,
-        address: pickupAtStore ? undefined : customer.address,
         payment_method: paymentMethod,
         items: lines.map((l) => ({ product_id: l.product.id, quantity: l.item.quantity })),
       })
@@ -137,31 +136,23 @@ export default function Checkout() {
           </label>
 
           {!pickupAtStore && (
-            <>
-              <div>
-                <label className="label">Bairro *</label>
-                <Autocomplete
-                  value={customer.neighborhood}
-                  onChange={(v) => customer.set({ neighborhood: v })}
-                  options={neighborhoods}
-                  placeholder="Digite para buscar o bairro em João Pessoa..."
-                />
-                {customer.neighborhood && (
-                  <p className="text-xs text-son-silver-dim mt-1">
-                    Frete para {customer.neighborhood}: {currency(shippingPrice)}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="label">Endereço (rua, número, referência)</label>
-                <input
-                  className="input-field"
-                  value={customer.address}
-                  onChange={(e) => customer.set({ address: e.target.value })}
-                  placeholder="Rua, número, ponto de referência"
-                />
-              </div>
-            </>
+            <div>
+              <label className="label">Bairro *</label>
+              <Autocomplete
+                value={customer.neighborhood}
+                onChange={(v) => customer.set({ neighborhood: v })}
+                options={neighborhoods}
+                placeholder="Digite para buscar o bairro em João Pessoa..."
+              />
+              {customer.neighborhood && (
+                <p className="text-xs text-son-silver-dim mt-1">
+                  Frete para {customer.neighborhood}: {currency(shippingPrice)}
+                </p>
+              )}
+              <p className="text-xs text-son-silver-dim mt-2">
+                Quando seu pedido ficar pronto, o motoboy vai te chamar no WhatsApp pedindo sua localização exata.
+              </p>
+            </div>
           )}
 
           <div>
