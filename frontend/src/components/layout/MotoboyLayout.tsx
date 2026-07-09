@@ -1,7 +1,8 @@
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { LogOut, MessageCircle, Truck, Wallet } from 'lucide-react'
+import { LogOut, MessageCircle, Moon, Sun, Truck, Wallet } from 'lucide-react'
 import Logo from '../ui/Logo'
 import { useMotoboyAuth } from '../../store/motoboyAuth'
+import { useMotoboyTheme } from '../../store/motoboyTheme'
 
 const NAV_ITEMS = [
   { href: '/motoboy', label: 'Fila', icon: Truck },
@@ -11,6 +12,7 @@ const NAV_ITEMS = [
 
 export default function MotoboyLayout() {
   const { token, name, logout } = useMotoboyAuth()
+  const { theme, toggle: toggleTheme } = useMotoboyTheme()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -22,16 +24,25 @@ export default function MotoboyLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-son-black text-white">
+    <div data-theme={theme} className="min-h-screen bg-son-black text-white">
       <header className="bg-son-surface border-b border-white/5 px-4 sm:px-8 py-4 flex items-center justify-between sticky top-0 z-10">
         <div>
           <Logo size="sm" />
           <p className="text-xs text-son-silver-dim mt-0.5">Olá, {name}</p>
         </div>
-        <button onClick={handleLogout} className="flex items-center gap-1.5 text-son-silver-dim hover:text-son-pink text-sm">
-          <LogOut className="w-4 h-4" />
-          Sair
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleTheme}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-son-surface-light text-son-silver-dim hover:text-son-pink"
+            aria-label={theme === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+          <button onClick={handleLogout} className="flex items-center gap-1.5 text-son-silver-dim hover:text-son-pink text-sm">
+            <LogOut className="w-4 h-4" />
+            Sair
+          </button>
+        </div>
       </header>
       <nav className="flex gap-2 overflow-x-auto px-4 sm:px-8 py-3 bg-son-black border-b border-white/5 scrollbar-hide sticky top-[65px] z-10">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
