@@ -130,11 +130,15 @@ export interface MotoboyRun {
 }
 
 export interface DeliveryPosition {
-  lat: number
-  lng: number
-  heading: number | null
-  updated_at: string
   is_next_stop: boolean
+  // Só vêm preenchidos quando is_next_stop é true — enquanto o motoboy
+  // ainda está terminando outra entrega do lote, a posição dele fica
+  // oculta pra esse pedido (mesma lógica do Uber/99: só mostra o
+  // entregador quando ele já está a caminho de você).
+  lat?: number
+  lng?: number
+  heading?: number | null
+  updated_at?: string
 }
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {

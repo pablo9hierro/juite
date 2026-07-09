@@ -754,13 +754,18 @@ async function trackDeliveryPositionLocal(orderId: string): Promise<DeliveryPosi
   const run = db.runs.find(
     (r) => r.motoboy_id === order.motoboy_id && r.status === 'ativo' && r.order_ids.includes(orderId)
   )
-  if (!run || run.motoboy_lat == null || run.motoboy_lng == null) return null
+  if (!run) return null
+
+  const isNextStop = run.order_ids[run.current_index] === orderId
+  if (!isNextStop) return { is_next_stop: false }
+  if (run.motoboy_lat == null || run.motoboy_lng == null) return { is_next_stop: true }
+
   return {
+    is_next_stop: true,
     lat: run.motoboy_lat,
     lng: run.motoboy_lng,
     heading: run.motoboy_heading,
     updated_at: nowIso(),
-    is_next_stop: run.order_ids[run.current_index] === orderId,
   }
 }
 

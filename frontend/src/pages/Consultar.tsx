@@ -10,6 +10,8 @@ import { StatusBadge } from '../components/ui/Badge'
 import { api } from '../lib/api'
 import { TILE_ATTR, TILE_URL, FALLBACK } from '../lib/geo/mapa'
 import { destDivIcon, motoDivIcon } from '../lib/geo/icones'
+import { calcularRota } from '../lib/geo/rotas'
+import type { Rota } from '../lib/geo/tipos'
 import type { DeliveryPosition, Order } from '../lib/types'
 import { useCustomer } from '../store/customer'
 
@@ -18,23 +20,36 @@ function currency(v: number) {
 }
 
 const TRACK_POLL_MS = 5000
+const ROUTE_REFRESH_MS = 25000
 
 // Mapa ao vivo do motoboy a caminho — só aparece quando o pedido está
 // em_rota_de_entrega. Faz polling em vez de assinar Realtime (mais simples
 // e evita expor sunset.motoboy_runs via RLS pública; a cada poucos
 // segundos já dá a sensação de "ao vivo" sem esse risco).
+//
+// Importante: se o motoboy saiu com um LOTE de entregas, a posição dele só
+// é revelada aqui quando a SUA entrega é a parada atual (is_next_stop) —
+// mesma lógica do Uber/99: você não vê o entregador enquanto ele ainda tá
+// terminando a entrega de outra pessoa.
 function DeliveryTrackingMap({ order }: { order: Order }) {
   const [position, setPosition] = useState<DeliveryPosition | null>(null)
+  const [route, setRoute] = useState<Rota | null>(null)
   const mapDivRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const motoMarkerRef = useRef<L.Marker | null>(null)
   const destMarkerRef = useRef<L.Marker | null>(null)
+  const routeLineRef = useRef<L.Polyline | null>(null)
   // Liberdade total pra arrastar/dar zoom no mapa — só recentraliza sozinho
   // até o cliente mexer nele pela primeira vez; depois disso só o botão de
   // GPS recentraliza.
   const userMovedRef = useRef(false)
   const suppressRef = useRef(false)
 
+  const tracking = position?.is_next_stop === true && position.lat != null && position.lng != null
+
+  // O container do mapa fica sempre montado (mesmo antes de "tracking"
+  // ficar true), senão esse efeito roda antes da div existir de verdade e,
+  // como as deps são [], nunca mais tenta de novo.
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return
     const map = L.map(mapDivRef.current, { zoomControl: false }).setView([FALLBACK.lat, FALLBACK.lng], 14)
@@ -49,6 +64,7 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
       if (!suppressRef.current) userMovedRef.current = true
     })
     mapRef.current = map
+    setTimeout(() => map.invalidateSize(), 0)
     return () => {
       map.remove()
       mapRef.current = null
@@ -74,10 +90,32 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
     }
   }, [order.id])
 
+  // Busca a rota do motoboy até o cliente assim que a posição dele fica
+  // visível, e atualiza periodicamente enquanto ele se desloca de verdade.
+  useEffect(() => {
+    if (!tracking || position.lat == null || position.lng == null) return
+    if (order.customer_lat == null || order.customer_lng == null) return
+    let cancelled = false
+    const fetchRoute = () => {
+      calcularRota({ lat: position.lat!, lng: position.lng! }, { lat: order.customer_lat!, lng: order.customer_lng! })
+        .then((r) => {
+          if (!cancelled) setRoute(r)
+        })
+        .catch(() => {})
+    }
+    fetchRoute()
+    const interval = setInterval(fetchRoute, ROUTE_REFRESH_MS)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracking, order.id])
+
   const recenter = () => {
     userMovedRef.current = false
     const map = mapRef.current
-    if (!map || !position) return
+    if (!map || !tracking || position.lat == null || position.lng == null) return
     suppressRef.current = true
     if (destMarkerRef.current) {
       map.fitBounds(L.latLngBounds([[position.lat, position.lng], destMarkerRef.current.getLatLng()]), { padding: [40, 40] })
@@ -89,13 +127,31 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !position) return
+    if (!map) return
+
+    if (!tracking || position.lat == null || position.lng == null) {
+      // Não é a parada atual (ou ainda sem sinal de GPS): some com o
+      // marcador do motoboy e a rota, se já existiam de uma entrega
+      // anterior do mesmo lote.
+      motoMarkerRef.current?.remove()
+      motoMarkerRef.current = null
+      routeLineRef.current?.remove()
+      routeLineRef.current = null
+      return
+    }
+
     if (!motoMarkerRef.current) {
-      motoMarkerRef.current = L.marker([position.lat, position.lng], { icon: motoDivIcon(position.heading, 32) }).addTo(map)
+      motoMarkerRef.current = L.marker([position.lat, position.lng], { icon: motoDivIcon(position.heading ?? null, 32) }).addTo(map)
     } else {
       motoMarkerRef.current.setLatLng([position.lat, position.lng])
-      motoMarkerRef.current.setIcon(motoDivIcon(position.heading, 32))
+      motoMarkerRef.current.setIcon(motoDivIcon(position.heading ?? null, 32))
     }
+
+    if (route) {
+      routeLineRef.current?.remove()
+      routeLineRef.current = L.polyline(route.coords, { color: '#d5aa45', weight: 5, opacity: 0.85 }).addTo(map)
+    }
+
     if (!userMovedRef.current) {
       suppressRef.current = true
       if (destMarkerRef.current) {
@@ -107,17 +163,25 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
       }
       suppressRef.current = false
     }
-  }, [position])
+  }, [position, route, tracking])
 
   return (
     <div className="mt-3">
-      {!position && <p className="text-xs text-son-silver-dim mb-2">Aguardando a localização do motoboy…</p>}
+      {!position && <p className="text-xs text-son-silver-dim mb-2">Aguardando início da corrida…</p>}
+      {position && position.is_next_stop === false && (
+        <p className="text-xs text-son-silver-dim mb-2">
+          O motoboy está terminando outra entrega antes da sua — assim que ele sair pra você, o mapa aparece aqui.
+        </p>
+      )}
+      {position?.is_next_stop === true && position.lat == null && (
+        <p className="text-xs text-son-silver-dim mb-2">Motoboy a caminho, aguardando sinal de GPS…</p>
+      )}
       {/* isolate: cria um stacking context próprio pro mapa, senão os panes
           internos do Leaflet (z-index alto) vazam por cima de outros
           elementos fixed da página (os FABs de WhatsApp/carrinho). */}
       <div className="relative isolate w-full h-48 rounded-xl overflow-hidden border border-white/5">
         <div ref={mapDivRef} className="absolute inset-0" />
-        {position && (
+        {tracking && (
           <button
             onClick={recenter}
             className="absolute bottom-2 right-2 z-[500] w-8 h-8 flex items-center justify-center rounded-full bg-son-black/80 border border-white/10 text-white backdrop-blur-sm"
