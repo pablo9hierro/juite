@@ -80,12 +80,15 @@ function OrderCard({
             </li>
           ))}
         </ul>
-        <div className="flex items-center justify-between text-sm mb-3">
+        <div className="flex items-center justify-between text-sm mb-1">
           <span className="text-son-silver-dim">
             {order.delivery_type === 'retirada' ? 'Retirada' : `Entrega · ${order.neighborhood}`} · {order.payment_method}
           </span>
           <span className="sunset-text font-bold">{currency(order.total)}</span>
         </div>
+        {order.reference_point && (
+          <p className="text-xs text-son-silver-dim italic mb-2">{order.reference_point}</p>
+        )}
         {canAdvance && (
           <button
             onClick={() => advance(order, requiresPaymentConfirm)}

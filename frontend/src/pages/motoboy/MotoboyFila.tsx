@@ -98,6 +98,9 @@ function OrderCard({
           <MapPin className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
           {order.neighborhood}
         </p>
+        {order.reference_point && (
+          <p className="text-xs text-son-silver-dim mt-0.5 italic">{order.reference_point}</p>
+        )}
         <div className="flex items-center justify-between text-sm mt-2">
           <span className="text-son-silver-dim">{order.payment_method}</span>
           <span className="sunset-text font-bold">{currency(order.total)}</span>

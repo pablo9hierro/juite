@@ -44,6 +44,7 @@ export interface Order {
   delivery_type: DeliveryType
   neighborhood: string | null
   address: string | null
+  reference_point?: string | null
   payment_method: PaymentMethod
   payment_status: PaymentStatus
   status: OrderStatus

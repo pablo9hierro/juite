@@ -82,6 +82,7 @@ export default function Checkout() {
         delivery_type: pickupAtStore ? 'retirada' : 'entrega',
         neighborhood: pickupAtStore ? undefined : customer.neighborhood,
         address: pickupAtStore ? undefined : customer.address,
+        reference_point: pickupAtStore ? undefined : customer.referencePoint || undefined,
         customer_lat: pickupAtStore ? undefined : customer.lat ?? undefined,
         customer_lng: pickupAtStore ? undefined : customer.lng ?? undefined,
         payment_method: paymentMethod,
@@ -170,9 +171,18 @@ export default function Checkout() {
                   {shippingEstimate.km.toFixed(1).replace('.', ',')} km da loja · Frete: {currency(shippingPrice)}
                 </p>
               )}
-              <p className="text-xs text-son-silver-dim mt-2">
-                Quando seu pedido ficar pronto, o motoboy vai te chamar no WhatsApp pedindo sua localização exata.
-              </p>
+            </div>
+          )}
+
+          {!pickupAtStore && (
+            <div>
+              <label className="label">Ponto de referência</label>
+              <input
+                className="input-field"
+                value={customer.referencePoint}
+                onChange={(e) => customer.set({ referencePoint: e.target.value })}
+                placeholder="Número da casa/Condomínio, observações de entrega..."
+              />
             </div>
           )}
 

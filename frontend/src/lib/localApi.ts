@@ -136,6 +136,7 @@ async function createOrder(payload: {
   delivery_type: 'entrega' | 'retirada'
   neighborhood?: string
   address?: string
+  reference_point?: string
   customer_lat?: number
   customer_lng?: number
   payment_method: 'pix' | 'cartao' | 'dinheiro'
@@ -196,6 +197,7 @@ async function createOrder(payload: {
     delivery_type: payload.delivery_type,
     neighborhood: payload.delivery_type === 'retirada' ? null : payload.neighborhood ?? null,
     address: payload.delivery_type === 'retirada' ? null : payload.address ?? null,
+    reference_point: payload.delivery_type === 'retirada' ? null : payload.reference_point ?? null,
     customer_lat: payload.delivery_type === 'retirada' ? null : payload.customer_lat ?? null,
     customer_lng: payload.delivery_type === 'retirada' ? null : payload.customer_lng ?? null,
     payment_method: payload.payment_method,

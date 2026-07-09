@@ -54,6 +54,7 @@ export const supabasePublicApi = {
       delivery_type: 'entrega' | 'retirada'
       neighborhood?: string
       address?: string
+      reference_point?: string
       customer_lat?: number
       customer_lng?: number
       payment_method: 'pix' | 'cartao' | 'dinheiro'
@@ -69,6 +70,7 @@ export const supabasePublicApi = {
         p_items: payload.items,
         p_customer_lat: payload.customer_lat ?? null,
         p_customer_lng: payload.customer_lng ?? null,
+        p_reference_point: payload.reference_point ?? null,
       })
       if (error) throw new ApiError(400, error.message)
       return data as Order
