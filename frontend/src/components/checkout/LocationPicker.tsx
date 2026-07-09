@@ -73,6 +73,17 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
 
   const seq = useRef(0)
 
+  // Trava o scroll da página por baixo enquanto o mapa em tela cheia está
+  // aberto — sem isso, um gesto de scroll no celular pode "vazar" pro body
+  // por baixo do overlay fixed e mostrar o resto do checkout por um instante.
+  useEffect(() => {
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [])
+
   // Debounce de 500ms na busca — Nominatim só aceita 1 requisição/segundo.
   useEffect(() => {
     if (query.trim().length < 3) {
