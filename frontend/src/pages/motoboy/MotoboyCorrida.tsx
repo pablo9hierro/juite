@@ -3,18 +3,20 @@ import { useNavigate } from 'react-router-dom'
 import { animate, motion, useMotionValue } from 'framer-motion'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Check, ChevronsRight, Copy, ExternalLink, Loader2, LocateFixed, MapPin, PackageCheck } from 'lucide-react'
+import { Check, ChevronsRight, Copy, ExternalLink, Loader2, Navigation, MapPin, PackageCheck } from 'lucide-react'
 import { api, ApiError } from '../../lib/api'
 import { seguirLocalizacao } from '../../lib/geo/localizacao'
 import { calcularRota, distanciaKm } from '../../lib/geo/rotas'
 import { FALLBACK, TILE_ATTR, TILE_URL } from '../../lib/geo/mapa'
 import { destDivIcon, motoDivIcon } from '../../lib/geo/icones'
+import { anexarGestoRotacao, normalizarAngulo } from '../../lib/geo/rotacaoMapa'
 import type { Ponto, Rota } from '../../lib/geo/tipos'
 import type { MotoboyRun } from '../../lib/types'
 
 const ARRIVAL_RADIUS_KM = 0.08 // ~80m — dá pra considerar "chegou"
 const POSITION_UPDATE_MIN_MS = 4000
 const ROUTE_REFRESH_MS = 25000
+const LOCKED_ZOOM = 18
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
@@ -70,20 +72,20 @@ export default function MotoboyCorrida() {
   const [completing, setCompleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // Travado (padrão): mapa segue o motoboy com zoom fechado e girado pra
+  // sempre apontar pra onde ele está indo — pra ele conseguir se guiar só
+  // olhando o mapa. Destravado: liberdade total (arrastar/zoom/girar).
+  const [locked, setLocked] = useState(true)
+  const [mapRotation, setMapRotation] = useState(0)
 
   const mapDivRef = useRef<HTMLDivElement>(null)
+  const rotateWrapperRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const myMarkerRef = useRef<L.Marker | null>(null)
   const destMarkerRef = useRef<L.Marker | null>(null)
   const routeLineRef = useRef<L.Polyline | null>(null)
   const lastSentRef = useRef(0)
   const myPosRef = useRef<Ponto | null>(null)
-  // true assim que o motoboy arrasta/dá zoom manualmente — a partir daí o
-  // mapa para de recentralizar sozinho até ele tocar em "Centralizar".
-  const userMovedRef = useRef(false)
-  // true só durante as nossas próprias chamadas de setView/fitBounds, pra
-  // não confundir isso com interação manual do usuário.
-  const suppressRef = useRef(false)
 
   // Reidrata a corrida ativa direto do banco — é isso que garante que ela
   // nunca "some" mesmo depois de um reload.
@@ -117,12 +119,6 @@ export default function MotoboyCorrida() {
     if (!mapDivRef.current || mapRef.current) return
     const map = L.map(mapDivRef.current, { zoomControl: false }).setView([FALLBACK.lat, FALLBACK.lng], 15)
     L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20 }).addTo(map)
-    map.on('dragstart', () => {
-      userMovedRef.current = true
-    })
-    map.on('zoomstart', () => {
-      if (!suppressRef.current) userMovedRef.current = true
-    })
     mapRef.current = map
     // Garante o tamanho certo mesmo se o layout mudar um pixel entre o
     // mount e a primeira pintura dos tiles.
@@ -132,6 +128,34 @@ export default function MotoboyCorrida() {
       mapRef.current = null
     }
   }, [])
+
+  // Trava/destrava a interação manual do Leaflet conforme o modo — travado,
+  // é o app que controla posição/zoom/rotação sozinho; destravado, é o
+  // motoboy que manda (arrastar, pinçar, girar com dois dedos).
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (locked) {
+      map.dragging.disable()
+      map.touchZoom.disable()
+      map.scrollWheelZoom.disable()
+      map.doubleClickZoom.disable()
+    } else {
+      map.dragging.enable()
+      map.touchZoom.enable()
+      map.scrollWheelZoom.enable()
+      map.doubleClickZoom.enable()
+    }
+  }, [locked])
+
+  // Gesto de girar com dois dedos — só ativo destravado (travado, quem
+  // decide a rotação é o heading do GPS, não o dedo do motoboy).
+  useEffect(() => {
+    if (locked || !mapDivRef.current) return
+    return anexarGestoRotacao(mapDivRef.current, {
+      onRotate: (delta) => setMapRotation((r) => normalizarAngulo(r + delta)),
+    })
+  }, [locked])
 
   useEffect(() => {
     const stop = seguirLocalizacao(
@@ -186,22 +210,36 @@ export default function MotoboyCorrida() {
     return () => clearInterval(interval)
   }, [current?.id])
 
+  // Travado: gira o mapa pra sempre apontar pra onde o motoboy está indo,
+  // com zoom fechado e centralizado nele — igual um navegador de verdade.
+  useEffect(() => {
+    if (!locked || !myPos) return
+    setMapRotation(-(heading ?? 0))
+    const map = mapRef.current
+    if (map) map.setView([myPos.lat, myPos.lng], LOCKED_ZOOM, { animate: true })
+  }, [locked, myPos, heading])
+
   useEffect(() => {
     const map = mapRef.current
     if (!map || !myPos) return
 
     if (!myMarkerRef.current) {
-      myMarkerRef.current = L.marker([myPos.lat, myPos.lng], { icon: motoDivIcon(heading), zIndexOffset: 1000 }).addTo(map)
+      myMarkerRef.current = L.marker([myPos.lat, myPos.lng], { icon: motoDivIcon(heading, 36, -mapRotation), zIndexOffset: 1000 }).addTo(
+        map
+      )
     } else {
       myMarkerRef.current.setLatLng([myPos.lat, myPos.lng])
-      myMarkerRef.current.setIcon(motoDivIcon(heading))
+      myMarkerRef.current.setIcon(motoDivIcon(heading, 36, -mapRotation))
     }
 
     if (current?.customer_lat != null && current?.customer_lng != null) {
       if (!destMarkerRef.current) {
-        destMarkerRef.current = L.marker([current.customer_lat, current.customer_lng], { icon: destDivIcon() }).addTo(map)
+        destMarkerRef.current = L.marker([current.customer_lat, current.customer_lng], {
+          icon: destDivIcon(30, -mapRotation),
+        }).addTo(map)
       } else {
         destMarkerRef.current.setLatLng([current.customer_lat, current.customer_lng])
+        destMarkerRef.current.setIcon(destDivIcon(30, -mapRotation))
       }
     }
 
@@ -209,33 +247,10 @@ export default function MotoboyCorrida() {
       routeLineRef.current?.remove()
       routeLineRef.current = L.polyline(route.coords, { color: '#d5aa45', weight: 5, opacity: 0.85 }).addTo(map)
     }
+  }, [myPos, heading, route, current?.id, mapRotation])
 
-    // Só recentraliza sozinho se o motoboy ainda não mexeu no mapa na mão —
-    // uma vez que ele arrasta ou dá zoom, o mapa some de "seguir automático"
-    // até ele tocar em "Centralizar".
-    if (!userMovedRef.current) {
-      suppressRef.current = true
-      if (routeLineRef.current) {
-        map.fitBounds(routeLineRef.current.getBounds(), { padding: [50, 50] })
-      } else {
-        map.setView([myPos.lat, myPos.lng], 16)
-      }
-      suppressRef.current = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myPos, heading, route, current?.id])
-
-  const recenter = () => {
-    userMovedRef.current = false
-    const map = mapRef.current
-    if (!map || !myPos) return
-    suppressRef.current = true
-    if (routeLineRef.current) {
-      map.fitBounds(routeLineRef.current.getBounds(), { padding: [50, 50] })
-    } else {
-      map.setView([myPos.lat, myPos.lng], 16)
-    }
-    suppressRef.current = false
+  const toggleLock = () => {
+    setLocked((v) => !v)
   }
 
   const arrived =
@@ -258,7 +273,6 @@ export default function MotoboyCorrida() {
       }
       setRun(updated)
       setRoute(null)
-      userMovedRef.current = false
       destMarkerRef.current?.remove()
       destMarkerRef.current = null
       routeLineRef.current?.remove()
@@ -301,20 +315,31 @@ export default function MotoboyCorrida() {
       {/* isolate: cria um novo stacking context pro mapa, senão os panes
           internos do Leaflet (z-index alto) podiam vazar por cima de
           outros elementos fixed da página, tipo FABs. */}
-      <div className="relative isolate">
-        <div ref={mapDivRef} className="w-full h-[55vh] rounded-2xl overflow-hidden border border-white/5" />
+      <div className="relative isolate rounded-2xl overflow-hidden border border-white/5 h-[55vh]">
+        {/* Camada giratória maior que a área visível (evita canto vazio ao
+            girar) — só ELA recebe o transform de rotação, nunca os botões. */}
+        <div
+          ref={rotateWrapperRef}
+          className="absolute"
+          style={{ inset: '-80%', transform: `rotate(${mapRotation}deg)`, transition: 'transform .15s linear' }}
+        >
+          <div ref={mapDivRef} className="absolute inset-0" />
+        </div>
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-son-black/50 rounded-2xl">
+          <div className="absolute inset-0 flex items-center justify-center bg-son-black/50">
             <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
           </div>
         )}
         {!loading && run && (
           <button
-            onClick={recenter}
-            className="absolute bottom-3 right-3 z-[500] w-10 h-10 flex items-center justify-center rounded-full bg-son-black/80 border border-white/10 text-white backdrop-blur-sm"
-            aria-label="Centralizar mapa"
+            onClick={toggleLock}
+            className={`absolute bottom-20 right-3 z-[500] w-14 h-14 flex items-center justify-center rounded-full border backdrop-blur-sm transition-colors ${
+              locked ? 'sunset-bg border-transparent text-son-silver' : 'bg-son-black/80 border-white/10 text-white'
+            }`}
+            aria-label={locked ? 'Destravar mapa (mover livremente)' : 'Travar mapa na minha posição'}
+            aria-pressed={locked}
           >
-            <LocateFixed className="w-4 h-4" />
+            <Navigation className="w-6 h-6" />
           </button>
         )}
       </div>

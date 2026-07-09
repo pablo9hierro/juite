@@ -11,6 +11,7 @@ import { api } from '../lib/api'
 import { TILE_ATTR, TILE_URL, FALLBACK } from '../lib/geo/mapa'
 import { destDivIcon, motoDivIcon } from '../lib/geo/icones'
 import { calcularRota } from '../lib/geo/rotas'
+import { anexarGestoRotacao, normalizarAngulo } from '../lib/geo/rotacaoMapa'
 import type { Rota } from '../lib/geo/tipos'
 import type { DeliveryPosition, Order } from '../lib/types'
 import { useCustomer } from '../store/customer'
@@ -34,14 +35,15 @@ const ROUTE_REFRESH_MS = 25000
 function DeliveryTrackingMap({ order }: { order: Order }) {
   const [position, setPosition] = useState<DeliveryPosition | null>(null)
   const [route, setRoute] = useState<Rota | null>(null)
+  const [mapRotation, setMapRotation] = useState(0)
   const mapDivRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const motoMarkerRef = useRef<L.Marker | null>(null)
   const destMarkerRef = useRef<L.Marker | null>(null)
   const routeLineRef = useRef<L.Polyline | null>(null)
-  // Liberdade total pra arrastar/dar zoom no mapa — só recentraliza sozinho
-  // até o cliente mexer nele pela primeira vez; depois disso só o botão de
-  // GPS recentraliza.
+  // Liberdade total pra arrastar/dar zoom/girar no mapa — só recentraliza
+  // sozinho até o cliente mexer nele pela primeira vez; depois disso só o
+  // botão de GPS recentraliza.
   const userMovedRef = useRef(false)
   const suppressRef = useRef(false)
 
@@ -70,6 +72,15 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
       mapRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Gesto de girar com dois dedos — roda em paralelo ao pinch-zoom nativo
+  // do Leaflet, sem conflito (é só um transform CSS por fora).
+  useEffect(() => {
+    if (!mapDivRef.current) return
+    return anexarGestoRotacao(mapDivRef.current, {
+      onRotate: (delta) => setMapRotation((r) => normalizarAngulo(r + delta)),
+    })
   }, [])
 
   useEffect(() => {
@@ -114,6 +125,7 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
 
   const recenter = () => {
     userMovedRef.current = false
+    setMapRotation(0)
     const map = mapRef.current
     if (!map || !tracking || position.lat == null || position.lng == null) return
     suppressRef.current = true
@@ -141,11 +153,15 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
     }
 
     if (!motoMarkerRef.current) {
-      motoMarkerRef.current = L.marker([position.lat, position.lng], { icon: motoDivIcon(position.heading ?? null, 32) }).addTo(map)
+      motoMarkerRef.current = L.marker([position.lat, position.lng], {
+        icon: motoDivIcon(position.heading ?? null, 32, -mapRotation),
+      }).addTo(map)
     } else {
       motoMarkerRef.current.setLatLng([position.lat, position.lng])
-      motoMarkerRef.current.setIcon(motoDivIcon(position.heading ?? null, 32))
+      motoMarkerRef.current.setIcon(motoDivIcon(position.heading ?? null, 32, -mapRotation))
     }
+
+    destMarkerRef.current?.setIcon(destDivIcon(26, -mapRotation))
 
     if (route) {
       routeLineRef.current?.remove()
@@ -163,7 +179,7 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
       }
       suppressRef.current = false
     }
-  }, [position, route, tracking])
+  }, [position, route, tracking, mapRotation])
 
   return (
     <div className="mt-3">
@@ -180,7 +196,9 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
           internos do Leaflet (z-index alto) vazam por cima de outros
           elementos fixed da página (os FABs de WhatsApp/carrinho). */}
       <div className="relative isolate w-full h-48 rounded-xl overflow-hidden border border-white/5">
-        <div ref={mapDivRef} className="absolute inset-0" />
+        <div className="absolute" style={{ inset: '-80%', transform: `rotate(${mapRotation}deg)`, transition: 'transform .15s linear' }}>
+          <div ref={mapDivRef} className="absolute inset-0" />
+        </div>
         {tracking && (
           <button
             onClick={recenter}

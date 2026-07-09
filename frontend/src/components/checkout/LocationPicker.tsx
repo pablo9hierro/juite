@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2, LocateFixed, MapPin, Search, X } from 'lucide-react
 import { buscarEnderecos, enderecoDe } from '../../lib/geo/geocodificacao'
 import { obterLocalizacao } from '../../lib/geo/localizacao'
 import { FALLBACK, TILE_ATTR, TILE_URL } from '../../lib/geo/mapa'
+import { anexarGestoRotacao, normalizarAngulo } from '../../lib/geo/rotacaoMapa'
 import type { EnderecoResultado, Ponto } from '../../lib/geo/tipos'
 import { api } from '../../lib/api'
 import type { ShippingEstimate } from '../../lib/types'
@@ -39,6 +40,7 @@ function MapaCentro({
   onMoveEnd?: (c: Ponto) => void
 }) {
   const divRef = useRef<HTMLDivElement>(null)
+  const [rotation, setRotation] = useState(0)
 
   useEffect(() => {
     if (!divRef.current) return
@@ -52,7 +54,20 @@ function MapaCentro({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return <div ref={divRef} className="absolute inset-0" />
+  // Gesto de girar com dois dedos — roda em paralelo ao pinch-zoom nativo
+  // do Leaflet (transform CSS por fora, não mexe no que o Leaflet gerencia).
+  useEffect(() => {
+    if (!divRef.current) return
+    return anexarGestoRotacao(divRef.current, {
+      onRotate: (delta) => setRotation((r) => normalizarAngulo(r + delta)),
+    })
+  }, [])
+
+  return (
+    <div className="absolute" style={{ inset: '-80%', transform: `rotate(${rotation}deg)`, transition: 'transform .15s linear' }}>
+      <div ref={divRef} className="absolute inset-0" />
+    </div>
+  )
 }
 
 export default function LocationPicker({ initial, onClose, onConfirm }: LocationPickerProps) {
@@ -256,7 +271,7 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
 
       {step === 'ajuste' && (
         <>
-          <div className="relative flex-1">
+          <div className="relative isolate overflow-hidden flex-1">
             <MapaCentro
               key={`${ajusteCentro.lat.toFixed(5)},${ajusteCentro.lng.toFixed(5)}`}
               centro={ajusteCentro}

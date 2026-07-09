@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { LayoutGrid, List, Loader2, Minus, Package, Plus } from 'lucide-react'
+import { LayoutGrid, List, Loader2, Minus, Package, Plus, Search, X } from 'lucide-react'
 import { motion } from 'framer-motion'
 import SiteHeader from '../components/layout/SiteHeader'
 import { api } from '../lib/api'
@@ -17,8 +17,12 @@ export default function Catalogo() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
 
   const { items, addItem, changeQty } = useCart()
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const searchBoxRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     Promise.all([api.products.list(), api.categories.list()])
@@ -29,10 +33,29 @@ export default function Catalogo() {
       .finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) setSearchOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
   const filtered = useMemo(() => {
     if (categoryFilter === 'all') return products
     return products.filter((p) => p.category_id === categoryFilter)
   }, [products, categoryFilter])
+
+  const searchResults = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return []
+    return products.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 8)
+  }, [search, products])
+
+  const clearSearch = () => {
+    setSearch('')
+    searchInputRef.current?.blur()
+  }
 
   const qtyInCart = (id: string) => items.find((i) => i.productId === id)?.quantity ?? 0
 
@@ -59,7 +82,59 @@ export default function Catalogo() {
             </button>
           </div>
         </div>
-        <p className="text-son-silver-dim text-sm mb-6">Escolha os produtos e finalize seu pedido.</p>
+        <p className="text-son-silver-dim text-sm mb-4">Escolha os produtos e finalize seu pedido.</p>
+
+        <div className="relative mb-6" ref={searchBoxRef}>
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-son-silver-dim pointer-events-none" />
+          <input
+            ref={searchInputRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onFocus={() => setSearchOpen(true)}
+            placeholder="Buscar produto..."
+            className="input-field pl-10 pr-10"
+          />
+          {search && (
+            <button
+              onClick={clearSearch}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-son-silver-dim hover:text-white"
+              aria-label="Limpar busca"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+          {searchOpen && search.trim().length > 0 && (
+            <div className="absolute z-20 mt-2 w-full max-h-80 overflow-y-auto glass rounded-2xl py-1 shadow-xl">
+              {searchResults.length === 0 ? (
+                <p className="text-sm text-son-silver-dim px-4 py-3">Nenhum produto encontrado.</p>
+              ) : (
+                searchResults.map((p) => (
+                  <Link
+                    key={p.id}
+                    to={`/produto/${p.id}`}
+                    onClick={() => {
+                      setSearch('')
+                      setSearchOpen(false)
+                    }}
+                    className="flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 transition-colors"
+                  >
+                    <div className="w-11 h-11 flex-shrink-0 rounded-lg bg-son-surface-light flex items-center justify-center overflow-hidden">
+                      {p.image_url ? (
+                        <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Package className="w-4 h-4 text-son-silver-dim/40" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white truncate">{p.name}</p>
+                      {p.description && <p className="text-xs text-son-silver-dim truncate">{p.description}</p>}
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+          )}
+        </div>
 
         {categories.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-1 mb-6 scrollbar-hide">

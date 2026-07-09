@@ -27,6 +27,24 @@
   filter: contrast(1.8) saturate(1.5) brightness(0.9);
 }
 
+/* Atribuição do OSM/CARTO é obrigatória pelos termos de uso dos tiles
+   grátis — não dá pra tirar, mas não precisa ser um botão clicável
+   chamativo no meio da tela. Fica pequena, apagada e sem clique. */
+.leaflet-control-attribution {
+  font-size: 8px;
+  line-height: 1.4;
+  opacity: 0.4;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  padding: 1px 4px;
+  pointer-events: none;
+}
+.leaflet-control-attribution a {
+  pointer-events: none;
+  text-decoration: none;
+  color: inherit;
+}
+
 /* Modo claro, hoje só usado no dashboard do motoboy (o atributo fica no
    container raiz de MotoboyLayout). Redefinir os tokens de cor aqui já
    cobre a maior parte da UI por cascata normal de custom property; o resto
