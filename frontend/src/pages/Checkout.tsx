@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CreditCard, Home, Loader2, QrCode, Wallet } from 'lucide-react'
+import { CreditCard, Home, Loader2, MapPin, QrCode, Wallet } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
-import Autocomplete from '../components/ui/Autocomplete'
+import LocationPicker from '../components/checkout/LocationPicker'
 import { api, ApiError } from '../lib/api'
-import type { PaymentMethod, Product, ShippingRate } from '../lib/types'
+import type { PaymentMethod, Product, ShippingEstimate } from '../lib/types'
 import { useCart } from '../store/cart'
 import { useCustomer } from '../store/customer'
 
@@ -26,15 +26,23 @@ export default function Checkout() {
   const customer = useCustomer()
 
   const [products, setProducts] = useState<Product[]>([])
-  const [shippingRates, setShippingRates] = useState<ShippingRate[]>([])
   const [pickupAtStore, setPickupAtStore] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [shippingEstimate, setShippingEstimate] = useState<ShippingEstimate | null>(null)
 
   useEffect(() => {
     api.products.list().then(setProducts)
-    api.shippingRates.list().then(setShippingRates)
+  }, [])
+
+  // Se o cliente já tinha escolhido um local numa visita anterior, revalida
+  // o frete (o preço por km do admin pode ter mudado desde então).
+  useEffect(() => {
+    if (customer.lat == null || customer.lng == null) return
+    api.estimateShipping(customer.lat, customer.lng).then(setShippingEstimate).catch(() => setShippingEstimate(null))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
@@ -43,12 +51,7 @@ export default function Checkout() {
     .filter((l): l is { item: typeof items[number]; product: Product } => !!l.product)
   const subtotal = lines.reduce((sum, l) => sum + l.product.price * l.item.quantity, 0)
 
-  const neighborhoods = useMemo(() => shippingRates.map((r) => r.neighborhood), [shippingRates])
-  const shippingPrice = useMemo(() => {
-    if (pickupAtStore) return 0
-    const rate = shippingRates.find((r) => r.neighborhood === customer.neighborhood)
-    return rate?.price ?? 0
-  }, [pickupAtStore, shippingRates, customer.neighborhood])
+  const shippingPrice = pickupAtStore ? 0 : shippingEstimate?.price ?? 0
   const total = subtotal + shippingPrice
 
   const handleSubmit = async () => {
@@ -66,8 +69,8 @@ export default function Checkout() {
       setError('Informe um WhatsApp válido.')
       return
     }
-    if (!pickupAtStore && !customer.neighborhood.trim()) {
-      setError('Selecione seu bairro ou marque retirada no local.')
+    if (!pickupAtStore && (customer.lat == null || customer.lng == null)) {
+      setError('Escolha sua localização no mapa ou marque retirada no local.')
       return
     }
 
@@ -78,6 +81,9 @@ export default function Checkout() {
         customer_whatsapp: `55${digits}`,
         delivery_type: pickupAtStore ? 'retirada' : 'entrega',
         neighborhood: pickupAtStore ? undefined : customer.neighborhood,
+        address: pickupAtStore ? undefined : customer.address,
+        customer_lat: pickupAtStore ? undefined : customer.lat ?? undefined,
+        customer_lng: pickupAtStore ? undefined : customer.lng ?? undefined,
         payment_method: paymentMethod,
         items: lines.map((l) => ({ product_id: l.product.id, quantity: l.item.quantity })),
       })
@@ -138,22 +144,57 @@ export default function Checkout() {
 
           {!pickupAtStore && (
             <div>
-              <label className="label">Bairro *</label>
-              <Autocomplete
-                value={customer.neighborhood}
-                onChange={(v) => customer.set({ neighborhood: v })}
-                options={neighborhoods}
-                placeholder="Digite para buscar o bairro em João Pessoa..."
-              />
-              {customer.neighborhood && (
+              <label className="label">Endereço de entrega *</label>
+              {customer.lat != null && customer.lng != null ? (
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(true)}
+                  className="w-full flex items-center gap-3 bg-son-surface border border-white/10 rounded-2xl px-4 py-3 text-left hover:border-son-pink/40 transition-colors"
+                >
+                  <MapPin className="w-4 h-4 text-son-pink flex-none" />
+                  <span className="flex-1 text-sm text-white truncate">{customer.address || 'Endereço selecionado'}</span>
+                  <span className="text-xs text-son-silver-dim flex-none">Editar</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 border border-dashed border-white/15 rounded-2xl px-4 py-4 text-sm text-son-silver-dim hover:border-son-pink/40 hover:text-son-pink transition-colors"
+                >
+                  <MapPin className="w-4 h-4" />
+                  Escolher localização no mapa
+                </button>
+              )}
+              {shippingEstimate && customer.lat != null && (
                 <p className="text-xs text-son-silver-dim mt-1">
-                  Frete para {customer.neighborhood}: {currency(shippingPrice)}
+                  {shippingEstimate.km.toFixed(1).replace('.', ',')} km da loja · Frete: {currency(shippingPrice)}
                 </p>
               )}
               <p className="text-xs text-son-silver-dim mt-2">
                 Quando seu pedido ficar pronto, o motoboy vai te chamar no WhatsApp pedindo sua localização exata.
               </p>
             </div>
+          )}
+
+          {pickerOpen && (
+            <LocationPicker
+              initial={
+                customer.lat != null && customer.lng != null
+                  ? { lat: customer.lat, lng: customer.lng, label: customer.address, bairro: customer.neighborhood || undefined }
+                  : null
+              }
+              onClose={() => setPickerOpen(false)}
+              onConfirm={(result) => {
+                customer.set({
+                  address: result.label,
+                  neighborhood: result.bairro ?? '',
+                  lat: result.lat,
+                  lng: result.lng,
+                })
+                setShippingEstimate(result.estimate ?? null)
+                setPickerOpen(false)
+              }}
+            />
           )}
 
           <div>

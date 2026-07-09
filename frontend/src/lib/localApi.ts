@@ -13,7 +13,7 @@ import {
   saveDb,
   nowIso,
   uid,
-  NEIGHBORHOODS,
+  estimateShippingLocal,
   type LocalDb,
   type LocalMotoboy,
 } from './localData'
@@ -26,7 +26,8 @@ import type {
   OrderStatus,
   PaymentMethod,
   Product,
-  ShippingRate,
+  ShippingEstimate,
+  ShippingSettings,
   StatusCount,
   TopProduct,
 } from './types'
@@ -135,6 +136,8 @@ async function createOrder(payload: {
   delivery_type: 'entrega' | 'retirada'
   neighborhood?: string
   address?: string
+  customer_lat?: number
+  customer_lng?: number
   payment_method: 'pix' | 'cartao' | 'dinheiro'
   items: { product_id: string; quantity: number }[]
 }): Promise<Order> {
@@ -173,9 +176,11 @@ async function createOrder(payload: {
   }
 
   let shippingPrice = 0
-  if (payload.delivery_type === 'entrega' && payload.neighborhood) {
-    const rate = db.shippingRates.find((r) => r.neighborhood === payload.neighborhood)
-    shippingPrice = rate?.price ?? 0
+  if (payload.delivery_type === 'entrega') {
+    if (payload.customer_lat == null || payload.customer_lng == null) {
+      throw new ApiError(400, 'customer_lat and customer_lng are required for delivery orders')
+    }
+    shippingPrice = estimateShippingLocal(payload.customer_lat, payload.customer_lng, db.pricePerKm).price
   }
   total += shippingPrice
 
@@ -191,6 +196,8 @@ async function createOrder(payload: {
     delivery_type: payload.delivery_type,
     neighborhood: payload.delivery_type === 'retirada' ? null : payload.neighborhood ?? null,
     address: payload.delivery_type === 'retirada' ? null : payload.address ?? null,
+    customer_lat: payload.delivery_type === 'retirada' ? null : payload.customer_lat ?? null,
+    customer_lng: payload.delivery_type === 'retirada' ? null : payload.customer_lng ?? null,
     payment_method: payload.payment_method,
     payment_status: 'pendente',
     status: 'pendente',
@@ -443,22 +450,21 @@ async function adminUpdateStatus(id: string, status: string, paymentConfirmed?: 
   return order
 }
 
-async function adminListShippingRates(): Promise<ShippingRate[]> {
+async function getShippingSettings(): Promise<ShippingSettings> {
   const db = loadDb()
-  return [...db.shippingRates].sort((a, b) => a.neighborhood.localeCompare(b.neighborhood))
+  return { price_per_km: db.pricePerKm }
 }
 
-async function adminUpdateShippingRate(neighborhood: string, price: number): Promise<ShippingRate> {
+async function updateShippingSettings(pricePerKm: number): Promise<ShippingSettings> {
   const db = loadDb()
-  let rate = db.shippingRates.find((r) => r.neighborhood === neighborhood)
-  if (!rate) {
-    rate = { neighborhood, price }
-    db.shippingRates.push(rate)
-  } else {
-    rate.price = price
-  }
+  db.pricePerKm = pricePerKm
   saveDb(db)
-  return rate
+  return { price_per_km: db.pricePerKm }
+}
+
+async function estimateShipping(lat: number, lng: number): Promise<ShippingEstimate> {
+  const db = loadDb()
+  return estimateShippingLocal(lat, lng, db.pricePerKm)
 }
 
 async function financeiro(): Promise<FinanceiroSummary> {
@@ -625,8 +631,8 @@ async function motoboyUpdateStatus(id: string, status: string, paymentConfirmed?
 export const localApi = {
   categories: { list: listCategoriesPublic },
   products: { list: listProducts, get: getProduct },
-  neighborhoods: { list: async () => [...NEIGHBORHOODS] },
-  shippingRates: { list: adminListShippingRates },
+  shippingSettings: { get: getShippingSettings },
+  estimateShipping,
   orders: {
     create: createOrder,
     get: getOrder,
@@ -652,7 +658,7 @@ export const localApi = {
       delete: deleteMotoboy,
     },
     orders: { list: adminListOrders, updateStatus: adminUpdateStatus, notifyReady: async () => {} },
-    shippingRates: { list: adminListShippingRates, update: adminUpdateShippingRate },
+    shippingSettings: { get: getShippingSettings, update: updateShippingSettings },
     financeiro: { get: financeiro },
     whatsapp: {
       status: async () => ({ instance: { state: 'close' } }),

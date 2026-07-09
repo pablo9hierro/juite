@@ -13,7 +13,7 @@ import type {
   MotoboyFinanceiro,
   Order,
   Product,
-  ShippingRate,
+  ShippingSettings,
 } from './types'
 
 // Ainda usado só pro login admin/motoboy e Pix, que continuam no backend
@@ -74,8 +74,8 @@ const remoteApi = {
   // supabase/sunset_public_rls_and_rpc.sql. Não dependem do Railway.
   categories: supabasePublicApi.categories,
   products: supabasePublicApi.products,
-  neighborhoods: supabasePublicApi.neighborhoods,
-  shippingRates: supabasePublicApi.shippingRates,
+  shippingSettings: supabasePublicApi.shippingSettings,
+  estimateShipping: supabasePublicApi.estimateShipping,
   orders: {
     create: supabasePublicApi.orders.create,
     get: supabasePublicApi.orders.get,
@@ -211,13 +211,12 @@ const remoteApi = {
           token: adminToken(),
         }),
     },
-    shippingRates: {
-      list: () => rpc<ShippingRate[]>('admin_list_shipping_rates', { p_token: adminToken() }),
-      update: (neighborhood: string, price: number) =>
-        rpc<ShippingRate>('admin_update_shipping_rate', {
+    shippingSettings: {
+      get: () => supabasePublicApi.shippingSettings.get(),
+      update: (pricePerKm: number) =>
+        rpc<ShippingSettings>('admin_update_shipping_settings', {
           p_token: adminToken(),
-          p_neighborhood: neighborhood,
-          p_price: price,
+          p_price_per_km: pricePerKm,
         }),
     },
     financeiro: {

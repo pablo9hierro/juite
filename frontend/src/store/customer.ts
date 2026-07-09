@@ -6,7 +6,9 @@ interface CustomerState {
   whatsapp: string
   neighborhood: string
   address: string
-  set: (data: Partial<Pick<CustomerState, 'name' | 'whatsapp' | 'neighborhood' | 'address'>>) => void
+  lat: number | null
+  lng: number | null
+  set: (data: Partial<Pick<CustomerState, 'name' | 'whatsapp' | 'neighborhood' | 'address' | 'lat' | 'lng'>>) => void
 }
 
 export const useCustomer = create<CustomerState>()(
@@ -16,6 +18,8 @@ export const useCustomer = create<CustomerState>()(
       whatsapp: '',
       neighborhood: '',
       address: '',
+      lat: null,
+      lng: null,
       set: (data) => set(data),
     }),
     { name: 'sonset_customer' }

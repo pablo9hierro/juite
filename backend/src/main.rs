@@ -2,7 +2,6 @@ mod auth;
 mod error;
 mod mercadopago;
 mod models;
-mod neighborhoods;
 mod orders_common;
 mod routes;
 mod seed;
@@ -129,7 +128,6 @@ async fn main() -> anyhow::Result<()> {
     sqlx::migrate!("./migrations").run(&pool).await?;
 
     seed::seed_if_empty(&pool).await?;
-    seed::seed_shipping_rates_if_empty(&pool).await?;
 
     let http = reqwest::Client::new();
 
@@ -168,15 +166,9 @@ async fn main() -> anyhow::Result<()> {
         // auth
         .route("/api/auth/admin/login", post(routes::auth::admin_login))
         .route("/api/auth/motoboy/login", post(routes::auth::motoboy_login))
-        // public / customer-facing
-        .route("/api/categories", get(routes::public::list_categories))
-        .route("/api/products", get(routes::public::list_products))
-        .route("/api/products/{id}", get(routes::public::get_product))
-        .route("/api/neighborhoods", get(routes::public::neighborhoods))
-        .route("/api/shipping-rates", get(routes::public::shipping_rates))
-        .route("/api/orders", post(routes::public::create_order))
-        .route("/api/orders/track", get(routes::public::track_orders))
-        .route("/api/orders/{id}", get(routes::public::get_order))
+        // public / customer-facing — catálogo e pedido em si são RPCs do
+        // Supabase agora (ver supabase/*.sql); só sobra o que precisa de
+        // segredo (Pix, WhatsApp).
         .route(
             "/api/orders/{id}/refresh-payment",
             post(routes::public::refresh_payment),
@@ -226,14 +218,6 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/admin/whatsapp/connect", get(routes::admin::whatsapp_connect))
         .route("/api/admin/whatsapp/logout", post(routes::admin::whatsapp_logout))
         .route("/api/admin/whatsapp/notify-order-ready", post(routes::admin::notify_order_ready))
-        .route(
-            "/api/admin/shipping-rates",
-            get(routes::admin::list_shipping_rates),
-        )
-        .route(
-            "/api/admin/shipping-rates/{neighborhood}",
-            put(routes::admin::update_shipping_rate),
-        )
         // motoboy
         .route("/api/motoboy/orders", get(routes::motoboy::list_orders))
         .route(

@@ -1,19 +1,6 @@
-import type { Category, Motoboy, Order, Product, ShippingRate } from './types'
-
-export const NEIGHBORHOODS = [
-  'Aeroclube', 'Alto do Céu', 'Alto do Mateus', 'Anatólia', 'Água Fria',
-  'Bairro das Indústrias', 'Bairro dos Estados', 'Bairro dos Ipês', 'Bancários',
-  'Barra de Gramame', 'Bessa', 'Brisamar', 'Cabo Branco', 'Castelo Branco', 'Centro',
-  'Cidade dos Colibris', 'Costa do Sol', 'Costa e Silva', 'Cristo Redentor',
-  'Cruz das Armas', 'Cuiá', 'Distrito Industrial', 'Ernani Sátiro', 'Ernesto Geisel',
-  'Expedicionários', 'Funcionários', 'Geisel', 'Gramame', 'Grotão', 'Ilha do Bispo',
-  'Jaguaribe', 'Jardim Cidade Universitária', 'Jardim Oceania', 'Jardim São Paulo',
-  'Jardim Veneza', 'José Pinheiro', 'Manaíra', 'Mandacaru', 'Mangabeira', 'Miramar',
-  'Mumbaba', 'Muçumagro', 'Oitizeiro', 'Padre Zé', 'Paratibe', 'Pedro Gondim', 'Penha',
-  'Planalto Boa Esperança', 'Portal do Sol', 'Praia do Bessa', 'Range', 'Roger',
-  'São José', 'Tambaú', 'Tambauzinho', 'Tambiá', 'Torre', 'Treze de Maio',
-  'Trincheiras', 'Valentina de Figueiredo', 'Varadouro', 'Varjão',
-]
+import { distanciaKm } from './geo/rotas'
+import { FALLBACK as STORE_LOCATION } from './geo/mapa'
+import type { Category, Motoboy, Order, Product } from './types'
 
 export interface LocalMotoboy extends Motoboy {
   password: string
@@ -24,7 +11,14 @@ export interface LocalDb {
   products: Product[]
   motoboys: LocalMotoboy[]
   orders: Order[]
-  shippingRates: ShippingRate[]
+  pricePerKm: number
+}
+
+// Mesma conta de sunset._distance_km/estimate_shipping do backend, só que
+// em memória (modo demonstração, sem banco de verdade).
+export function estimateShippingLocal(lat: number, lng: number, pricePerKm: number) {
+  const km = distanciaKm(STORE_LOCATION, { lat, lng })
+  return { km: Math.round(km * 100) / 100, price: Math.round(km * pricePerKm * 100) / 100 }
 }
 
 export const ADMIN_CREDENTIALS = { email: 'pablo2@gmail.com', password: '123456', name: 'Admin Sunset Tabas' }
@@ -73,9 +67,7 @@ function seedDb(): LocalDb {
     },
   ]
 
-  const shippingRates: ShippingRate[] = NEIGHBORHOODS.map((n) => ({ neighborhood: n, price: 0 }))
-
-  return { categories, products, motoboys, orders: [], shippingRates }
+  return { categories, products, motoboys, orders: [], pricePerKm: 1.5 }
 }
 
 export function loadDb(): LocalDb {

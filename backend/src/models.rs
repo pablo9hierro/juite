@@ -206,23 +206,6 @@ impl OrderDto {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct OrderItemInput {
-    pub product_id: String,
-    pub quantity: i64,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CreateOrderInput {
-    pub customer_name: String,
-    pub customer_whatsapp: String,
-    pub delivery_type: String,
-    pub neighborhood: Option<String>,
-    pub address: Option<String>,
-    pub payment_method: String,
-    pub items: Vec<OrderItemInput>,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct UpdateStatusInput {
     pub status: String,
     #[serde(default)]
@@ -258,19 +241,6 @@ pub struct LoginInput {
 pub struct LoginResponse {
     pub token: String,
     pub name: String,
-}
-
-// ---------- Shipping rates ----------
-
-#[derive(Debug, sqlx::FromRow, Serialize)]
-pub struct ShippingRate {
-    pub neighborhood: String,
-    pub price: f64,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ShippingRateInput {
-    pub price: f64,
 }
 
 // ---------- Financeiro ----------

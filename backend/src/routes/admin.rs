@@ -8,8 +8,7 @@ use crate::auth::{hash_password, AdminUser, SunsetAdminSession};
 use crate::error::AppError;
 use crate::models::{
     Category, CategoryInput, FinanceiroSummary, MotoboyDto, MotoboyInput, MotoboyRow, OrderDto,
-    OrderRow, ProductDto, ProductInput, ProductRow, ShippingRate, ShippingRateInput, StatusCount,
-    TopProduct, UpdateStatusInput,
+    OrderRow, ProductDto, ProductInput, ProductRow, StatusCount, TopProduct, UpdateStatusInput,
 };
 use crate::orders_common::row_to_dto;
 use crate::state::AppState;
@@ -432,37 +431,6 @@ pub async fn update_order_status(
         .await?
         .ok_or_else(|| AppError::NotFound("order not found".to_string()))?;
     Ok(Json(dto))
-}
-
-// ---------- Shipping rates ----------
-
-pub async fn list_shipping_rates(
-    State(state): State<AppState>,
-    _admin: AdminUser,
-) -> Result<Json<Vec<ShippingRate>>, AppError> {
-    let rows: Vec<ShippingRate> = sqlx::query_as(
-        "SELECT neighborhood, price FROM neighborhood_shipping_rates ORDER BY neighborhood",
-    )
-    .fetch_all(&state.pool)
-    .await?;
-    Ok(Json(rows))
-}
-
-pub async fn update_shipping_rate(
-    State(state): State<AppState>,
-    _admin: AdminUser,
-    Path(neighborhood): Path<String>,
-    Json(input): Json<ShippingRateInput>,
-) -> Result<Json<ShippingRate>, AppError> {
-    sqlx::query(
-        "INSERT INTO neighborhood_shipping_rates (neighborhood, price) VALUES ($1, $2) \
-         ON CONFLICT (neighborhood) DO UPDATE SET price = EXCLUDED.price",
-    )
-    .bind(&neighborhood)
-    .bind(input.price)
-    .execute(&state.pool)
-    .await?;
-    Ok(Json(ShippingRate { neighborhood, price: input.price }))
 }
 
 // ---------- Financeiro ----------

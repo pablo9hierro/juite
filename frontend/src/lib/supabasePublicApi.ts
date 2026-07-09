@@ -1,6 +1,6 @@
 import { ApiError } from './apiError'
 import { supabase } from './supabaseClient'
-import type { Category, Order, Product, ShippingRate } from './types'
+import type { Category, Order, Product, ShippingEstimate, ShippingSettings } from './types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new ApiError(400, result.error.message)
@@ -36,21 +36,16 @@ export const supabasePublicApi = {
       return toProduct(data)
     },
   },
-  neighborhoods: {
-    list: async () => {
-      const { data, error } = await supabase
-        .from('neighborhood_shipping_rates')
-        .select('neighborhood')
-        .order('neighborhood')
-      if (error) throw new ApiError(400, error.message)
-      return (data ?? []).map((r) => r.neighborhood)
-    },
-  },
-  shippingRates: {
-    list: async () =>
-      unwrap<ShippingRate[]>(
-        await supabase.from('neighborhood_shipping_rates').select('neighborhood, price').order('neighborhood')
+  shippingSettings: {
+    get: async () =>
+      unwrap<ShippingSettings>(
+        await supabase.from('shipping_settings').select('price_per_km').single()
       ),
+  },
+  estimateShipping: async (lat: number, lng: number) => {
+    const { data, error } = await supabase.rpc('estimate_shipping', { p_lat: lat, p_lng: lng })
+    if (error) throw new ApiError(400, error.message)
+    return data as ShippingEstimate
   },
   orders: {
     create: async (payload: {
@@ -59,6 +54,8 @@ export const supabasePublicApi = {
       delivery_type: 'entrega' | 'retirada'
       neighborhood?: string
       address?: string
+      customer_lat?: number
+      customer_lng?: number
       payment_method: 'pix' | 'cartao' | 'dinheiro'
       items: { product_id: string; quantity: number }[]
     }) => {
@@ -70,6 +67,8 @@ export const supabasePublicApi = {
         p_neighborhood: payload.neighborhood ?? null,
         p_address: payload.address ?? null,
         p_items: payload.items,
+        p_customer_lat: payload.customer_lat ?? null,
+        p_customer_lng: payload.customer_lng ?? null,
       })
       if (error) throw new ApiError(400, error.message)
       return data as Order

@@ -107,8 +107,12 @@ export const STATUS_LABELS: Record<OrderStatus, string> = {
   concluido: 'Concluído',
 }
 
-export interface ShippingRate {
-  neighborhood: string
+export interface ShippingSettings {
+  price_per_km: number
+}
+
+export interface ShippingEstimate {
+  km: number
   price: number
 }
 
