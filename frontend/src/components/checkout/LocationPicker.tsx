@@ -153,6 +153,22 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
     }
   }
 
+  // Botão de GPS na tela de ajuste — pula direto pra posição atual do
+  // aparelho. O mapa em si já tem liberdade total de arrastar/zoom o
+  // tempo todo (nunca recentraliza sozinho), isso aqui é só um atalho.
+  async function recentrarNoGps() {
+    setErrorMsg(null)
+    setGpsLoading(true)
+    try {
+      const p = await obterLocalizacao()
+      abrirAjuste(p)
+    } catch {
+      setErrorMsg('Não consegui acessar seu GPS.')
+    } finally {
+      setGpsLoading(false)
+    }
+  }
+
   async function handleMoveEnd(c: Ponto) {
     setPos(c)
     setMoving(false)
@@ -261,6 +277,14 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
               aria-label="Fechar"
             >
               <X className="w-5 h-5" />
+            </button>
+            <button
+              onClick={recentrarNoGps}
+              disabled={gpsLoading}
+              className="absolute bottom-4 right-4 z-[500] w-10 h-10 flex items-center justify-center rounded-full bg-son-black/80 border border-white/10 text-white backdrop-blur-sm"
+              aria-label="Centralizar na minha localização"
+            >
+              {gpsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}
             </button>
 
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center z-[400]">

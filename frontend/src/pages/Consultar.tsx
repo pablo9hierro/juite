@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Loader2, Package, Search } from 'lucide-react'
+import { Loader2, LocateFixed, Package, Search } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
 import { StatusBadge } from '../components/ui/Badge'
 import { api } from '../lib/api'
 import { TILE_ATTR, TILE_URL, FALLBACK } from '../lib/geo/mapa'
+import { destDivIcon, motoDivIcon } from '../lib/geo/icones'
 import type { DeliveryPosition, Order } from '../lib/types'
 import { useCustomer } from '../store/customer'
 
@@ -17,24 +18,6 @@ function currency(v: number) {
 }
 
 const TRACK_POLL_MS = 5000
-
-function motoIcon(heading: number | null) {
-  return L.divIcon({
-    className: 'icone-limpo',
-    html: `<div style="font-size:24px;transform:rotate(${heading ?? 0}deg);transition:transform .3s">🛵</div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-  })
-}
-
-function destIcon() {
-  return L.divIcon({
-    className: 'icone-limpo',
-    html: `<div style="font-size:26px">📍</div>`,
-    iconSize: [26, 26],
-    iconAnchor: [13, 26],
-  })
-}
 
 // Mapa ao vivo do motoboy a caminho — só aparece quando o pedido está
 // em_rota_de_entrega. Faz polling em vez de assinar Realtime (mais simples
@@ -46,14 +29,25 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
   const mapRef = useRef<L.Map | null>(null)
   const motoMarkerRef = useRef<L.Marker | null>(null)
   const destMarkerRef = useRef<L.Marker | null>(null)
+  // Liberdade total pra arrastar/dar zoom no mapa — só recentraliza sozinho
+  // até o cliente mexer nele pela primeira vez; depois disso só o botão de
+  // GPS recentraliza.
+  const userMovedRef = useRef(false)
+  const suppressRef = useRef(false)
 
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return
     const map = L.map(mapDivRef.current, { zoomControl: false }).setView([FALLBACK.lat, FALLBACK.lng], 14)
     L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20 }).addTo(map)
     if (order.customer_lat != null && order.customer_lng != null) {
-      destMarkerRef.current = L.marker([order.customer_lat, order.customer_lng], { icon: destIcon() }).addTo(map)
+      destMarkerRef.current = L.marker([order.customer_lat, order.customer_lng], { icon: destDivIcon(26) }).addTo(map)
     }
+    map.on('dragstart', () => {
+      userMovedRef.current = true
+    })
+    map.on('zoomstart', () => {
+      if (!suppressRef.current) userMovedRef.current = true
+    })
     mapRef.current = map
     return () => {
       map.remove()
@@ -80,21 +74,38 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
     }
   }, [order.id])
 
+  const recenter = () => {
+    userMovedRef.current = false
+    const map = mapRef.current
+    if (!map || !position) return
+    suppressRef.current = true
+    if (destMarkerRef.current) {
+      map.fitBounds(L.latLngBounds([[position.lat, position.lng], destMarkerRef.current.getLatLng()]), { padding: [40, 40] })
+    } else {
+      map.setView([position.lat, position.lng], 15)
+    }
+    suppressRef.current = false
+  }
+
   useEffect(() => {
     const map = mapRef.current
     if (!map || !position) return
     if (!motoMarkerRef.current) {
-      motoMarkerRef.current = L.marker([position.lat, position.lng], { icon: motoIcon(position.heading) }).addTo(map)
+      motoMarkerRef.current = L.marker([position.lat, position.lng], { icon: motoDivIcon(position.heading, 32) }).addTo(map)
     } else {
       motoMarkerRef.current.setLatLng([position.lat, position.lng])
-      motoMarkerRef.current.setIcon(motoIcon(position.heading))
+      motoMarkerRef.current.setIcon(motoDivIcon(position.heading, 32))
     }
-    if (destMarkerRef.current) {
-      map.fitBounds(L.latLngBounds([[position.lat, position.lng], destMarkerRef.current.getLatLng()]), {
-        padding: [40, 40],
-      })
-    } else {
-      map.setView([position.lat, position.lng], 15)
+    if (!userMovedRef.current) {
+      suppressRef.current = true
+      if (destMarkerRef.current) {
+        map.fitBounds(L.latLngBounds([[position.lat, position.lng], destMarkerRef.current.getLatLng()]), {
+          padding: [40, 40],
+        })
+      } else {
+        map.setView([position.lat, position.lng], 15)
+      }
+      suppressRef.current = false
     }
   }, [position])
 
@@ -106,6 +117,15 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
           elementos fixed da página (os FABs de WhatsApp/carrinho). */}
       <div className="relative isolate w-full h-48 rounded-xl overflow-hidden border border-white/5">
         <div ref={mapDivRef} className="absolute inset-0" />
+        {position && (
+          <button
+            onClick={recenter}
+            className="absolute bottom-2 right-2 z-[500] w-8 h-8 flex items-center justify-center rounded-full bg-son-black/80 border border-white/10 text-white backdrop-blur-sm"
+            aria-label="Centralizar mapa"
+          >
+            <LocateFixed className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </div>
   )

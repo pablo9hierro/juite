@@ -20,6 +20,13 @@
   color-scheme: dark;
 }
 
+/* Reforça o contraste das ruas nos tiles do mapa (CARTO Voyager já é bem
+   melhor que a Positron, mas ainda fica meio pálido) — filtro no pane em
+   vez de por tile individual, evita costura visível entre tiles. */
+.leaflet-tile-pane {
+  filter: contrast(1.35) saturate(1.3) brightness(0.97);
+}
+
 /* Modo claro, hoje só usado no dashboard do motoboy (o atributo fica no
    container raiz de MotoboyLayout). Redefinir os tokens de cor aqui já
    cobre a maior parte da UI por cascata normal de custom property; o resto
