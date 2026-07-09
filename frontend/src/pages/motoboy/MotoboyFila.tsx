@@ -51,7 +51,7 @@ function OrderCard({
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1 gap-2">
-          <span className="font-semibold text-white truncate">{order.customer_name}</span>
+          <span className="font-semibold text-son-silver truncate">{order.customer_name}</span>
           {order.customer_lat != null && order.customer_lng != null ? (
             <a
               href={`https://www.google.com/maps?q=${order.customer_lat},${order.customer_lng}`}
@@ -96,7 +96,7 @@ function ActiveRunCard({ run }: { run: MotoboyRun }) {
       <p className="text-xs text-son-silver-dim mb-1">
         Entrega {run.current_index + 1} de {run.order_ids.length}
       </p>
-      <p className="font-semibold text-white text-lg mb-1">{current.customer_name}</p>
+      <p className="font-semibold text-son-silver text-lg mb-1">{current.customer_name}</p>
       <p className="text-sm text-son-silver-dim flex items-center gap-1 mb-1">
         <MapPin className="w-3.5 h-3.5" /> {current.neighborhood}
       </p>
@@ -175,7 +175,7 @@ export default function MotoboyFila() {
             key={t.value}
             onClick={() => setTab(t.value)}
             className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              tab === t.value ? 'sunset-bg text-white' : 'bg-son-surface border border-white/5 text-son-silver hover:border-son-pink/30'
+              tab === t.value ? 'sunset-bg text-son-silver' : 'bg-son-surface border border-white/5 text-son-silver hover:border-son-pink/30'
             }`}
           >
             {t.label} ({counts[t.value] ?? 0})

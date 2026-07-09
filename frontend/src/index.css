@@ -35,20 +35,34 @@
   color-scheme: light;
 }
 
-[data-theme='light'] [class~='text-white'] {
+/* Cada regra cobre DOIS casos: a classe num descendente do container com
+   data-theme (o normal) E a classe no PRÓPRIO elemento que carrega
+   data-theme (ex.: o container raiz de MotoboyLayout tem os dois atributos
+   ao mesmo tempo — um combinador de descendente sozinho NUNCA casa um
+   elemento contra ele mesmo, então sem a versão composta a cor herdada por
+   tudo que não define a própria cor ficava presa em branco). */
+[data-theme='light'] [class~='text-white'],
+[data-theme='light'][class~='text-white'] {
   color: var(--color-son-silver);
 }
 
-[data-theme='light'] [class~='bg-white/10'] {
+[data-theme='light'] [class~='bg-white/10'],
+[data-theme='light'][class~='bg-white/10'] {
   background-color: rgba(0, 0, 0, 0.06);
 }
 
-[data-theme='light'] [class~='border-white/5'] {
+[data-theme='light'] [class~='border-white/5'],
+[data-theme='light'][class~='border-white/5'] {
   border-color: rgba(0, 0, 0, 0.06);
 }
 
-[data-theme='light'] [class~='border-white/10'] {
+[data-theme='light'] [class~='border-white/10'],
+[data-theme='light'][class~='border-white/10'] {
   border-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='light'] [class~='divide-white/5'] > :not(:last-child) {
+  border-color: rgba(0, 0, 0, 0.06);
 }
 
 [data-theme='light'] .glass {

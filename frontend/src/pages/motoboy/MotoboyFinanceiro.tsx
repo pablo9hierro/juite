@@ -42,7 +42,7 @@ export default function MotoboyFinanceiro() {
           <div className="flex items-center gap-2 text-son-silver-dim text-xs mb-2">
             <Package className="w-3.5 h-3.5" /> Entregas concluídas
           </div>
-          <p className="font-black text-2xl text-white">{data.total_deliveries}</p>
+          <p className="font-black text-2xl text-son-silver">{data.total_deliveries}</p>
         </Card>
       </div>
 
@@ -50,7 +50,7 @@ export default function MotoboyFinanceiro() {
         <div className="flex items-center gap-2 text-son-silver-dim text-xs mb-2">
           <Clock className="w-3.5 h-3.5" /> Tempo médio por entrega
         </div>
-        <p className="font-black text-xl text-white">
+        <p className="font-black text-xl text-son-silver">
           {data.avg_delivery_minutes > 0 ? `${data.avg_delivery_minutes.toFixed(1).replace('.', ',')} min` : '—'}
         </p>
       </Card>
@@ -64,7 +64,7 @@ export default function MotoboyFinanceiro() {
             {data.deliveries.map((d) => (
               <li key={d.id} className="py-2.5 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm text-white truncate">{d.customer_name}</p>
+                  <p className="text-sm text-son-silver truncate">{d.customer_name}</p>
                   <p className="text-xs text-son-silver-dim flex items-center gap-1">
                     <MapPin className="w-3 h-3" /> {d.neighborhood ?? '-'}
                     {d.duration_minutes != null && ` · ${d.duration_minutes.toFixed(0)} min`}
@@ -89,10 +89,10 @@ export default function MotoboyFinanceiro() {
             {data.settlements.map((s) => (
               <li key={s.id} className="py-2.5 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm text-white capitalize">{s.payment_method}</p>
+                  <p className="text-sm text-son-silver capitalize">{s.payment_method}</p>
                   <p className="text-xs text-son-silver-dim">{new Date(s.paid_at).toLocaleString('pt-BR')}</p>
                 </div>
-                <span className="font-bold text-sm text-white flex-shrink-0">{currency(s.amount)}</span>
+                <span className="font-bold text-sm text-son-silver flex-shrink-0">{currency(s.amount)}</span>
               </li>
             ))}
           </ul>

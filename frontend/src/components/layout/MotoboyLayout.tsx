@@ -44,7 +44,7 @@ export default function MotoboyLayout() {
   }
 
   return (
-    <div data-theme={theme} className="min-h-screen bg-son-black text-white">
+    <div data-theme={theme} className="min-h-screen bg-son-black text-son-silver">
       <header className="bg-son-surface border-b border-white/5 px-4 sm:px-8 py-4 flex items-center justify-between sticky top-0 z-10">
         <div>
           <Logo size="sm" />
@@ -72,7 +72,7 @@ export default function MotoboyLayout() {
               key={href}
               to={href}
               className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                active ? 'sunset-bg text-white' : 'bg-son-surface border border-white/5 text-son-silver hover:bg-son-surface-light'
+                active ? 'sunset-bg text-son-silver' : 'bg-son-surface border border-white/5 text-son-silver hover:bg-son-surface-light'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -84,7 +84,7 @@ export default function MotoboyLayout() {
       {hasActiveRun && location.pathname !== '/motoboy/corrida' && (
         <button
           onClick={() => navigate('/motoboy/corrida')}
-          className="sunset-bg w-full flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5"
+          className="sunset-bg w-full flex items-center justify-center gap-2 text-son-silver text-sm font-semibold py-2.5"
         >
           <Navigation className="w-4 h-4" />
           Corrida em andamento — toque pra voltar ao mapa

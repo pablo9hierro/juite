@@ -101,7 +101,12 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
   return (
     <div className="mt-3">
       {!position && <p className="text-xs text-son-silver-dim mb-2">Aguardando a localização do motoboy…</p>}
-      <div ref={mapDivRef} className="w-full h-48 rounded-xl overflow-hidden border border-white/5" />
+      {/* isolate: cria um stacking context próprio pro mapa, senão os panes
+          internos do Leaflet (z-index alto) vazam por cima de outros
+          elementos fixed da página (os FABs de WhatsApp/carrinho). */}
+      <div className="relative isolate w-full h-48 rounded-xl overflow-hidden border border-white/5">
+        <div ref={mapDivRef} className="absolute inset-0" />
+      </div>
     </div>
   )
 }

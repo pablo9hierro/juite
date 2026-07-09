@@ -69,7 +69,7 @@ function SwipeToComplete({ onComplete, disabled }: { onComplete: () => void; dis
         }}
         className="absolute left-0 top-0 w-14 h-14 rounded-full sunset-bg flex items-center justify-center cursor-grab active:cursor-grabbing touch-none"
       >
-        <ChevronsRight className="w-5 h-5 text-white" />
+        <ChevronsRight className="w-5 h-5 text-son-silver" />
       </motion.div>
     </div>
   )
@@ -97,23 +97,39 @@ export default function MotoboyCorrida() {
   // Reidrata a corrida ativa direto do banco — é isso que garante que ela
   // nunca "some" mesmo depois de um reload.
   useEffect(() => {
+    let cancelled = false
     api.motoboy.runs
       .active()
       .then((r) => {
+        if (cancelled) return
         if (!r) {
           navigate('/motoboy')
           return
         }
         setRun(r)
       })
-      .finally(() => setLoading(false))
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof ApiError ? e.message : 'Não foi possível carregar a corrida.')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [navigate])
 
+  // O container do mapa fica sempre montado (mesmo durante o loading —
+  // ver JSX abaixo), senão esse efeito roda antes da div existir de
+  // verdade e, como as deps são [], nunca mais tenta de novo.
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return
     const map = L.map(mapDivRef.current, { zoomControl: false }).setView([FALLBACK.lat, FALLBACK.lng], 15)
     L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20 }).addTo(map)
     mapRef.current = map
+    // Garante o tamanho certo mesmo se o layout mudar um pixel entre o
+    // mount e a primeira pintura dos tiles.
+    setTimeout(() => map.invalidateSize(), 0)
     return () => {
       map.remove()
       mapRef.current = null
@@ -219,66 +235,77 @@ export default function MotoboyCorrida() {
     finishCurrent()
   }
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-24">
-        <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
-      </div>
-    )
-  }
-  if (!run || !current) return null
-
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-black">Em rota</h1>
-          <p className="text-xs text-son-silver-dim">
-            Entrega {run.current_index + 1} de {run.order_ids.length}
-          </p>
+          {run && (
+            <p className="text-xs text-son-silver-dim">
+              Entrega {run.current_index + 1} de {run.order_ids.length}
+            </p>
+          )}
         </div>
-        <button
-          onClick={() => setView((v) => (v === 'primeira' ? 'terceira' : 'primeira'))}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-son-surface border border-white/5 text-son-silver hover:border-son-pink/30"
-        >
-          {view === 'primeira' ? <Compass className="w-3.5 h-3.5" /> : <MapIcon className="w-3.5 h-3.5" />}
-          {view === 'primeira' ? '1ª pessoa' : '3ª pessoa'}
-        </button>
+        {run && (
+          <button
+            onClick={() => setView((v) => (v === 'primeira' ? 'terceira' : 'primeira'))}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-son-surface border border-white/5 text-son-silver hover:border-son-pink/30"
+          >
+            {view === 'primeira' ? <Compass className="w-3.5 h-3.5" /> : <MapIcon className="w-3.5 h-3.5" />}
+            {view === 'primeira' ? '1ª pessoa' : '3ª pessoa'}
+          </button>
+        )}
       </div>
 
       {error && <p className="error-msg mb-3">{error}</p>}
 
-      <div ref={mapDivRef} className="w-full h-[55vh] rounded-2xl overflow-hidden border border-white/5" />
-
-      <div className="bg-son-surface border border-white/5 rounded-2xl p-4 mt-4">
-        <p className="font-semibold text-white">{current.customer_name}</p>
-        <p className="text-sm text-son-silver-dim flex items-center gap-1 mt-0.5">
-          <MapPin className="w-3.5 h-3.5" /> {current.neighborhood}
-        </p>
-        {current.reference_point && <p className="text-xs text-son-silver-dim italic mt-0.5">{current.reference_point}</p>}
-        <p className="text-xs text-son-silver-dim mt-2">
-          {route ? `${route.km.toFixed(1).replace('.', ',')} km · ${route.min} min` : 'Calculando rota…'}
-        </p>
-
-        <div className="mt-4">
-          {arrived ? (
-            <SwipeToComplete onComplete={handleSwipe} disabled={completing} />
-          ) : (
-            <div className="h-14 rounded-full bg-son-surface-light flex items-center justify-center text-sm text-son-silver-dim">
-              A caminho — arraste pra concluir quando chegar
-            </div>
-          )}
-        </div>
+      {/* isolate: cria um novo stacking context pro mapa, senão os panes
+          internos do Leaflet (z-index alto) podiam vazar por cima de
+          outros elementos fixed da página, tipo FABs. */}
+      <div className="relative isolate">
+        <div ref={mapDivRef} className="w-full h-[55vh] rounded-2xl overflow-hidden border border-white/5" />
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-son-black/50 rounded-2xl">
+            <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
+          </div>
+        )}
       </div>
 
-      {confirmingPayment && (
+      {!loading && !run && (
+        <p className="text-sm text-son-silver-dim text-center py-8">Nenhuma corrida ativa no momento.</p>
+      )}
+
+      {run && current && (
+        <div className="bg-son-surface border border-white/5 rounded-2xl p-4 mt-4">
+          <p className="font-semibold text-son-silver">{current.customer_name}</p>
+          <p className="text-sm text-son-silver-dim flex items-center gap-1 mt-0.5">
+            <MapPin className="w-3.5 h-3.5" /> {current.neighborhood}
+          </p>
+          {current.reference_point && <p className="text-xs text-son-silver-dim italic mt-0.5">{current.reference_point}</p>}
+          <p className="text-xs text-son-silver-dim mt-2">
+            {route ? `${route.km.toFixed(1).replace('.', ',')} km · ${route.min} min` : 'Calculando rota…'}
+          </p>
+
+          <div className="mt-4">
+            {arrived ? (
+              <SwipeToComplete onComplete={handleSwipe} disabled={completing} />
+            ) : (
+              <div className="h-14 rounded-full bg-son-surface-light flex items-center justify-center text-sm text-son-silver-dim">
+                A caminho — arraste pra concluir quando chegar
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {confirmingPayment && current && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           onClick={() => setConfirmingPayment(false)}
         >
           <div className="glass rounded-2xl p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
             <PackageCheck className="w-8 h-8 text-son-gold mb-2" />
-            <h3 className="font-bold text-white mb-2">Confirmar pagamento</h3>
+            <h3 className="font-bold text-son-silver mb-2">Confirmar pagamento</h3>
             <p className="text-sm text-son-silver-dim mb-5">
               Confirme que recebeu o pagamento em {current.payment_method} de{' '}
               <span className="sunset-text font-bold">{currency(current.total)}</span> para concluir a entrega.
