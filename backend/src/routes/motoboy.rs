@@ -268,7 +268,9 @@ pub struct NotifyEnRouteInput {
     pub order_id: String,
 }
 
-/// Sent when the motoboy advances an order to em_rota_de_entrega.
+/// Sent when the motoboy starts a delivery run (order moves straight to
+/// em_rota_de_entrega — see sunset.motoboy_start_run). Includes a tracking
+/// link so the customer can watch the delivery live on /consultar.
 pub async fn notify_en_route(
     State(state): State<AppState>,
     SunsetMotoboySession(motoboy_id): SunsetMotoboySession,
@@ -280,10 +282,19 @@ pub async fn notify_en_route(
         return Err(AppError::NotFound("order not found".to_string()));
     };
     let digits = whatsapp::digits_only(&order.customer_whatsapp);
-    let msg = format!(
-        "Olá, {}! Aqui é {name}, seu entregador da Sunset Tabas 🛵 Já estou a caminho, chego jajá!",
-        order.customer_name
-    );
+    let msg = if state.frontend_public_url.is_empty() {
+        format!(
+            "Olá, {}! Aqui é {name}, seu entregador da Sunset Tabas 🛵 Já estou a caminho, chego jajá!",
+            order.customer_name
+        )
+    } else {
+        format!(
+            "Olá, {}! Aqui é {name}, seu entregador da Sunset Tabas 🛵 Já estou a caminho, chego jajá!\n\nAcompanhe a entrega em tempo real: {}/consultar?order={}",
+            order.customer_name,
+            state.frontend_public_url.trim_end_matches('/'),
+            order.id
+        )
+    };
     whatsapp::notify(&state, &instance, &digits, &msg);
     Ok(StatusCode::NO_CONTENT)
 }

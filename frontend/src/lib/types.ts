@@ -57,6 +57,8 @@ export interface Order {
   customer_lat?: number | null
   customer_lng?: number | null
   motoboy_paid_at?: string | null
+  delivery_started_at?: string | null
+  delivered_at?: string | null
   items: OrderItem[]
   created_at: string
   updated_at?: string
@@ -78,6 +80,7 @@ export interface MotoboyDelivery {
   shipping_price: number
   earned: number
   paid: boolean
+  duration_minutes: number | null
   updated_at: string
 }
 
@@ -93,6 +96,7 @@ export interface MotoboyFinanceiro {
   total_paid: number
   total_deliveries: number
   total_shipping: number
+  avg_delivery_minutes: number
   deliveries: MotoboyDelivery[]
   settlements: MotoboySettlement[]
 }
@@ -104,11 +108,33 @@ export interface AdminMotoboyFinanceiro {
   total_shipping: number
   pending_amount: number
   total_paid: number
+  avg_delivery_minutes: number
 }
 
 export interface MotoboyPending {
   pending_amount: number
   pending_deliveries: number | null
+}
+
+export interface MotoboyRun {
+  id: string
+  status: 'ativo' | 'concluido'
+  current_index: number
+  order_ids: string[]
+  motoboy_lat: number | null
+  motoboy_lng: number | null
+  motoboy_heading: number | null
+  started_at: string
+  finished_at: string | null
+  orders: Order[]
+}
+
+export interface DeliveryPosition {
+  lat: number
+  lng: number
+  heading: number | null
+  updated_at: string
+  is_next_stop: boolean
 }
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {
@@ -167,4 +193,5 @@ export interface FinanceiroSummary {
   top_products: TopProduct[]
   recent_orders: Order[]
   motoboys: AdminMotoboyFinanceiro[]
+  avg_delivery_minutes: number
 }

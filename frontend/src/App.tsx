@@ -15,6 +15,7 @@ import AdminFinanceiro from './pages/admin/AdminFinanceiro'
 import AdminSenha from './pages/admin/AdminSenha'
 import MotoboyLogin from './pages/motoboy/MotoboyLogin'
 import MotoboyFila from './pages/motoboy/MotoboyFila'
+import MotoboyCorrida from './pages/motoboy/MotoboyCorrida'
 import MotoboyFinanceiro from './pages/motoboy/MotoboyFinanceiro'
 import MotoboyConta from './pages/motoboy/MotoboyConta'
 import AdminLayout from './components/layout/AdminLayout'
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/motoboy/login" element={<MotoboyLogin />} />
         <Route path="/motoboy" element={<MotoboyLayout />}>
           <Route index element={<MotoboyFila />} />
+          <Route path="corrida" element={<MotoboyCorrida />} />
           <Route path="financeiro" element={<MotoboyFinanceiro />} />
           <Route path="conta" element={<MotoboyConta />} />
         </Route>

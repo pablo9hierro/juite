@@ -12,6 +12,7 @@ import type {
   Motoboy,
   MotoboyFinanceiro,
   MotoboyPending,
+  MotoboyRun,
   MotoboySettlement,
   Order,
   PaymentMethod,
@@ -79,6 +80,7 @@ const remoteApi = {
   products: supabasePublicApi.products,
   shippingSettings: supabasePublicApi.shippingSettings,
   estimateShipping: supabasePublicApi.estimateShipping,
+  trackDeliveryPosition: supabasePublicApi.trackDeliveryPosition,
   orders: {
     create: supabasePublicApi.orders.create,
     get: supabasePublicApi.orders.get,
@@ -243,16 +245,24 @@ const remoteApi = {
     orders: {
       list: (status: string) => rpc<Order[]>('motoboy_list_orders', { p_token: motoboyToken(), p_status: status }),
       counts: () => rpc<Record<string, number>>('motoboy_order_counts', { p_token: motoboyToken() }),
-      requestLocation: (orderIds: string[]) =>
-        rpc<{ updated: Order[]; skipped: { id: string; reason: string }[] }>('motoboy_request_location', {
+    },
+    // Corrida ativa: sobrevive a troca de página/reload porque o estado
+    // mora no banco (sunset.motoboy_runs), não no componente React — ver
+    // supabase/sunset_motoboy_runs.sql.
+    runs: {
+      active: () => rpc<MotoboyRun | null>('motoboy_active_run', { p_token: motoboyToken() }),
+      start: (orderIds: string[]) =>
+        rpc<MotoboyRun>('motoboy_start_run', { p_token: motoboyToken(), p_order_ids: orderIds }),
+      updatePosition: (lat: number, lng: number, heading?: number | null) =>
+        rpc<void>('motoboy_update_run_position', {
           p_token: motoboyToken(),
-          p_order_ids: orderIds,
+          p_lat: lat,
+          p_lng: lng,
+          p_heading: heading ?? null,
         }),
-      updateStatus: (id: string, status: string, paymentConfirmed?: boolean) =>
-        rpc<Order>('motoboy_update_order_status', {
+      completeCurrent: (paymentConfirmed?: boolean) =>
+        rpc<MotoboyRun>('motoboy_complete_current_delivery', {
           p_token: motoboyToken(),
-          p_order_id: id,
-          p_status: status,
           p_payment_confirmed: paymentConfirmed ?? null,
         }),
     },
@@ -265,16 +275,9 @@ const remoteApi = {
       status: () => request<EvolutionStatus>('/api/motoboy/whatsapp/status', { token: motoboyToken() }),
       connect: () => request<EvolutionConnect>('/api/motoboy/whatsapp/connect', { token: motoboyToken() }),
       logout: () => request<void>('/api/motoboy/whatsapp/logout', { method: 'POST', token: motoboyToken() }),
-      // Chamados depois dos RPCs motoboy_request_location/motoboy_update_order_status
-      // (que só mexem no banco) — mandam a mensagem de verdade a partir do
-      // WhatsApp do próprio motoboy. O backend monta o texto (com o nome do
-      // motoboy) e busca os dados do pedido, só recebe os ids.
-      notifyLocationRequest: (orderIds: string[]) =>
-        request<void>('/api/motoboy/whatsapp/notify-location-request', {
-          method: 'POST',
-          body: JSON.stringify({ order_ids: orderIds }),
-          token: motoboyToken(),
-        }),
+      // Chamado depois de motoboy_start_run (que só mexe no banco) — manda
+      // a mensagem de verdade a partir do WhatsApp do próprio motoboy,
+      // avisando que saiu pra entrega + link de acompanhamento.
       notifyEnRoute: (orderId: string) =>
         request<void>('/api/motoboy/whatsapp/notify-en-route', {
           method: 'POST',

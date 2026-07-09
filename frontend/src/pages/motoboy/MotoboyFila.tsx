@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Reorder, useDragControls } from 'framer-motion'
-import { GripVertical, Loader2, MapPin, MapPinned, Navigation, Package, PackageCheck } from 'lucide-react'
+import { GripVertical, Loader2, MapPin, MapPinned, Navigation, Package } from 'lucide-react'
 import { StatusBadge } from '../../components/ui/Badge'
 import WhatsAppLink from '../../components/ui/WhatsAppLink'
 import { api, ApiError } from '../../lib/api'
-import type { Order, OrderStatus } from '../../lib/types'
+import type { MotoboyRun, Order, OrderStatus } from '../../lib/types'
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
@@ -12,47 +13,22 @@ function currency(v: number) {
 
 const TABS: { value: OrderStatus; label: string }[] = [
   { value: 'pedido_pronto', label: 'Pedido pronto' },
-  { value: 'aguardando_localizacao', label: 'Aguardando localização' },
   { value: 'em_rota_de_entrega', label: 'Em rota' },
   { value: 'concluido', label: 'Concluídos' },
 ]
 
-const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
-  aguardando_localizacao: 'em_rota_de_entrega',
-  em_rota_de_entrega: 'entregue',
-  entregue: 'concluido',
-}
-const NEXT_LABEL: Partial<Record<OrderStatus, string>> = {
-  aguardando_localizacao: 'Saiu para entrega',
-  em_rota_de_entrega: 'Marcar entregue',
-  entregue: 'Concluir',
-}
-
 function OrderCard({
   order,
-  tab,
+  selectable,
   selected,
   toggleSelect,
-  busyId,
-  advance,
 }: {
   order: Order
-  tab: OrderStatus
+  selectable: boolean
   selected: string[]
   toggleSelect: (id: string) => void
-  busyId: string | null
-  advance: (order: Order, requirePayment: boolean) => void
 }) {
   const dragControls = useDragControls()
-  const next = NEXT_STATUS[order.status]
-  // Gate the popup on whichever transition is actually pending payment
-  // confirmation: normally em_rota_de_entrega -> entregue, but also
-  // entregue -> concluido as a fallback for orders that somehow got
-  // to "entregue" without it (e.g. legacy data).
-  const requiresPaymentConfirm =
-    (order.status === 'em_rota_de_entrega' || order.status === 'entregue') &&
-    order.payment_method !== 'pix' &&
-    order.payment_status !== 'pago'
 
   return (
     <Reorder.Item
@@ -65,7 +41,7 @@ function OrderCard({
         onPointerDown={(e) => dragControls.start(e)}
         className="w-4 h-4 text-son-silver-dim mt-1 flex-shrink-0 cursor-grab active:cursor-grabbing touch-none"
       />
-      {(tab === 'pedido_pronto' || tab === 'aguardando_localizacao') && (
+      {selectable && (
         <input
           type="checkbox"
           checked={selected.includes(order.id)}
@@ -85,7 +61,7 @@ function OrderCard({
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors flex-shrink-0"
             >
               <MapPinned className="w-3 h-3" />
-              Localização recebida
+              Ver no mapa
             </a>
           ) : (
             <StatusBadge status={order.status} />
@@ -105,31 +81,45 @@ function OrderCard({
           <span className="text-son-silver-dim">{order.payment_method}</span>
           <span className="sunset-text font-bold">{currency(order.total)}</span>
         </div>
-        {next && (
-          <button
-            onClick={() => advance(order, requiresPaymentConfirm)}
-            disabled={busyId === order.id}
-            className="btn-secondary w-full text-sm py-2 mt-3"
-          >
-            {busyId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Navigation className="w-3.5 h-3.5" />}
-            {NEXT_LABEL[order.status]}
-          </button>
-        )}
       </div>
     </Reorder.Item>
+  )
+}
+
+function ActiveRunCard({ run }: { run: MotoboyRun }) {
+  const navigate = useNavigate()
+  const current = run.orders[run.current_index]
+  if (!current) return null
+
+  return (
+    <div className="bg-son-surface border border-son-pink/30 rounded-2xl p-5">
+      <p className="text-xs text-son-silver-dim mb-1">
+        Entrega {run.current_index + 1} de {run.order_ids.length}
+      </p>
+      <p className="font-semibold text-white text-lg mb-1">{current.customer_name}</p>
+      <p className="text-sm text-son-silver-dim flex items-center gap-1 mb-1">
+        <MapPin className="w-3.5 h-3.5" /> {current.neighborhood}
+      </p>
+      {current.reference_point && <p className="text-xs text-son-silver-dim italic mb-3">{current.reference_point}</p>}
+      <button onClick={() => navigate('/motoboy/corrida')} className="btn-primary w-full text-sm py-3 mt-2">
+        <Navigation className="w-4 h-4" />
+        Abrir navegação
+      </button>
+    </div>
   )
 }
 
 export default function MotoboyFila() {
   const [tab, setTab] = useState<OrderStatus>('pedido_pronto')
   const [orders, setOrders] = useState<Order[]>([])
+  const [activeRun, setActiveRun] = useState<MotoboyRun | null>(null)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<string[]>([])
-  const [busyId, setBusyId] = useState<string | null>(null)
-  const [requesting, setRequesting] = useState(false)
-  const [confirmingOrder, setConfirmingOrder] = useState<Order | null>(null)
+  const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [counts, setCounts] = useState<Record<string, number>>({})
+
+  const navigate = useNavigate()
 
   const loadCounts = () => {
     api.motoboy.orders.counts().then(setCounts)
@@ -138,96 +128,40 @@ export default function MotoboyFila() {
   const load = () => {
     setLoading(true)
     setSelected([])
-    api.motoboy.orders
-      .list(tab)
-      .then(setOrders)
-      .finally(() => setLoading(false))
+    if (tab === 'em_rota_de_entrega') {
+      api.motoboy.runs
+        .active()
+        .then(setActiveRun)
+        .finally(() => setLoading(false))
+    } else {
+      api.motoboy.orders
+        .list(tab)
+        .then(setOrders)
+        .finally(() => setLoading(false))
+    }
     loadCounts()
   }
 
   useEffect(load, [tab])
 
-  // Enquanto espera o cliente responder com a localização, verifica de
-  // tempos em tempos — a atualização chega via webhook, assíncrona.
-  useEffect(() => {
-    if (tab !== 'aguardando_localizacao') return
-    const interval = setInterval(() => {
-      api.motoboy.orders.list(tab).then(setOrders)
-    }, 15000)
-    return () => clearInterval(interval)
-  }, [tab])
-
   const toggleSelect = (id: string) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
 
-  const requestLocation = async () => {
+  const startRun = async () => {
     if (selected.length === 0) return
-    setRequesting(true)
-    try {
-      const result = await api.motoboy.orders.requestLocation(selected)
-      // O RPC só mexe no banco (marca aguardando_localizacao) — quem manda
-      // a mensagem de verdade, a partir do WhatsApp do próprio motoboy, é
-      // essa segunda chamada (backend Rust, guarda a chave da Evolution API).
-      if (result.updated.length > 0) {
-        api.motoboy.whatsapp.notifyLocationRequest(result.updated.map((o) => o.id)).catch(() => {})
-      }
-      load()
-    } finally {
-      setRequesting(false)
-    }
-  }
-
-  const advanceSelected = async () => {
-    if (selected.length === 0) return
-    setRequesting(true)
-    try {
-      await Promise.all(selected.map((id) => api.motoboy.orders.updateStatus(id, 'em_rota_de_entrega')))
-      for (const id of selected) {
-        api.motoboy.whatsapp.notifyEnRoute(id).catch(() => {})
-      }
-      load()
-    } finally {
-      setRequesting(false)
-    }
-  }
-
-  const advance = async (order: Order, requirePayment: boolean) => {
-    const next = NEXT_STATUS[order.status]
-    if (!next) return
-    if (requirePayment) {
-      setConfirmingOrder(order)
-      return
-    }
     setError(null)
-    setBusyId(order.id)
+    setStarting(true)
     try {
-      await api.motoboy.orders.updateStatus(order.id, next)
-      if (next === 'em_rota_de_entrega') {
-        api.motoboy.whatsapp.notifyEnRoute(order.id).catch(() => {})
+      const run = await api.motoboy.runs.start(selected)
+      for (const orderId of run.order_ids) {
+        api.motoboy.whatsapp.notifyEnRoute(orderId).catch(() => {})
       }
-      load()
+      navigate('/motoboy/corrida')
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Não foi possível atualizar o pedido.')
+      setError(e instanceof ApiError ? e.message : 'Não foi possível iniciar a(s) entrega(s).')
     } finally {
-      setBusyId(null)
-    }
-  }
-
-  const confirmPayment = async () => {
-    if (!confirmingOrder) return
-    const next = NEXT_STATUS[confirmingOrder.status]
-    if (!next) return
-    setError(null)
-    setBusyId(confirmingOrder.id)
-    try {
-      await api.motoboy.orders.updateStatus(confirmingOrder.id, next, true)
-      setConfirmingOrder(null)
-      load()
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Não foi possível confirmar o pagamento.')
-    } finally {
-      setBusyId(null)
+      setStarting(false)
     }
   }
 
@@ -252,16 +186,9 @@ export default function MotoboyFila() {
       {error && <p className="error-msg mb-4">{error}</p>}
 
       {tab === 'pedido_pronto' && selected.length > 0 && (
-        <button onClick={requestLocation} disabled={requesting} className="btn-primary w-full mb-4 text-sm py-3">
-          {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
-          Solicitar localização ({selected.length})
-        </button>
-      )}
-
-      {tab === 'aguardando_localizacao' && selected.length > 0 && (
-        <button onClick={advanceSelected} disabled={requesting} className="btn-primary w-full mb-4 text-sm py-3">
-          {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
-          Saiu para entrega ({selected.length})
+        <button onClick={startRun} disabled={starting} className="btn-primary w-full mb-4 text-sm py-3">
+          {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+          Iniciar entrega{selected.length > 1 ? 's' : ''} ({selected.length})
         </button>
       )}
 
@@ -269,6 +196,15 @@ export default function MotoboyFila() {
         <div className="flex justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
         </div>
+      ) : tab === 'em_rota_de_entrega' ? (
+        activeRun ? (
+          <ActiveRunCard run={activeRun} />
+        ) : (
+          <div className="text-center py-16 text-son-silver-dim">
+            <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
+            <p>Nenhuma corrida em andamento.</p>
+          </div>
+        )
       ) : orders.length === 0 ? (
         <div className="text-center py-16 text-son-silver-dim">
           <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
@@ -280,36 +216,12 @@ export default function MotoboyFila() {
             <OrderCard
               key={order.id}
               order={order}
-              tab={tab}
+              selectable={tab === 'pedido_pronto'}
               selected={selected}
               toggleSelect={toggleSelect}
-              busyId={busyId}
-              advance={advance}
             />
           ))}
         </Reorder.Group>
-      )}
-
-      {confirmingOrder && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setConfirmingOrder(null)}>
-          <div className="glass rounded-2xl p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
-            <PackageCheck className="w-8 h-8 text-son-gold mb-2" />
-            <h3 className="font-bold text-white mb-2">Confirmar pagamento</h3>
-            <p className="text-sm text-son-silver-dim mb-5">
-              Confirme que recebeu o pagamento em {confirmingOrder.payment_method} de{' '}
-              <span className="sunset-text font-bold">{currency(confirmingOrder.total)}</span> para concluir a entrega.
-            </p>
-            <div className="flex gap-2">
-              <button onClick={() => setConfirmingOrder(null)} className="btn-secondary flex-1">
-                Cancelar
-              </button>
-              <button onClick={confirmPayment} disabled={busyId === confirmingOrder.id} className="btn-primary flex-1">
-                {busyId === confirmingOrder.id ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Confirmar
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   )

@@ -90,6 +90,15 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    // Usado só pra montar o link de acompanhamento (/consultar?order=...)
+    // na mensagem de "saiu pra entrega". Sem isso, a mensagem sai sem o link.
+    let frontend_public_url = env_trimmed("FRONTEND_PUBLIC_URL");
+    if frontend_public_url.is_empty() {
+        tracing::warn!(
+            "FRONTEND_PUBLIC_URL not set — the 'saiu pra entrega' WhatsApp message won't include a tracking link"
+        );
+    }
+
     // Server-side only — used to upload product images to Supabase Storage
     // (bypasses RLS). Never expose SUPABASE_SERVICE_ROLE_KEY to the frontend.
     let supabase_url = env_trimmed("SUPABASE_URL");
@@ -141,6 +150,7 @@ async fn main() -> anyhow::Result<()> {
         mp_token: Arc::new(mp_token),
         pickup_address: Arc::new(pickup_address),
         backend_public_url: Arc::new(backend_public_url),
+        frontend_public_url: Arc::new(frontend_public_url),
         supabase_url: Arc::new(supabase_url),
         supabase_service_key: Arc::new(supabase_service_key),
     };

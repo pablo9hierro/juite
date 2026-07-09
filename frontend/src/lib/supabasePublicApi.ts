@@ -1,6 +1,6 @@
 import { ApiError } from './apiError'
 import { supabase } from './supabaseClient'
-import type { Category, Order, Product, ShippingEstimate, ShippingSettings } from './types'
+import type { Category, DeliveryPosition, Order, Product, ShippingEstimate, ShippingSettings } from './types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new ApiError(400, result.error.message)
@@ -85,6 +85,11 @@ export const supabasePublicApi = {
       if (error) throw new ApiError(400, error.message)
       return (data ?? []) as Order[]
     },
+  },
+  trackDeliveryPosition: async (orderId: string) => {
+    const { data, error } = await supabase.rpc('track_delivery_position', { p_order_id: orderId })
+    if (error) throw new ApiError(400, error.message)
+    return (data ?? null) as DeliveryPosition | null
   },
 }
 

@@ -16,12 +16,17 @@ import {
   estimateShippingLocal,
   type LocalDb,
   type LocalMotoboy,
+  type LocalRun,
 } from './localData'
+import { distanciaKm } from './geo/rotas'
+import { FALLBACK as STORE_LOCATION } from './geo/mapa'
 import { useMotoboyAuth } from '../store/motoboyAuth'
 import type {
   Category,
+  DeliveryPosition,
   FinanceiroSummary,
   Motoboy,
+  MotoboyRun,
   Order,
   OrderStatus,
   PaymentMethod,
@@ -90,19 +95,6 @@ function adminApplyTransition(order: Order, target: string, paymentConfirmed?: b
     if (order.delivery_type !== 'retirada') {
       throw new ApiError(400, 'only retirada orders can be concluded from retiradas')
     }
-    return confirmPaymentIfNeeded(order.payment_method, order.payment_status, paymentConfirmed)
-  }
-  throw new ApiError(400, `invalid status transition: ${current} -> ${target}`)
-}
-
-function motoboyApplyTransition(order: Order, target: string, paymentConfirmed?: boolean): boolean {
-  const current = order.status
-  if (current === 'aguardando_localizacao' && target === 'em_rota_de_entrega') return false
-  if (current === 'em_rota_de_entrega' && target === 'entregue') {
-    return confirmPaymentIfNeeded(order.payment_method, order.payment_status, paymentConfirmed)
-  }
-  if (current === 'entregue' && target === 'concluido') {
-    if (order.payment_status === 'pago') return false
     return confirmPaymentIfNeeded(order.payment_method, order.payment_status, paymentConfirmed)
   }
   throw new ApiError(400, `invalid status transition: ${current} -> ${target}`)
@@ -426,6 +418,18 @@ function pendingForMotoboy(db: LocalDb, motoboyId: string) {
   return { orderIds: pending.map((o) => o.id), amount }
 }
 
+function durationMinutes(o: Order): number | null {
+  if (!o.delivery_started_at || !o.delivered_at) return null
+  const ms = new Date(o.delivered_at).getTime() - new Date(o.delivery_started_at).getTime()
+  return Math.round((ms / 60000) * 10) / 10
+}
+
+function avgDeliveryMinutes(orders: Order[]): number {
+  const durations = orders.map(durationMinutes).filter((d): d is number => d != null)
+  if (durations.length === 0) return 0
+  return Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10
+}
+
 async function motoboyPending(id: string): Promise<import('./types').MotoboyPending> {
   const db = loadDb()
   const { orderIds, amount } = pendingForMotoboy(db, id)
@@ -530,10 +534,10 @@ async function financeiro(): Promise<FinanceiroSummary> {
 
   const recent_orders = [...db.orders].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 20)
 
+  const allDelivered = db.orders.filter((o) => o.status === 'concluido' && o.delivery_type === 'entrega')
+
   const motoboys = db.motoboys.map((m) => {
-    const delivered = db.orders.filter(
-      (o) => o.motoboy_id === m.id && o.status === 'concluido' && o.delivery_type === 'entrega'
-    )
+    const delivered = allDelivered.filter((o) => o.motoboy_id === m.id)
     const total_shipping = delivered.reduce((sum, o) => sum + o.shipping_price, 0)
     const total_paid = db.settlements
       .filter((s) => s.motoboy_id === m.id)
@@ -545,10 +549,19 @@ async function financeiro(): Promise<FinanceiroSummary> {
       total_shipping,
       pending_amount: pendingForMotoboy(db, m.id).amount,
       total_paid: Math.round(total_paid * 100) / 100,
+      avg_delivery_minutes: avgDeliveryMinutes(delivered),
     }
   })
 
-  return { total_revenue, total_orders, orders_by_status, top_products, recent_orders, motoboys }
+  return {
+    total_revenue,
+    total_orders,
+    orders_by_status,
+    top_products,
+    recent_orders,
+    motoboys,
+    avg_delivery_minutes: avgDeliveryMinutes(allDelivered),
+  }
 }
 
 async function motoboyFinanceiro(): Promise<import('./types').MotoboyFinanceiro> {
@@ -564,6 +577,7 @@ async function motoboyFinanceiro(): Promise<import('./types').MotoboyFinanceiro>
       shipping_price: o.shipping_price,
       earned: o.shipping_price,
       paid: !!o.motoboy_paid_at,
+      duration_minutes: durationMinutes(o),
       updated_at: o.updated_at ?? o.created_at,
     }))
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
@@ -580,6 +594,7 @@ async function motoboyFinanceiro(): Promise<import('./types').MotoboyFinanceiro>
     total_paid,
     total_deliveries: deliveries.length,
     total_shipping,
+    avg_delivery_minutes: avgDeliveryMinutes(delivered),
     deliveries,
     settlements,
   }
@@ -610,62 +625,143 @@ async function motoboyListOrders(status: string): Promise<Order[]> {
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
 
-async function requestLocation(
-  orderIds: string[]
-): Promise<{ updated: Order[]; skipped: { id: string; reason: string }[] }> {
-  const db = loadDb()
-  const selfId = currentMotoboyId()
-  const updated: Order[] = []
-  const skipped: { id: string; reason: string }[] = []
+// ---------- corrida do motoboy (mesma lógica de supabase/sunset_motoboy_runs.sql) ----------
 
-  for (const id of orderIds) {
-    const order = db.orders.find((o) => o.id === id)
-    if (!order) {
-      skipped.push({ id, reason: 'order not found' })
-      continue
-    }
-    if (order.delivery_type !== 'entrega') {
-      skipped.push({ id, reason: 'order is not a delivery order' })
-      continue
-    }
-    if (order.status !== 'pedido_pronto') {
-      skipped.push({ id, reason: `order is not in pedido_pronto (currently ${order.status})` })
-      continue
-    }
-    if (order.motoboy_id) {
-      skipped.push({ id, reason: 'order already assigned to a motoboy' })
-      continue
-    }
-    order.motoboy_id = selfId
-    order.status = 'aguardando_localizacao'
-    order.updated_at = nowIso()
-    notifyLocal(
-      order.customer_whatsapp,
-      `Olá ${order.customer_name}! Para agilizar sua entrega, envie sua localização atual aqui no WhatsApp 📍`
-    )
-    updated.push(order)
-  }
-
-  saveDb(db)
-  return { updated, skipped }
+function runToDto(db: LocalDb, run: LocalRun): MotoboyRun {
+  const orders = run.order_ids.map((id) => db.orders.find((o) => o.id === id)).filter((o): o is Order => !!o)
+  return { ...run, orders }
 }
 
-async function motoboyUpdateStatus(id: string, status: string, paymentConfirmed?: boolean): Promise<Order> {
+// Nearest-neighbor guloso a partir da loja — mesma ideia de sunset._optimize_route.
+function optimizeRouteLocal(db: LocalDb, orderIds: string[]): string[] {
+  const remaining = [...orderIds]
+  const result: string[] = []
+  let cur = STORE_LOCATION
+  while (remaining.length > 0) {
+    let bestIdx = 0
+    let bestDist = Infinity
+    for (let i = 0; i < remaining.length; i++) {
+      const order = db.orders.find((o) => o.id === remaining[i])
+      if (!order || order.customer_lat == null || order.customer_lng == null) continue
+      const dist = distanciaKm(cur, { lat: order.customer_lat, lng: order.customer_lng })
+      if (dist < bestDist) {
+        bestDist = dist
+        bestIdx = i
+      }
+    }
+    const [chosenId] = remaining.splice(bestIdx, 1)
+    result.push(chosenId)
+    const chosenOrder = db.orders.find((o) => o.id === chosenId)
+    if (chosenOrder?.customer_lat != null && chosenOrder?.customer_lng != null) {
+      cur = { lat: chosenOrder.customer_lat, lng: chosenOrder.customer_lng }
+    }
+  }
+  return result
+}
+
+async function motoboyActiveRun(): Promise<MotoboyRun | null> {
   const db = loadDb()
   const selfId = currentMotoboyId()
-  const order = db.orders.find((o) => o.id === id)
-  if (!order) throw new ApiError(404, 'order not found')
-  if (order.motoboy_id !== selfId) throw new ApiError(403, 'order is not assigned to you')
+  const run = db.runs.find((r) => r.motoboy_id === selfId && r.status === 'ativo')
+  return run ? runToDto(db, run) : null
+}
 
-  const setPaid = motoboyApplyTransition(order, status, paymentConfirmed)
-  order.status = status as OrderStatus
+async function motoboyStartRun(orderIds: string[]): Promise<MotoboyRun> {
+  const db = loadDb()
+  const selfId = currentMotoboyId()
+  if (!orderIds || orderIds.length === 0) {
+    throw new ApiError(400, 'select at least one order to start a run')
+  }
+  if (db.runs.some((r) => r.motoboy_id === selfId && r.status === 'ativo')) {
+    throw new ApiError(400, 'you already have an active run — finish it before starting another')
+  }
+  const distinctIds = [...new Set(orderIds)]
+  for (const id of distinctIds) {
+    const order = db.orders.find((o) => o.id === id)
+    if (!order || order.delivery_type !== 'entrega' || order.status !== 'pedido_pronto' || order.motoboy_id) {
+      throw new ApiError(400, `order ${id} is not available to start a delivery run`)
+    }
+  }
+
+  const sequence = optimizeRouteLocal(db, distinctIds)
+  const startedAt = nowIso()
+  for (const id of distinctIds) {
+    const order = db.orders.find((o) => o.id === id)!
+    order.motoboy_id = selfId
+    order.status = 'em_rota_de_entrega'
+    order.delivery_started_at = startedAt
+    order.updated_at = startedAt
+    notifyLocal(order.customer_whatsapp, `Olá ${order.customer_name}! Seu pedido saiu pra entrega 🛵 Acompanhe em tempo real.`)
+  }
+
+  const run: LocalRun = {
+    id: uid(),
+    motoboy_id: selfId,
+    status: 'ativo',
+    current_index: 0,
+    order_ids: sequence,
+    motoboy_lat: null,
+    motoboy_lng: null,
+    motoboy_heading: null,
+    started_at: startedAt,
+    finished_at: null,
+  }
+  db.runs.push(run)
+  saveDb(db)
+  return runToDto(db, run)
+}
+
+async function motoboyUpdateRunPosition(lat: number, lng: number, heading?: number | null): Promise<void> {
+  const db = loadDb()
+  const selfId = currentMotoboyId()
+  const run = db.runs.find((r) => r.motoboy_id === selfId && r.status === 'ativo')
+  if (!run) return
+  run.motoboy_lat = lat
+  run.motoboy_lng = lng
+  run.motoboy_heading = heading ?? null
+  saveDb(db)
+}
+
+async function motoboyCompleteCurrentDelivery(paymentConfirmed?: boolean): Promise<MotoboyRun> {
+  const db = loadDb()
+  const selfId = currentMotoboyId()
+  const run = db.runs.find((r) => r.motoboy_id === selfId && r.status === 'ativo')
+  if (!run) throw new ApiError(400, 'no active run')
+  const orderId = run.order_ids[run.current_index]
+  const order = db.orders.find((o) => o.id === orderId)
+  if (!order) throw new ApiError(404, 'order not found')
+
+  const setPaid = confirmPaymentIfNeeded(order.payment_method, order.payment_status, paymentConfirmed)
+  order.status = 'concluido'
   if (setPaid) order.payment_status = 'pago'
+  order.delivered_at = nowIso()
   order.updated_at = nowIso()
-  if (status === 'em_rota_de_entrega') {
-    notifyLocal(order.customer_whatsapp, 'Seu pedido acabou de sair para entrega! Aguarde no local informado 🛵')
+
+  if (run.current_index + 1 >= run.order_ids.length) {
+    run.status = 'concluido'
+    run.finished_at = nowIso()
+  } else {
+    run.current_index += 1
   }
   saveDb(db)
-  return order
+  return runToDto(db, run)
+}
+
+async function trackDeliveryPositionLocal(orderId: string): Promise<DeliveryPosition | null> {
+  const db = loadDb()
+  const order = db.orders.find((o) => o.id === orderId)
+  if (!order || order.status !== 'em_rota_de_entrega' || !order.motoboy_id) return null
+  const run = db.runs.find(
+    (r) => r.motoboy_id === order.motoboy_id && r.status === 'ativo' && r.order_ids.includes(orderId)
+  )
+  if (!run || run.motoboy_lat == null || run.motoboy_lng == null) return null
+  return {
+    lat: run.motoboy_lat,
+    lng: run.motoboy_lng,
+    heading: run.motoboy_heading,
+    updated_at: nowIso(),
+    is_next_stop: run.order_ids[run.current_index] === orderId,
+  }
 }
 
 export const localApi = {
@@ -673,6 +769,7 @@ export const localApi = {
   products: { list: listProducts, get: getProduct },
   shippingSettings: { get: getShippingSettings },
   estimateShipping,
+  trackDeliveryPosition: trackDeliveryPositionLocal,
   orders: {
     create: createOrder,
     get: getOrder,
@@ -713,8 +810,6 @@ export const localApi = {
   motoboy: {
     orders: {
       list: motoboyListOrders,
-      requestLocation,
-      updateStatus: motoboyUpdateStatus,
       counts: async () => {
         const db = loadDb()
         const forMotoboy = (status: string, unassigned = false) =>
@@ -726,11 +821,16 @@ export const localApi = {
           ).length
         return {
           pedido_pronto: forMotoboy('pedido_pronto', true),
-          aguardando_localizacao: forMotoboy('aguardando_localizacao'),
           em_rota_de_entrega: forMotoboy('em_rota_de_entrega'),
           concluido: forMotoboy('concluido'),
         }
       },
+    },
+    runs: {
+      active: motoboyActiveRun,
+      start: motoboyStartRun,
+      updatePosition: motoboyUpdateRunPosition,
+      completeCurrent: motoboyCompleteCurrentDelivery,
     },
     financeiro: { get: motoboyFinanceiro },
     whatsapp: {
@@ -739,7 +839,6 @@ export const localApi = {
         throw new ApiError(400, 'WhatsApp não disponível no modo demonstração.')
       },
       logout: async () => {},
-      notifyLocationRequest: async () => {},
       notifyEnRoute: async () => {},
     },
   },

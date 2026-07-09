@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { LogOut, MessageCircle, Moon, Sun, Truck, Wallet } from 'lucide-react'
+import { LogOut, MessageCircle, Moon, Navigation, Sun, Truck, Wallet } from 'lucide-react'
 import Logo from '../ui/Logo'
+import { api } from '../../lib/api'
 import { useMotoboyAuth } from '../../store/motoboyAuth'
 import { useMotoboyTheme } from '../../store/motoboyTheme'
 
@@ -10,11 +12,29 @@ const NAV_ITEMS = [
   { href: '/motoboy/financeiro', label: 'Financeiro', icon: Wallet },
 ]
 
+const ACTIVE_RUN_POLL_MS = 20000
+
 export default function MotoboyLayout() {
   const { token, name, logout } = useMotoboyAuth()
   const { theme, toggle: toggleTheme } = useMotoboyTheme()
   const location = useLocation()
   const navigate = useNavigate()
+  const [hasActiveRun, setHasActiveRun] = useState(false)
+
+  // Lembrete persistente de corrida ativa, visível em qualquer página do
+  // dashboard — a corrida em si mora no banco (não aqui), isso é só um
+  // atalho pra ele não esquecer de voltar pro mapa.
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    const check = () => api.motoboy.runs.active().then((r) => !cancelled && setHasActiveRun(!!r))
+    check()
+    const interval = setInterval(check, ACTIVE_RUN_POLL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [token])
 
   if (!token) return <Navigate to="/motoboy/login" state={{ from: location }} replace />
 
@@ -61,6 +81,15 @@ export default function MotoboyLayout() {
           )
         })}
       </nav>
+      {hasActiveRun && location.pathname !== '/motoboy/corrida' && (
+        <button
+          onClick={() => navigate('/motoboy/corrida')}
+          className="sunset-bg w-full flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5"
+        >
+          <Navigation className="w-4 h-4" />
+          Corrida em andamento — toque pra voltar ao mapa
+        </button>
+      )}
       <main className="p-4 sm:p-8 max-w-4xl mx-auto">
         <Outlet />
       </main>
