@@ -5,7 +5,7 @@ import { ArrowLeft, Loader2, LocateFixed, MapPin, Search, X } from 'lucide-react
 import { buscarEnderecos, enderecoDe } from '../../lib/geo/geocodificacao'
 import { obterLocalizacao } from '../../lib/geo/localizacao'
 import { FALLBACK, TILE_ATTR, TILE_URL } from '../../lib/geo/mapa'
-import { anexarGestoRotacao, normalizarAngulo } from '../../lib/geo/rotacaoMapa'
+import { anexarGestoMapa } from '../../lib/geo/rotacaoMapa'
 import type { EnderecoResultado, Ponto } from '../../lib/geo/tipos'
 import { api } from '../../lib/api'
 import type { ShippingEstimate } from '../../lib/types'
@@ -40,7 +40,12 @@ function MapaCentro({
   onMoveEnd?: (c: Ponto) => void
 }) {
   const divRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<L.Map | null>(null)
   const [rotation, setRotation] = useState(0)
+  const rotationRef = useRef(0)
+  useEffect(() => {
+    rotationRef.current = rotation
+  }, [rotation])
 
   useEffect(() => {
     if (!divRef.current) return
@@ -48,18 +53,30 @@ function MapaCentro({
     L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20 }).addTo(map)
     if (onMoveStart) map.on('movestart', onMoveStart)
     if (onMoveEnd) map.on('moveend', () => onMoveEnd(map.getCenter()))
+    // Nativo do Leaflet não sabe que o mapa pode estar rotacionado (a
+    // rotação é só CSS por fora) — fica desligado pra sempre, o gesto
+    // unificado abaixo cuida de arrastar/pinçar/girar sabendo da rotação
+    // (panBy/setZoom continuam disparando move/moveend normalmente, então
+    // a busca de endereço ao arrastar continua funcionando igual).
+    map.dragging.disable()
+    map.touchZoom.disable()
+    map.scrollWheelZoom.disable()
+    map.doubleClickZoom.disable()
+    mapRef.current = map
     return () => {
       map.remove()
+      mapRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Gesto de girar com dois dedos — roda em paralelo ao pinch-zoom nativo
-  // do Leaflet (transform CSS por fora, não mexe no que o Leaflet gerencia).
   useEffect(() => {
-    if (!divRef.current) return
-    return anexarGestoRotacao(divRef.current, {
-      onRotate: (delta) => setRotation((r) => normalizarAngulo(r + delta)),
+    const map = mapRef.current
+    if (!map || !divRef.current) return
+    return anexarGestoMapa(divRef.current, {
+      map,
+      getRotation: () => rotationRef.current,
+      onRotate: setRotation,
     })
   }, [])
 

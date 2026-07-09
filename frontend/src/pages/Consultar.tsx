@@ -11,7 +11,7 @@ import { api } from '../lib/api'
 import { TILE_ATTR, TILE_URL, FALLBACK } from '../lib/geo/mapa'
 import { destDivIcon, motoDivIcon } from '../lib/geo/icones'
 import { calcularRota } from '../lib/geo/rotas'
-import { anexarGestoRotacao, normalizarAngulo } from '../lib/geo/rotacaoMapa'
+import { anexarGestoMapa } from '../lib/geo/rotacaoMapa'
 import type { Rota } from '../lib/geo/tipos'
 import type { DeliveryPosition, Order } from '../lib/types'
 import { useCustomer } from '../store/customer'
@@ -46,6 +46,10 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
   // botão de GPS recentraliza.
   const userMovedRef = useRef(false)
   const suppressRef = useRef(false)
+  const rotationRef = useRef(0)
+  useEffect(() => {
+    rotationRef.current = mapRotation
+  }, [mapRotation])
 
   const tracking = position?.is_next_stop === true && position.lat != null && position.lng != null
 
@@ -59,12 +63,13 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
     if (order.customer_lat != null && order.customer_lng != null) {
       destMarkerRef.current = L.marker([order.customer_lat, order.customer_lng], { icon: destDivIcon(26) }).addTo(map)
     }
-    map.on('dragstart', () => {
-      userMovedRef.current = true
-    })
-    map.on('zoomstart', () => {
-      if (!suppressRef.current) userMovedRef.current = true
-    })
+    // Nativo do Leaflet não sabe que o mapa pode estar rotacionado (a
+    // rotação é só CSS por fora) — fica desligado pra sempre, o gesto
+    // unificado abaixo cuida de arrastar/pinçar/girar sabendo da rotação.
+    map.dragging.disable()
+    map.touchZoom.disable()
+    map.scrollWheelZoom.disable()
+    map.doubleClickZoom.disable()
     mapRef.current = map
     setTimeout(() => map.invalidateSize(), 0)
     return () => {
@@ -74,12 +79,16 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Gesto de girar com dois dedos — roda em paralelo ao pinch-zoom nativo
-  // do Leaflet, sem conflito (é só um transform CSS por fora).
   useEffect(() => {
-    if (!mapDivRef.current) return
-    return anexarGestoRotacao(mapDivRef.current, {
-      onRotate: (delta) => setMapRotation((r) => normalizarAngulo(r + delta)),
+    const map = mapRef.current
+    if (!map || !mapDivRef.current) return
+    return anexarGestoMapa(mapDivRef.current, {
+      map,
+      getRotation: () => rotationRef.current,
+      onRotate: setMapRotation,
+      onInteract: () => {
+        userMovedRef.current = true
+      },
     })
   }, [])
 

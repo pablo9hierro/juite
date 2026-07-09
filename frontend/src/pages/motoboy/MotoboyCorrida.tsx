@@ -9,7 +9,7 @@ import { seguirLocalizacao } from '../../lib/geo/localizacao'
 import { calcularRota, distanciaKm } from '../../lib/geo/rotas'
 import { FALLBACK, TILE_ATTR, TILE_URL } from '../../lib/geo/mapa'
 import { destDivIcon, motoDivIcon } from '../../lib/geo/icones'
-import { anexarGestoRotacao, normalizarAngulo } from '../../lib/geo/rotacaoMapa'
+import { anexarGestoMapa } from '../../lib/geo/rotacaoMapa'
 import type { Ponto, Rota } from '../../lib/geo/tipos'
 import type { MotoboyRun } from '../../lib/types'
 
@@ -86,6 +86,18 @@ export default function MotoboyCorrida() {
   const routeLineRef = useRef<L.Polyline | null>(null)
   const lastSentRef = useRef(0)
   const myPosRef = useRef<Ponto | null>(null)
+  // Refs sincronizados com o state — o gesto do mapa é anexado uma única
+  // vez (não pode reanexar a cada render, senão perde o estado do dedo no
+  // meio de um toque), então ele precisa ler o valor mais atual através de
+  // uma ref em vez de fechar sobre o state direto.
+  const lockedRef = useRef(locked)
+  const rotationRef = useRef(mapRotation)
+  useEffect(() => {
+    lockedRef.current = locked
+  }, [locked])
+  useEffect(() => {
+    rotationRef.current = mapRotation
+  }, [mapRotation])
 
   // Reidrata a corrida ativa direto do banco — é isso que garante que ela
   // nunca "some" mesmo depois de um reload.
@@ -129,33 +141,33 @@ export default function MotoboyCorrida() {
     }
   }, [])
 
-  // Trava/destrava a interação manual do Leaflet conforme o modo — travado,
-  // é o app que controla posição/zoom/rotação sozinho; destravado, é o
-  // motoboy que manda (arrastar, pinçar, girar com dois dedos).
+  // O dragging/touchZoom nativos do Leaflet não sabem que o mapa pode estar
+  // rotacionado (a rotação é só um CSS transform por fora, invisível pra
+  // ele) — deixados ligados, eles calculam tudo errado assim que o mapa
+  // gira uma vez. Por isso ficam desligados pra sempre e quem cuida de
+  // arrastar/pinçar/girar é o gesto unificado abaixo, que sabe da rotação.
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    if (locked) {
-      map.dragging.disable()
-      map.touchZoom.disable()
-      map.scrollWheelZoom.disable()
-      map.doubleClickZoom.disable()
-    } else {
-      map.dragging.enable()
-      map.touchZoom.enable()
-      map.scrollWheelZoom.enable()
-      map.doubleClickZoom.enable()
-    }
-  }, [locked])
+    map.dragging.disable()
+    map.touchZoom.disable()
+    map.scrollWheelZoom.disable()
+    map.doubleClickZoom.disable()
+  }, [])
 
-  // Gesto de girar com dois dedos — só ativo destravado (travado, quem
-  // decide a rotação é o heading do GPS, não o dedo do motoboy).
+  // Gesto único de arrastar+pinçar+girar — só mexe no mapa destravado
+  // (travado, quem decide posição/zoom/rotação é o heading do GPS, não o
+  // dedo do motoboy).
   useEffect(() => {
-    if (locked || !mapDivRef.current) return
-    return anexarGestoRotacao(mapDivRef.current, {
-      onRotate: (delta) => setMapRotation((r) => normalizarAngulo(r + delta)),
+    const map = mapRef.current
+    if (!map || !mapDivRef.current) return
+    return anexarGestoMapa(mapDivRef.current, {
+      map,
+      getRotation: () => rotationRef.current,
+      onRotate: setMapRotation,
+      enabled: () => !lockedRef.current,
     })
-  }, [locked])
+  }, [])
 
   useEffect(() => {
     const stop = seguirLocalizacao(
