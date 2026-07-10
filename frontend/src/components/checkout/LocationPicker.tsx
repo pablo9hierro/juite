@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { ArrowLeft, Loader2, LocateFixed, MapPin, Search, X } from 'lucide-react'
+import { ArrowLeft, Loader2, LocateFixed, MapPin, Pencil, Search, X } from 'lucide-react'
 import { buscarEnderecos, enderecoDe } from '../../lib/geo/geocodificacao'
 import { obterLocalizacao } from '../../lib/geo/localizacao'
 import { FALLBACK, TILE_ATTR, TILE_URL } from '../../lib/geo/mapa'
@@ -135,6 +136,32 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
       body.style.top = previous.top
       body.style.width = previous.width
       window.scrollTo(0, scrollY)
+    }
+  }, [])
+
+  // `position: fixed; inset: 0` confia que o "viewport" do CSS bate com o
+  // que tá realmente visível — mas no Chrome/Safari mobile a barra de
+  // endereço/navegação some e volta o tempo todo, e esse recálculo nem
+  // sempre acontece na hora certa, deixando uma fresta embaixo por onde o
+  // conteúdo do checkout (por trás) aparece por um instante. window.
+  // visualViewport é a API feita pra isso: mede o que tá REALMENTE visível
+  // agora, então o overlay é dimensionado em px direto por JS em vez de
+  // confiar em vh/dvh/inset. Sem suporte (browser antigo), cai pra
+  // innerHeight normal.
+  const [viewport, setViewport] = useState(() => ({
+    top: window.visualViewport?.offsetTop ?? 0,
+    height: window.visualViewport?.height ?? window.innerHeight,
+  }))
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const update = () => setViewport({ top: vv.offsetTop, height: vv.height })
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
     }
   }, [])
 
@@ -304,8 +331,12 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 bg-son-black flex flex-col">
+  // Portal direto pro <body>: tira o overlay de dentro da árvore do
+  // Checkout de vez — assim nenhum ancestral (containers com padding, max-w
+  // etc.) pode interferir na altura/posição dele. Combinado com a medida
+  // via visualViewport acima, cobre 100% do que tá visível de verdade.
+  return createPortal(
+    <div className="fixed left-0 z-50 bg-son-black flex flex-col" style={{ top: viewport.top, height: viewport.height, width: '100%' }}>
       {step === 'busca' && (
         <>
           <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10">
@@ -401,14 +432,49 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
               {gpsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}
             </button>
 
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center z-[400]">
-              <div
-                className={`glass rounded-xl px-3 py-1.5 mb-1 max-w-[85vw] text-xs font-medium text-white transition-opacity ${
-                  moving ? 'opacity-0' : 'opacity-100'
-                }`}
-              >
-                {label}
+            {/* Barra de endereço fixa no topo (mesmo padrão do Uber/99) —
+                editável: digitar aqui busca e move o alfinete pro endereço
+                escolhido, arrastar o alfinete atualiza o texto aqui. */}
+            <div className="absolute top-16 left-4 right-4 z-[500]">
+              {labelEditing && (labelResults.length > 0 || labelSearching) && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-son-black border border-white/10 rounded-xl overflow-hidden max-h-56 overflow-y-auto shadow-lg">
+                  {labelSearching && <p className="text-xs text-son-silver-dim px-3 py-2.5">Buscando endereços…</p>}
+                  {!labelSearching &&
+                    labelResults.map((r, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => selecionarResultadoLabel(r)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-white/5 last:border-b-0 text-left hover:bg-white/5 transition-colors"
+                      >
+                        <MapPin className="w-4 h-4 text-son-silver-dim flex-none" />
+                        <div className="min-w-0">
+                          <div className="text-sm text-white truncate">{r.titulo}</div>
+                          <div className="text-xs text-son-silver-dim truncate">{r.subtitulo}</div>
+                        </div>
+                      </button>
+                    ))}
+                </div>
+              )}
+              <div className="flex items-center gap-2 bg-son-black border border-white/15 rounded-2xl px-4 py-3 shadow-lg">
+                <MapPin className="w-4 h-4 text-son-pink flex-none" />
+                <input
+                  className="flex-1 min-w-0 bg-transparent outline-none text-white placeholder-son-silver-dim text-sm truncate"
+                  value={labelEditing ? labelQuery : label}
+                  onFocus={() => {
+                    setLabelEditing(true)
+                    setLabelQuery(label)
+                  }}
+                  onChange={(e) => setLabelQuery(e.target.value)}
+                  onBlur={() => setTimeout(() => setLabelEditing(false), 150)}
+                  placeholder="Digite a rua e o número…"
+                />
+                <Pencil className="w-3.5 h-3.5 text-son-silver-dim flex-none" />
               </div>
+            </div>
+
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center z-[400]">
               <MapPin
                 className={`w-9 h-9 text-son-pink drop-shadow-[0_4px_6px_rgba(0,0,0,0.5)] transition-transform ${
                   moving ? '-translate-y-2' : 'translate-y-0'
@@ -420,43 +486,6 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
           </div>
 
           <div className="relative border-t border-white/10 px-4 py-4 space-y-3">
-            {labelEditing && (labelResults.length > 0 || labelSearching) && (
-              <div className="absolute left-4 right-4 bottom-full mb-1 bg-son-black border border-white/10 rounded-xl overflow-hidden max-h-56 overflow-y-auto z-[600] shadow-lg">
-                {labelSearching && <p className="text-xs text-son-silver-dim px-3 py-2.5">Buscando endereços…</p>}
-                {!labelSearching &&
-                  labelResults.map((r, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => selecionarResultadoLabel(r)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-white/5 last:border-b-0 text-left hover:bg-white/5 transition-colors"
-                    >
-                      <MapPin className="w-4 h-4 text-son-silver-dim flex-none" />
-                      <div className="min-w-0">
-                        <div className="text-sm text-white truncate">{r.titulo}</div>
-                        <div className="text-xs text-son-silver-dim truncate">{r.subtitulo}</div>
-                      </div>
-                    </button>
-                  ))}
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 text-sm text-white">
-              <MapPin className="w-4 h-4 text-son-pink flex-none" />
-              <input
-                className="flex-1 min-w-0 bg-transparent outline-none text-white placeholder-son-silver-dim truncate"
-                value={labelEditing ? labelQuery : label}
-                onFocus={() => {
-                  setLabelEditing(true)
-                  setLabelQuery(label)
-                }}
-                onChange={(e) => setLabelQuery(e.target.value)}
-                onBlur={() => setTimeout(() => setLabelEditing(false), 150)}
-                placeholder="Digite a rua e o número…"
-              />
-            </div>
-
             {errorMsg && <p className="error-msg">{errorMsg}</p>}
             {!errorMsg && foraDoAlcance && estimate && (
               <p className="text-xs text-amber-400">
@@ -472,6 +501,7 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
           </div>
         </>
       )}
-    </div>
+    </div>,
+    document.body
   )
 }

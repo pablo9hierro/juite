@@ -40,12 +40,7 @@ export default function AdminFrete() {
 
   return (
     <div>
-      <h1 className="text-2xl font-black mb-2">Frete</h1>
-      <p className="text-sm text-son-silver-dim mb-6">
-        O frete é calculado pela distância entre a tabacaria e o endereço que o cliente ajustar no
-        mapa do checkout. Defina o preço por quilômetro e, opcionalmente, uma distância máxima —
-        acima dela o cliente não consegue concluir o pedido por entrega.
-      </p>
+      <h1 className="text-2xl font-black mb-6">Frete</h1>
 
       {error && <p className="error-msg mb-4">{error}</p>}
 

@@ -20,11 +20,16 @@
   color-scheme: dark;
 }
 
-/* Reforça o contraste das ruas nos tiles do mapa (CARTO Voyager já é bem
-   melhor que a Positron, mas ainda fica meio pálido) — filtro no pane em
-   vez de por tile individual, evita costura visível entre tiles. */
+/* As ruas residenciais do CARTO Voyager são um creme bem claro sobre um
+   fundo quase branco — as duas cores ficam perto do teto (255), então só
+   aumentar contrast() estoura tudo pra branco puro em vez de separar (o
+   filtro estica em torno do meio-tom; sem "sobra" perto do teto ele clipa
+   em vez de esticar). Por isso inverte pra um mapa escuro primeiro (dá
+   espaço embaixo, perto do preto, pra contrast() esticar de verdade) — e
+   de quebra combina com o resto do app, que é todo escuro. hue-rotate
+   devolve tons mais naturais (o que era laranja/água some se não girar). */
 .leaflet-tile-pane {
-  filter: contrast(1.8) saturate(1.5) brightness(0.9);
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(2.4) saturate(1.6);
 }
 
 /* Atribuição do OSM/CARTO é obrigatória pelos termos de uso dos tiles

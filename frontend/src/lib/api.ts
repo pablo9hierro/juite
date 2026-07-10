@@ -37,14 +37,25 @@ async function request<T>(
   options: RequestInit & { token?: string } = {}
 ): Promise<T> {
   const { token, headers, ...rest } = options
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...rest,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...rest,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
+      },
+    })
+  } catch {
+    // fetch() falhou antes de chegar a ter uma resposta HTTP (servidor
+    // fora do ar, CORS, sem internet) — sem isso virar um ApiError de
+    // verdade, esse erro passa batido em todo `catch (e) { e instanceof
+    // ApiError ? e.message : '<mensagem genérica>' }` espalhado pelo app,
+    // sempre caindo na mensagem genérica em vez de dizer que o servidor
+    // tá inacessível.
+    throw new ApiError(0, 'Não foi possível conectar ao servidor. Verifique sua internet ou tente novamente em instantes.')
+  }
   if (!res.ok) {
     let message = `Erro ${res.status}`
     try {
