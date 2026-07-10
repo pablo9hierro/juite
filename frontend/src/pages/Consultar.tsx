@@ -8,7 +8,7 @@ import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
 import { StatusBadge } from '../components/ui/Badge'
 import { api } from '../lib/api'
-import { TILE_ATTR, TILE_URL, FALLBACK, monitorarTiles } from '../lib/geo/mapa'
+import { TILE_ATTR, TILE_URL, FALLBACK, monitorarTiles, ajustarParaCaber } from '../lib/geo/mapa'
 import { destDivIcon, motoDivIcon } from '../lib/geo/icones'
 import { calcularRota } from '../lib/geo/rotas'
 import { anexarGestoMapa } from '../lib/geo/rotacaoMapa'
@@ -47,6 +47,11 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
   const [route, setRoute] = useState<Rota | null>(null)
   const [mapRotation, setMapRotation] = useState(0)
   const mapDivRef = useRef<HTMLDivElement>(null)
+  // Wrapper de fora (tamanho real, visível) — diferente de mapDivRef, que
+  // o Leaflet gerencia e é propositalmente maior que a área visível
+  // (inset:-80%, pra rotação não deixar canto vazio). fitBounds precisa
+  // do tamanho VISÍVEL de verdade, não do tamanho que o Leaflet enxerga.
+  const visibleWrapperRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const motoMarkerRef = useRef<L.Marker | null>(null)
   const destMarkerRef = useRef<L.Marker | null>(null)
@@ -176,10 +181,9 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
 
     if (!fitInicialRef.current) {
       fitInicialRef.current = true
-      if (destMarkerRef.current) {
-        map.fitBounds(L.latLngBounds([[position.lat, position.lng], destMarkerRef.current.getLatLng()]), {
-          padding: [40, 40],
-        })
+      if (destMarkerRef.current && visibleWrapperRef.current) {
+        const rect = visibleWrapperRef.current.getBoundingClientRect()
+        ajustarParaCaber(map, L.latLngBounds([[position.lat, position.lng], destMarkerRef.current.getLatLng()]), rect, 40)
       } else {
         map.setView([position.lat, position.lng], 15)
       }
@@ -195,8 +199,9 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
     const map = mapRef.current
     if (!map || !tracking || position.lat == null || position.lng == null) return
     setMapRotation(0)
-    if (destMarkerRef.current) {
-      map.fitBounds(L.latLngBounds([[position.lat, position.lng], destMarkerRef.current.getLatLng()]), { padding: [40, 40] })
+    if (destMarkerRef.current && visibleWrapperRef.current) {
+      const rect = visibleWrapperRef.current.getBoundingClientRect()
+      ajustarParaCaber(map, L.latLngBounds([[position.lat, position.lng], destMarkerRef.current.getLatLng()]), rect, 40)
     } else {
       map.setView([position.lat, position.lng], 15)
     }
@@ -216,7 +221,7 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
       {/* isolate: cria um stacking context próprio pro mapa, senão os panes
           internos do Leaflet (z-index alto) vazam por cima de outros
           elementos fixed da página (os FABs de WhatsApp/carrinho). */}
-      <div className="relative isolate w-full h-48 rounded-xl overflow-hidden border border-white/5">
+      <div ref={visibleWrapperRef} className="relative isolate w-full h-48 rounded-xl overflow-hidden border border-white/5">
         <div
           className="absolute"
           style={{ inset: '-80%', transform: `rotate(${mapRotation}deg)`, transition: 'transform .15s linear', willChange: 'transform' }}

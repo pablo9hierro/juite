@@ -44,3 +44,30 @@ export function monitorarTiles(layer: L.TileLayer, onMudarStatus: (falhando: boo
     layer.off('tileload', onCarregou)
   }
 }
+
+// Encaixa bounds (2 pontos) no espaço VISÍVEL de verdade — não usa o
+// fitBounds nativo do Leaflet porque ele calcula o zoom em cima de
+// map.getSize(), que é o tamanho do <div> que o Leaflet gerencia. Nos
+// nossos mapas com rotação, esse div é propositalmente maior que a área
+// visível na tela (inset:-80%, ~2.6x maior — pra não sobrar canto vazio
+// quando gira), então o fitBounds nativo calcula um zoom pra caber numa
+// área bem maior que a real, e os pontos acabam fora do que a tela
+// realmente mostra. Esse helper mede o tamanho VISÍVEL de verdade (o
+// wrapper de fora, que não é oversized) e calcula o zoom certo na mão via
+// projeção geográfica, sem depender do tamanho que o Leaflet enxerga.
+export function ajustarParaCaber(
+  map: L.Map,
+  bounds: L.LatLngBounds,
+  visivel: { width: number; height: number },
+  paddingPx = 40
+) {
+  const p1 = map.project(bounds.getNorthWest(), 0)
+  const p2 = map.project(bounds.getSouthEast(), 0)
+  const boundsW = Math.max(Math.abs(p2.x - p1.x), 1)
+  const boundsH = Math.max(Math.abs(p2.y - p1.y), 1)
+  const availW = Math.max(1, visivel.width - paddingPx * 2)
+  const availH = Math.max(1, visivel.height - paddingPx * 2)
+  const escala = Math.min(availW / boundsW, availH / boundsH)
+  const zoom = Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), Math.log2(escala)))
+  map.setView(bounds.getCenter(), zoom, { animate: false })
+}
