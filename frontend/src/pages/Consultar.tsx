@@ -191,7 +191,10 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
           internos do Leaflet (z-index alto) vazam por cima de outros
           elementos fixed da página (os FABs de WhatsApp/carrinho). */}
       <div className="relative isolate w-full h-48 rounded-xl overflow-hidden border border-white/5">
-        <div className="absolute" style={{ inset: '-80%', transform: `rotate(${mapRotation}deg)`, transition: 'transform .15s linear' }}>
+        <div
+          className="absolute"
+          style={{ inset: '-80%', transform: `rotate(${mapRotation}deg)`, transition: 'transform .15s linear', willChange: 'transform' }}
+        >
           <div ref={mapDivRef} className="absolute inset-0" />
         </div>
         {tilesFailing && (

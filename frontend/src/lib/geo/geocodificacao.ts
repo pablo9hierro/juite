@@ -5,6 +5,23 @@
 // e limites de uso documentados em src/backend/README.md daquele projeto.
 import type { EnderecoResultado, Ponto } from './tipos'
 
+const TIMEOUT_MS = 8000
+
+// fetch() sozinho não tem timeout nenhum — numa rede ruim/instável, ele
+// pode ficar pendurado indefinidamente sem nunca resolver NEM rejeitar,
+// deixando quem chamou (o campo de endereço, por ex.) preso pra sempre no
+// estado de "carregando" em vez de cair no fallback. AbortController força
+// uma desistência depois de TIMEOUT_MS.
+async function fetchComTimeout(url: string): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  try {
+    return await fetch(url, { signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // Texto → lista de endereços com coordenadas (autocomplete). `perto`
 // (opcional) enviesa os resultados pra perto do usuário/loja.
 export async function buscarEnderecos(q: string, perto?: Ponto): Promise<EnderecoResultado[]> {
@@ -19,7 +36,7 @@ export async function buscarEnderecos(q: string, perto?: Ponto): Promise<Enderec
   if (perto) {
     p.set('viewbox', [perto.lng - 0.35, perto.lat - 0.35, perto.lng + 0.35, perto.lat + 0.35].join(','))
   }
-  const r = await fetch('https://nominatim.openstreetmap.org/search?' + p)
+  const r = await fetchComTimeout('https://nominatim.openstreetmap.org/search?' + p)
   if (!r.ok) throw new Error('busca falhou')
   const hits = (await r.json()) as Array<{
     lat: string
@@ -56,7 +73,7 @@ export async function enderecoDe({ lat, lng }: Ponto, tentativa = 0): Promise<{ 
     zoom: '18',
   })
   try {
-    const r = await fetch('https://nominatim.openstreetmap.org/reverse?' + p)
+    const r = await fetchComTimeout('https://nominatim.openstreetmap.org/reverse?' + p)
     if (!r.ok) {
       if (tentativa < 1) {
         await new Promise((res) => setTimeout(res, 700))

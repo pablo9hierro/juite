@@ -336,7 +336,7 @@ export default function MotoboyCorrida() {
         <div
           ref={rotateWrapperRef}
           className="absolute"
-          style={{ inset: '-80%', transform: `rotate(${mapRotation}deg)`, transition: 'transform .15s linear' }}
+          style={{ inset: '-80%', transform: `rotate(${mapRotation}deg)`, transition: 'transform .15s linear', willChange: 'transform' }}
         >
           <div ref={mapDivRef} className="absolute inset-0" />
         </div>

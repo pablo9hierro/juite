@@ -86,7 +86,10 @@ function MapaCentro({
   }, [])
 
   return (
-    <div className="absolute" style={{ inset: '-80%', transform: `rotate(${rotation}deg)`, transition: 'transform .15s linear' }}>
+    <div
+      className="absolute"
+      style={{ inset: '-80%', transform: `rotate(${rotation}deg)`, transition: 'transform .15s linear', willChange: 'transform' }}
+    >
       <div ref={divRef} className="absolute inset-0" />
     </div>
   )
