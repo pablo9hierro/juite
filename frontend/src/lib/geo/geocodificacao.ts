@@ -43,17 +43,38 @@ export async function buscarEnderecos(q: string, perto?: Ponto): Promise<Enderec
 
 // Coordenada → nome da rua (geocodificação reversa). Usada quando o usuário
 // arrasta o alfinete. Nunca lança erro: devolve um fallback.
-export async function enderecoDe({ lat, lng }: Ponto): Promise<{ label: string; bairro?: string }> {
-  const p = new URLSearchParams({ lat: String(lat), lon: String(lng), format: 'jsonv2', 'accept-language': 'pt-BR' })
+// zoom=18 pede o nível mais fino (rua/número) em vez do padrão do Nominatim,
+// que às vezes devolve só o bairro/cidade pra coordenadas fora do centro.
+// tentativa faz 1 retry silencioso — o reverse geocode falha às vezes só
+// por rate limit (1 req/s do Nominatim) quando o usuário arrasta rápido.
+export async function enderecoDe({ lat, lng }: Ponto, tentativa = 0): Promise<{ label: string; bairro?: string }> {
+  const p = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lng),
+    format: 'jsonv2',
+    'accept-language': 'pt-BR',
+    zoom: '18',
+  })
   try {
     const r = await fetch('https://nominatim.openstreetmap.org/reverse?' + p)
-    if (!r.ok) return { label: 'Local no mapa' }
-    const body = (await r.json()) as { address?: Record<string, string> }
+    if (!r.ok) {
+      if (tentativa < 1) {
+        await new Promise((res) => setTimeout(res, 700))
+        return enderecoDe({ lat, lng }, tentativa + 1)
+      }
+      return { label: 'Local no mapa' }
+    }
+    const body = (await r.json()) as { address?: Record<string, string>; display_name?: string }
     const a = body.address || {}
-    const rua = a.road || a.pedestrian || a.suburb || 'Local no mapa'
+    const rua = a.road || a.pedestrian || a.suburb || a.neighbourhood || body.display_name?.split(',')[0]
+    if (!rua) return { label: 'Local no mapa', bairro: a.suburb || a.neighbourhood }
     const label = a.house_number ? `${rua}, ${a.house_number}` : rua
     return { label, bairro: a.suburb || a.neighbourhood }
   } catch {
+    if (tentativa < 1) {
+      await new Promise((res) => setTimeout(res, 700))
+      return enderecoDe({ lat, lng }, tentativa + 1)
+    }
     return { label: 'Local no mapa' }
   }
 }

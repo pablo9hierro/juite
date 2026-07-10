@@ -173,7 +173,11 @@ async function createOrder(payload: {
     if (payload.customer_lat == null || payload.customer_lng == null) {
       throw new ApiError(400, 'customer_lat and customer_lng are required for delivery orders')
     }
-    shippingPrice = estimateShippingLocal(payload.customer_lat, payload.customer_lng, db.pricePerKm).price
+    const estimate = estimateShippingLocal(payload.customer_lat, payload.customer_lng, db.pricePerKm, db.maxKm ?? null)
+    if (!estimate.within_range) {
+      throw new ApiError(400, `delivery address is ${estimate.km} km away, which exceeds the maximum delivery range of ${estimate.max_km} km`)
+    }
+    shippingPrice = estimate.price
   }
   total += shippingPrice
 
@@ -486,19 +490,20 @@ async function adminUpdateStatus(id: string, status: string, paymentConfirmed?: 
 
 async function getShippingSettings(): Promise<ShippingSettings> {
   const db = loadDb()
-  return { price_per_km: db.pricePerKm }
+  return { price_per_km: db.pricePerKm, max_km: db.maxKm ?? null }
 }
 
-async function updateShippingSettings(pricePerKm: number): Promise<ShippingSettings> {
+async function updateShippingSettings(pricePerKm: number, maxKm: number | null): Promise<ShippingSettings> {
   const db = loadDb()
   db.pricePerKm = pricePerKm
+  db.maxKm = maxKm
   saveDb(db)
-  return { price_per_km: db.pricePerKm }
+  return { price_per_km: db.pricePerKm, max_km: db.maxKm }
 }
 
 async function estimateShipping(lat: number, lng: number): Promise<ShippingEstimate> {
   const db = loadDb()
-  return estimateShippingLocal(lat, lng, db.pricePerKm)
+  return estimateShippingLocal(lat, lng, db.pricePerKm, db.maxKm ?? null)
 }
 
 async function financeiro(): Promise<FinanceiroSummary> {

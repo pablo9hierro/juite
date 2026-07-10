@@ -39,7 +39,7 @@ export const supabasePublicApi = {
   shippingSettings: {
     get: async () =>
       unwrap<ShippingSettings>(
-        await supabase.from('shipping_settings').select('price_per_km').single()
+        await supabase.from('shipping_settings').select('price_per_km, max_km').single()
       ),
   },
   estimateShipping: async (lat: number, lng: number) => {

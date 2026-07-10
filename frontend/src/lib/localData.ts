@@ -22,13 +22,20 @@ export interface LocalDb {
   settlements: LocalSettlement[]
   runs: LocalRun[]
   pricePerKm: number
+  maxKm: number | null
 }
 
 // Mesma conta de sunset._distance_km/estimate_shipping do backend, só que
 // em memória (modo demonstração, sem banco de verdade).
-export function estimateShippingLocal(lat: number, lng: number, pricePerKm: number) {
+export function estimateShippingLocal(lat: number, lng: number, pricePerKm: number, maxKm: number | null = null) {
   const km = distanciaKm(STORE_LOCATION, { lat, lng })
-  return { km: Math.round(km * 100) / 100, price: Math.round(km * pricePerKm * 100) / 100 }
+  const roundedKm = Math.round(km * 100) / 100
+  return {
+    km: roundedKm,
+    price: Math.round(km * pricePerKm * 100) / 100,
+    max_km: maxKm,
+    within_range: maxKm == null || roundedKm <= maxKm,
+  }
 }
 
 export const ADMIN_CREDENTIALS = { email: 'pablo2@gmail.com', password: '123456', name: 'Admin Sunset Tabas' }
@@ -76,7 +83,7 @@ function seedDb(): LocalDb {
     },
   ]
 
-  return { categories, products, motoboys, orders: [], settlements: [], runs: [], pricePerKm: 1.5 }
+  return { categories, products, motoboys, orders: [], settlements: [], runs: [], pricePerKm: 1.5, maxKm: null }
 }
 
 export function loadDb(): LocalDb {

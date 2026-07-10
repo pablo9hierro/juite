@@ -129,7 +129,7 @@ export default function MotoboyCorrida() {
   // verdade e, como as deps são [], nunca mais tenta de novo.
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return
-    const map = L.map(mapDivRef.current, { zoomControl: false }).setView([FALLBACK.lat, FALLBACK.lng], 15)
+    const map = L.map(mapDivRef.current, { zoomControl: false, zoomSnap: 0, zoomDelta: 0.5 }).setView([FALLBACK.lat, FALLBACK.lng], 15)
     L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20 }).addTo(map)
     mapRef.current = map
     // Garante o tamanho certo mesmo se o layout mudar um pixel entre o
@@ -323,6 +323,11 @@ export default function MotoboyCorrida() {
       </div>
 
       {error && <p className="error-msg mb-3">{error}</p>}
+
+      <p className="text-[11px] text-son-gold/80 bg-son-gold/10 border border-son-gold/20 rounded-lg px-3 py-2 mb-3 leading-relaxed">
+        A rota é sugerida por mapa livre (OpenStreetMap) e pode não refletir mão/contramão reais de todas as ruas.
+        Sempre respeite a sinalização de trânsito, mesmo que diferente do mapa.
+      </p>
 
       {/* isolate: cria um novo stacking context pro mapa, senão os panes
           internos do Leaflet (z-index alto) podiam vazar por cima de

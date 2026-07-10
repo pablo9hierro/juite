@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Loader2, LocateFixed, Package, Search } from 'lucide-react'
+import { Loader2, MessageCircle, Package, Search } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
@@ -41,11 +41,12 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
   const motoMarkerRef = useRef<L.Marker | null>(null)
   const destMarkerRef = useRef<L.Marker | null>(null)
   const routeLineRef = useRef<L.Polyline | null>(null)
-  // Liberdade total pra arrastar/dar zoom/girar no mapa — só recentraliza
-  // sozinho até o cliente mexer nele pela primeira vez; depois disso só o
-  // botão de GPS recentraliza.
-  const userMovedRef = useRef(false)
-  const suppressRef = useRef(false)
+  // Liberdade total pra arrastar/dar zoom/girar no mapa (mesmo gesto do
+  // motoboy, sem o botão/funcionalidade de travar/centralizar dele — esse
+  // aqui é só do cliente). Enquadra a posição do motoboy + destino uma
+  // única vez, na primeira vez que a posição aparece — depois disso nunca
+  // mais mexe sozinho, pra não brigar com o gesto manual do cliente.
+  const fitInicialRef = useRef(false)
   const rotationRef = useRef(0)
   useEffect(() => {
     rotationRef.current = mapRotation
@@ -58,7 +59,7 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
   // como as deps são [], nunca mais tenta de novo.
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return
-    const map = L.map(mapDivRef.current, { zoomControl: false }).setView([FALLBACK.lat, FALLBACK.lng], 14)
+    const map = L.map(mapDivRef.current, { zoomControl: false, zoomSnap: 0, zoomDelta: 0.5 }).setView([FALLBACK.lat, FALLBACK.lng], 14)
     L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20 }).addTo(map)
     if (order.customer_lat != null && order.customer_lng != null) {
       destMarkerRef.current = L.marker([order.customer_lat, order.customer_lng], { icon: destDivIcon(26) }).addTo(map)
@@ -86,9 +87,6 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
       map,
       getRotation: () => rotationRef.current,
       onRotate: setMapRotation,
-      onInteract: () => {
-        userMovedRef.current = true
-      },
     })
   }, [])
 
@@ -132,20 +130,6 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracking, order.id])
 
-  const recenter = () => {
-    userMovedRef.current = false
-    setMapRotation(0)
-    const map = mapRef.current
-    if (!map || !tracking || position.lat == null || position.lng == null) return
-    suppressRef.current = true
-    if (destMarkerRef.current) {
-      map.fitBounds(L.latLngBounds([[position.lat, position.lng], destMarkerRef.current.getLatLng()]), { padding: [40, 40] })
-    } else {
-      map.setView([position.lat, position.lng], 15)
-    }
-    suppressRef.current = false
-  }
-
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
@@ -177,8 +161,8 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
       routeLineRef.current = L.polyline(route.coords, { color: '#d5aa45', weight: 5, opacity: 0.85 }).addTo(map)
     }
 
-    if (!userMovedRef.current) {
-      suppressRef.current = true
+    if (!fitInicialRef.current) {
+      fitInicialRef.current = true
       if (destMarkerRef.current) {
         map.fitBounds(L.latLngBounds([[position.lat, position.lng], destMarkerRef.current.getLatLng()]), {
           padding: [40, 40],
@@ -186,7 +170,6 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
       } else {
         map.setView([position.lat, position.lng], 15)
       }
-      suppressRef.current = false
     }
   }, [position, route, tracking, mapRotation])
 
@@ -208,15 +191,6 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
         <div className="absolute" style={{ inset: '-80%', transform: `rotate(${mapRotation}deg)`, transition: 'transform .15s linear' }}>
           <div ref={mapDivRef} className="absolute inset-0" />
         </div>
-        {tracking && (
-          <button
-            onClick={recenter}
-            className="absolute bottom-2 right-2 z-[500] w-8 h-8 flex items-center justify-center rounded-full bg-son-black/80 border border-white/10 text-white backdrop-blur-sm"
-            aria-label="Centralizar mapa"
-          >
-            <LocateFixed className="w-3.5 h-3.5" />
-          </button>
-        )}
       </div>
     </div>
   )
@@ -316,7 +290,22 @@ export default function Consultar() {
                   </span>
                   <span className="sunset-text font-bold">{currency(order.total)}</span>
                 </div>
-                {order.status === 'em_rota_de_entrega' && <DeliveryTrackingMap order={order} />}
+                {order.status === 'em_rota_de_entrega' && (
+                  <>
+                    {order.motoboy_whatsapp && (
+                      <a
+                        href={`https://wa.me/${order.motoboy_whatsapp.replace(/\D/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        Falar com motoboy
+                      </a>
+                    )}
+                    <DeliveryTrackingMap order={order} />
+                  </>
+                )}
               </li>
             ))}
           </ul>

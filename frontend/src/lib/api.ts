@@ -223,10 +223,11 @@ const remoteApi = {
     },
     shippingSettings: {
       get: () => supabasePublicApi.shippingSettings.get(),
-      update: (pricePerKm: number) =>
+      update: (pricePerKm: number, maxKm: number | null) =>
         rpc<ShippingSettings>('admin_update_shipping_settings', {
           p_token: adminToken(),
           p_price_per_km: pricePerKm,
+          p_max_km: maxKm,
         }),
     },
     financeiro: {

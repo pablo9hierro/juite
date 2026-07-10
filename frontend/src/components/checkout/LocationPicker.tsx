@@ -49,7 +49,7 @@ function MapaCentro({
 
   useEffect(() => {
     if (!divRef.current) return
-    const map = L.map(divRef.current, { zoomControl: false }).setView([centro.lat, centro.lng], zoom)
+    const map = L.map(divRef.current, { zoomControl: false, zoomSnap: 0, zoomDelta: 0.5 }).setView([centro.lat, centro.lng], zoom)
     L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20 }).addTo(map)
     if (onMoveStart) map.on('movestart', onMoveStart)
     if (onMoveEnd) map.on('moveend', () => onMoveEnd(map.getCenter()))
@@ -103,16 +103,38 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
   const [estimate, setEstimate] = useState<ShippingEstimate | null>(null)
   const [confirming, setConfirming] = useState(false)
 
+  // Campo de endereço editável na tela de ajuste: arrastar o alfinete
+  // atualiza o texto (via `label`) e, ao contrário, digitar aqui busca e
+  // move o alfinete pro endereço escolhido — sem precisar voltar pra
+  // tela de busca.
+  const [labelEditing, setLabelEditing] = useState(false)
+  const [labelQuery, setLabelQuery] = useState('')
+  const [labelResults, setLabelResults] = useState<EnderecoResultado[]>([])
+  const [labelSearching, setLabelSearching] = useState(false)
+  const labelSeq = useRef(0)
+
   const seq = useRef(0)
 
   // Trava o scroll da página por baixo enquanto o mapa em tela cheia está
-  // aberto — sem isso, um gesto de scroll no celular pode "vazar" pro body
-  // por baixo do overlay fixed e mostrar o resto do checkout por um instante.
+  // aberto. Só overflow:hidden não é suficiente em Safari/Chrome mobile —
+  // eles ainda permitem rubber-band/overscroll no body por baixo de um
+  // elemento fixed, o que "vaza" o checkout por um instante lá embaixo.
+  // position:fixed no body (técnica padrão) trava de verdade; ao fechar,
+  // volta pro scroll exato de onde parou.
   useEffect(() => {
-    const previous = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    const scrollY = window.scrollY
+    const body = document.body
+    const previous = { overflow: body.style.overflow, position: body.style.position, top: body.style.top, width: body.style.width }
+    body.style.overflow = 'hidden'
+    body.style.position = 'fixed'
+    body.style.top = `-${scrollY}px`
+    body.style.width = '100%'
     return () => {
-      document.body.style.overflow = previous
+      body.style.overflow = previous.overflow
+      body.style.position = previous.position
+      body.style.top = previous.top
+      body.style.width = previous.width
+      window.scrollTo(0, scrollY)
     }
   }, [])
 
@@ -137,6 +159,29 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query])
+
+  // Mesma lógica de busca com debounce, só que pro campo de endereço da
+  // tela de ajuste — só busca enquanto o usuário está de fato digitando ali.
+  useEffect(() => {
+    if (!labelEditing || labelQuery.trim().length < 3) {
+      setLabelResults([])
+      setLabelSearching(false)
+      return
+    }
+    const id = ++labelSeq.current
+    const t = setTimeout(async () => {
+      setLabelSearching(true)
+      try {
+        const r = await buscarEnderecos(labelQuery, pos)
+        if (id === labelSeq.current) setLabelResults(r)
+      } catch {
+        if (id === labelSeq.current) setLabelResults([])
+      }
+      if (id === labelSeq.current) setLabelSearching(false)
+    }, 500)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [labelQuery, labelEditing])
 
   // Roda uma vez ao entrar (ou reentrar) na tela de ajuste — a construção
   // do mapa não dispara "moveend" sozinha, então o primeiro endereço/frete
@@ -171,6 +216,19 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
     setStep('ajuste')
   }
 
+  // Selecionou um resultado ao digitar direto no campo da tela de ajuste —
+  // o alfinete pula pro endereço escolhido sem sair dessa tela (remonta o
+  // MapaCentro via key, igual abrirAjuste, só que sem trocar de step).
+  function selecionarResultadoLabel(r: EnderecoResultado) {
+    setLabelEditing(false)
+    setLabelQuery('')
+    setLabelResults([])
+    setAjusteCentro(r)
+    setPos(r)
+    setLabel(r.titulo)
+    setBairro(r.bairro)
+  }
+
   async function usarLocalizacaoAtual() {
     setErrorMsg(null)
     setGpsLoading(true)
@@ -201,19 +259,43 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
     }
   }
 
-  async function handleMoveEnd(c: Ponto) {
+  // Debounce de 400ms + guarda de sequência: sem isso, ajustes rápidos e
+  // sucessivos do alfinete disparam várias buscas de endereço em paralelo
+  // (o Nominatim só aceita 1 req/s, então algumas voltam com erro/429) e,
+  // como não há garantia de que respondam na mesma ordem, uma resposta
+  // antiga podia sobrescrever uma mais nova com "Local no mapa".
+  const moveSeq = useRef(0)
+  const moveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function handleMoveEnd(c: Ponto) {
     setPos(c)
     setMoving(false)
     setLabel('…')
-    const [addr, est] = await Promise.allSettled([enderecoDe(c), api.estimateShipping(c.lat, c.lng)])
-    if (addr.status === 'fulfilled') {
-      setLabel(addr.value.label)
-      setBairro(addr.value.bairro)
-    }
-    setEstimate(est.status === 'fulfilled' ? est.value : null)
+    if (moveTimer.current) clearTimeout(moveTimer.current)
+    const id = ++moveSeq.current
+    moveTimer.current = setTimeout(async () => {
+      const [addr, est] = await Promise.allSettled([enderecoDe(c), api.estimateShipping(c.lat, c.lng)])
+      if (id !== moveSeq.current) return
+      if (addr.status === 'fulfilled') {
+        setLabel(addr.value.label)
+        setBairro(addr.value.bairro)
+      }
+      setEstimate(est.status === 'fulfilled' ? est.value : null)
+    }, 400)
   }
 
+  const foraDoAlcance = estimate != null && estimate.within_range === false
+
   async function confirmar() {
+    if (foraDoAlcance) {
+      setErrorMsg(
+        `Esse endereço fica a ${estimate!.km.toFixed(1).replace('.', ',')} km da loja — nosso limite de entrega é ${estimate!
+          .max_km!.toFixed(1)
+          .replace('.', ',')} km. Escolha um endereço mais próximo ou opte por retirada no local.`
+      )
+      return
+    }
+    setErrorMsg(null)
     setConfirming(true)
     try {
       onConfirm({ lat: pos.lat, lng: pos.lng, label, bairro, estimate: estimate ?? undefined })
@@ -337,17 +419,52 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
             </div>
           </div>
 
-          <div className="border-t border-white/10 px-4 py-4 space-y-3">
+          <div className="relative border-t border-white/10 px-4 py-4 space-y-3">
+            {labelEditing && (labelResults.length > 0 || labelSearching) && (
+              <div className="absolute left-4 right-4 bottom-full mb-1 bg-son-black border border-white/10 rounded-xl overflow-hidden max-h-56 overflow-y-auto z-[600] shadow-lg">
+                {labelSearching && <p className="text-xs text-son-silver-dim px-3 py-2.5">Buscando endereços…</p>}
+                {!labelSearching &&
+                  labelResults.map((r, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => selecionarResultadoLabel(r)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-white/5 last:border-b-0 text-left hover:bg-white/5 transition-colors"
+                    >
+                      <MapPin className="w-4 h-4 text-son-silver-dim flex-none" />
+                      <div className="min-w-0">
+                        <div className="text-sm text-white truncate">{r.titulo}</div>
+                        <div className="text-xs text-son-silver-dim truncate">{r.subtitulo}</div>
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            )}
+
             <div className="flex items-center gap-2 text-sm text-white">
               <MapPin className="w-4 h-4 text-son-pink flex-none" />
-              <span className="truncate">{label}</span>
+              <input
+                className="flex-1 min-w-0 bg-transparent outline-none text-white placeholder-son-silver-dim truncate"
+                value={labelEditing ? labelQuery : label}
+                onFocus={() => {
+                  setLabelEditing(true)
+                  setLabelQuery(label)
+                }}
+                onChange={(e) => setLabelQuery(e.target.value)}
+                onBlur={() => setTimeout(() => setLabelEditing(false), 150)}
+                placeholder="Digite a rua e o número…"
+              />
             </div>
-            {estimate && (
-              <p className="text-xs text-son-silver-dim">
-                {estimate.km.toFixed(1).replace('.', ',')} km da loja · Frete estimado: R${' '}
-                {estimate.price.toFixed(2).replace('.', ',')}
+
+            {errorMsg && <p className="error-msg">{errorMsg}</p>}
+            {!errorMsg && foraDoAlcance && estimate && (
+              <p className="text-xs text-amber-400">
+                Fora do raio de entrega ({estimate.km.toFixed(1).replace('.', ',')} km, máximo{' '}
+                {estimate.max_km!.toFixed(1).replace('.', ',')} km).
               </p>
             )}
+
             <button onClick={confirmar} disabled={confirming || moving} className="btn-primary w-full py-3.5">
               {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               Confirmar localização

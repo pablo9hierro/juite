@@ -51,6 +51,8 @@ export interface Order {
   shipping_price: number
   total: number
   motoboy_id: string | null
+  motoboy_name?: string | null
+  motoboy_whatsapp?: string | null
   pix_payment_id?: string | null
   pix_qr_base64?: string | null
   pix_copia_cola?: string | null
@@ -154,11 +156,14 @@ export const STATUS_LABELS: Record<OrderStatus, string> = {
 
 export interface ShippingSettings {
   price_per_km: number
+  max_km: number | null
 }
 
 export interface ShippingEstimate {
   km: number
   price: number
+  max_km: number | null
+  within_range: boolean
 }
 
 // Formato exato varia entre versões da Evolution API — os campos abaixo
