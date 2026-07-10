@@ -51,7 +51,7 @@ function MapaCentro({
   useEffect(() => {
     if (!divRef.current) return
     const map = L.map(divRef.current, { zoomControl: false, zoomSnap: 0, zoomDelta: 0.5 }).setView([centro.lat, centro.lng], zoom)
-    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20 }).addTo(map)
+    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20, keepBuffer: 4 }).addTo(map)
     if (onMoveStart) map.on('movestart', onMoveStart)
     if (onMoveEnd) map.on('moveend', () => onMoveEnd(map.getCenter()))
     // Nativo do Leaflet não sabe que o mapa pode estar rotacionado (a

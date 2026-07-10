@@ -20,13 +20,22 @@
   color-scheme: dark;
 }
 
+/* O Leaflet pinta a área do mapa com cinza claro (#ddd) por padrão até o
+   tile de verdade terminar de carregar — igual pro tile escuro "Dark
+   Matter" que a gente usa. Toda vez que uma parte nova do mapa entra na
+   tela (arrastando/dando zoom) e aquele tile ainda não baixou da CARTO,
+   aparece esse cinza claro por baixo por uma fração de segundo: é ISSO que
+   parecia "piscar entre claro e escuro" durante o gesto, não é o tile
+   trocando de cor. Fundo escuro aqui garante que qualquer brecha de
+   carregamento mostra escuro, nunca claro. */
+.leaflet-container {
+  background: #060a08;
+}
+
 /* Tile "Dark Matter" já é escuro de fábrica (ver lib/geo/mapa.ts) — só
-   reforça um pouco o brilho/contraste das linhas de rua em cima disso.
-   Nada de invert() aqui: era isso que conflitava com o auto-dark-theme do
-   Chrome/Android, que reprocessa cada tile (uma <img>) ao entrar na tela e
-   piscava entre a versão invertida e a normal durante o gesto. */
+   reforça o brilho/contraste das linhas de rua em cima disso. */
 .leaflet-tile-pane {
-  filter: brightness(1.25) contrast(1.5) saturate(1.3);
+  filter: brightness(1.6) contrast(1.9) saturate(1.5);
 }
 
 /* Atribuição do OSM/CARTO é obrigatória pelos termos de uso dos tiles

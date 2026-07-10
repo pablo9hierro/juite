@@ -130,7 +130,7 @@ export default function MotoboyCorrida() {
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return
     const map = L.map(mapDivRef.current, { zoomControl: false, zoomSnap: 0, zoomDelta: 0.5 }).setView([FALLBACK.lat, FALLBACK.lng], 15)
-    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20 }).addTo(map)
+    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20, keepBuffer: 4 }).addTo(map)
     mapRef.current = map
     // Garante o tamanho certo mesmo se o layout mudar um pixel entre o
     // mount e a primeira pintura dos tiles.

@@ -60,7 +60,7 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return
     const map = L.map(mapDivRef.current, { zoomControl: false, zoomSnap: 0, zoomDelta: 0.5 }).setView([FALLBACK.lat, FALLBACK.lng], 14)
-    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20 }).addTo(map)
+    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20, keepBuffer: 4 }).addTo(map)
     if (order.customer_lat != null && order.customer_lng != null) {
       destMarkerRef.current = L.marker([order.customer_lat, order.customer_lng], { icon: destDivIcon(26) }).addTo(map)
     }
