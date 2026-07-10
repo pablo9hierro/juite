@@ -32,10 +32,19 @@
   background: #060a08;
 }
 
-/* Tile "Dark Matter" já é escuro de fábrica (ver lib/geo/mapa.ts) — só
-   reforça o brilho/contraste das linhas de rua em cima disso. */
+/* Tile "Dark Matter" já é escuro de fábrica (ver lib/geo/mapa.ts), mas a
+   rua residencial nele é cinza ~40/255 sobre fundo ~12/255 — quase igual.
+   O contrast() do CSS gira em torno do meio-tom (50%): como AMBAS as cores
+   ficam bem abaixo dele, aumentar contrast() sozinho empurrava as duas
+   pra baixo, pra perto do preto, JUNTAS (testei com números reais: cinza
+   40 vira 6.8/255 com brightness 1.6 + contrast 1.9 — praticamente preto
+   igual o fundo, por isso não tinha jeito de ver rua nenhuma). A correção
+   de verdade é dar bastante brightness ANTES pra tirar as duas cores lá de
+   baixo, só DEPOIS o contrast tem "sobra" pra separar de verdade (mesma
+   conta, mas com brightness 3.5: o cinza da rua sobe pra ~147/255, bem
+   visível, e o fundo continua ~0, preto solido). */
 .leaflet-tile-pane {
-  filter: brightness(1.6) contrast(1.9) saturate(1.5);
+  filter: brightness(3.5) contrast(1.6) saturate(1.4);
 }
 
 /* Atribuição do OSM/CARTO é obrigatória pelos termos de uso dos tiles
