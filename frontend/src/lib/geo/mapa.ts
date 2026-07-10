@@ -63,8 +63,16 @@ export function ajustarParaCaber(
 ) {
   const p1 = map.project(bounds.getNorthWest(), 0)
   const p2 = map.project(bounds.getSouthEast(), 0)
-  const boundsW = Math.max(Math.abs(p2.x - p1.x), 1)
-  const boundsH = Math.max(Math.abs(p2.y - p1.y), 1)
+  // Nada de Math.max(..., 1) aqui — no zoom 0 o mundo inteiro cabe em
+  // 256px, então dois pontos a poucos km de distância (o caso normal de
+  // uma entrega dentro da cidade) ficam bem abaixo de 1px de distância
+  // (testei com números reais: ~2km em João Pessoa dá ~0.013px). Um
+  // "clamp" de segurança pra evitar divisão por zero em 1px inflava esse
+  // valor em ~80x, o que derrubava o zoom calculado de ~14 (correto, dá
+  // pra ver as ruas) pra ~7 (todo o Nordeste na tela). Só protege contra
+  // divisão por zero de verdade (os dois pontos exatamente sobrepostos).
+  const boundsW = Math.max(Math.abs(p2.x - p1.x), 1e-9)
+  const boundsH = Math.max(Math.abs(p2.y - p1.y), 1e-9)
   const availW = Math.max(1, visivel.width - paddingPx * 2)
   const availH = Math.max(1, visivel.height - paddingPx * 2)
   const escala = Math.min(availW / boundsW, availH / boundsH)
