@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import { ArrowLeft, Loader2, LocateFixed, MapPin, Pencil, Search, X } from 'lucide-react'
 import { buscarEnderecos, enderecoDe } from '../../lib/geo/geocodificacao'
 import { obterLocalizacao } from '../../lib/geo/localizacao'
-import { FALLBACK, TILE_ATTR, TILE_URL } from '../../lib/geo/mapa'
+import { FALLBACK, monitorarTiles, TILE_ATTR, TILE_URL } from '../../lib/geo/mapa'
 import { anexarGestoMapa } from '../../lib/geo/rotacaoMapa'
 import type { EnderecoResultado, Ponto } from '../../lib/geo/tipos'
 import { api } from '../../lib/api'
@@ -34,11 +34,13 @@ function MapaCentro({
   zoom = 17,
   onMoveStart,
   onMoveEnd,
+  onTileStatus,
 }: {
   centro: Ponto
   zoom?: number
   onMoveStart?: () => void
   onMoveEnd?: (c: Ponto) => void
+  onTileStatus?: (falhando: boolean) => void
 }) {
   const divRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -51,7 +53,8 @@ function MapaCentro({
   useEffect(() => {
     if (!divRef.current) return
     const map = L.map(divRef.current, { zoomControl: false, zoomSnap: 0, zoomDelta: 0.5 }).setView([centro.lat, centro.lng], zoom)
-    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20, keepBuffer: 4 }).addTo(map)
+    const tileLayer = L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20, keepBuffer: 4 }).addTo(map)
+    const pararMonitor = onTileStatus ? monitorarTiles(tileLayer, onTileStatus) : undefined
     if (onMoveStart) map.on('movestart', onMoveStart)
     if (onMoveEnd) map.on('moveend', () => onMoveEnd(map.getCenter()))
     // Nativo do Leaflet não sabe que o mapa pode estar rotacionado (a
@@ -65,6 +68,7 @@ function MapaCentro({
     map.doubleClickZoom.disable()
     mapRef.current = map
     return () => {
+      pararMonitor?.()
       map.remove()
       mapRef.current = null
     }
@@ -103,6 +107,7 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
   const [moving, setMoving] = useState(false)
   const [estimate, setEstimate] = useState<ShippingEstimate | null>(null)
   const [confirming, setConfirming] = useState(false)
+  const [tilesFailing, setTilesFailing] = useState(false)
 
   // Campo de endereço editável na tela de ajuste: arrastar o alfinete
   // atualiza o texto (via `label`) e, ao contrário, digitar aqui busca e
@@ -407,7 +412,14 @@ export default function LocationPicker({ initial, onClose, onConfirm }: Location
               centro={ajusteCentro}
               onMoveStart={() => setMoving(true)}
               onMoveEnd={handleMoveEnd}
+              onTileStatus={setTilesFailing}
             />
+
+            {tilesFailing && (
+              <div className="absolute top-28 left-1/2 -translate-x-1/2 z-[500] bg-red-950/90 border border-red-500/40 text-red-200 text-xs px-3 py-1.5 rounded-full whitespace-nowrap">
+                Mapa não carregou — verifique sua internet
+              </div>
+            )}
 
             <button
               onClick={() => setStep('busca')}

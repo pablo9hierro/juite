@@ -7,7 +7,7 @@ import { Check, ChevronsRight, Copy, ExternalLink, Loader2, Navigation, MapPin, 
 import { api, ApiError } from '../../lib/api'
 import { seguirLocalizacao } from '../../lib/geo/localizacao'
 import { calcularRota, distanciaKm } from '../../lib/geo/rotas'
-import { FALLBACK, TILE_ATTR, TILE_URL } from '../../lib/geo/mapa'
+import { FALLBACK, monitorarTiles, TILE_ATTR, TILE_URL } from '../../lib/geo/mapa'
 import { destDivIcon, motoDivIcon } from '../../lib/geo/icones'
 import { anexarGestoMapa } from '../../lib/geo/rotacaoMapa'
 import type { Ponto, Rota } from '../../lib/geo/tipos'
@@ -77,6 +77,7 @@ export default function MotoboyCorrida() {
   // olhando o mapa. Destravado: liberdade total (arrastar/zoom/girar).
   const [locked, setLocked] = useState(true)
   const [mapRotation, setMapRotation] = useState(0)
+  const [tilesFailing, setTilesFailing] = useState(false)
 
   const mapDivRef = useRef<HTMLDivElement>(null)
   const rotateWrapperRef = useRef<HTMLDivElement>(null)
@@ -130,12 +131,14 @@ export default function MotoboyCorrida() {
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return
     const map = L.map(mapDivRef.current, { zoomControl: false, zoomSnap: 0, zoomDelta: 0.5 }).setView([FALLBACK.lat, FALLBACK.lng], 15)
-    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20, keepBuffer: 4 }).addTo(map)
+    const tileLayer = L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20, keepBuffer: 4 }).addTo(map)
+    const pararMonitor = monitorarTiles(tileLayer, setTilesFailing)
     mapRef.current = map
     // Garante o tamanho certo mesmo se o layout mudar um pixel entre o
     // mount e a primeira pintura dos tiles.
     setTimeout(() => map.invalidateSize(), 0)
     return () => {
+      pararMonitor()
       map.remove()
       mapRef.current = null
     }
@@ -340,6 +343,11 @@ export default function MotoboyCorrida() {
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-son-black/50">
             <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
+          </div>
+        )}
+        {tilesFailing && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[500] bg-red-950/90 border border-red-500/40 text-red-200 text-xs px-3 py-1.5 rounded-full whitespace-nowrap">
+            Mapa não carregou — verifique sua internet
           </div>
         )}
         {!loading && run && (

@@ -1,3 +1,5 @@
+import type L from 'leaflet'
+
 // Tiles do mapa — OpenStreetMap renderizado pela CARTO. Gratuito com
 // atribuição obrigatória (já incluída no TILE_ATTR).
 //
@@ -19,3 +21,26 @@ export const TILE_ATTR =
 // Centro usado quando o usuário nega o GPS (loja, José Américo de Almeida,
 // João Pessoa - PB — mesma coordenada de sunset.shipping_settings).
 export const FALLBACK = { lat: -7.1746, lng: -34.8576 }
+
+// Diagnóstico: em vez de ficar advinhando por que os tiles não aparecem
+// (pode ser contraste, pode ser a CDN da CARTO falhando/lenta numa rede
+// específica — são bugs completamente diferentes e parecem iguais na
+// tela), isso avisa de verdade quando os tiles estão de fato falhando em
+// carregar (rede/CDN), separando isso de "carregou mas tá difícil de ver".
+export function monitorarTiles(layer: L.TileLayer, onMudarStatus: (falhando: boolean) => void): () => void {
+  let falhasSeguidas = 0
+  const onErro = () => {
+    falhasSeguidas++
+    if (falhasSeguidas >= 3) onMudarStatus(true)
+  }
+  const onCarregou = () => {
+    falhasSeguidas = 0
+    onMudarStatus(false)
+  }
+  layer.on('tileerror', onErro)
+  layer.on('tileload', onCarregou)
+  return () => {
+    layer.off('tileerror', onErro)
+    layer.off('tileload', onCarregou)
+  }
+}

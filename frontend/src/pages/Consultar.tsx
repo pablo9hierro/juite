@@ -8,7 +8,7 @@ import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
 import { StatusBadge } from '../components/ui/Badge'
 import { api } from '../lib/api'
-import { TILE_ATTR, TILE_URL, FALLBACK } from '../lib/geo/mapa'
+import { TILE_ATTR, TILE_URL, FALLBACK, monitorarTiles } from '../lib/geo/mapa'
 import { destDivIcon, motoDivIcon } from '../lib/geo/icones'
 import { calcularRota } from '../lib/geo/rotas'
 import { anexarGestoMapa } from '../lib/geo/rotacaoMapa'
@@ -48,6 +48,7 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
   // mais mexe sozinho, pra não brigar com o gesto manual do cliente.
   const fitInicialRef = useRef(false)
   const rotationRef = useRef(0)
+  const [tilesFailing, setTilesFailing] = useState(false)
   useEffect(() => {
     rotationRef.current = mapRotation
   }, [mapRotation])
@@ -60,7 +61,8 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return
     const map = L.map(mapDivRef.current, { zoomControl: false, zoomSnap: 0, zoomDelta: 0.5 }).setView([FALLBACK.lat, FALLBACK.lng], 14)
-    L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20, keepBuffer: 4 }).addTo(map)
+    const tileLayer = L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20, keepBuffer: 4 }).addTo(map)
+    const pararMonitor = monitorarTiles(tileLayer, setTilesFailing)
     if (order.customer_lat != null && order.customer_lng != null) {
       destMarkerRef.current = L.marker([order.customer_lat, order.customer_lng], { icon: destDivIcon(26) }).addTo(map)
     }
@@ -74,6 +76,7 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
     mapRef.current = map
     setTimeout(() => map.invalidateSize(), 0)
     return () => {
+      pararMonitor()
       map.remove()
       mapRef.current = null
     }
@@ -191,6 +194,11 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
         <div className="absolute" style={{ inset: '-80%', transform: `rotate(${mapRotation}deg)`, transition: 'transform .15s linear' }}>
           <div ref={mapDivRef} className="absolute inset-0" />
         </div>
+        {tilesFailing && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[500] bg-red-950/90 border border-red-500/40 text-red-200 text-[11px] px-2.5 py-1 rounded-full whitespace-nowrap">
+            Mapa não carregou — verifique sua internet
+          </div>
+        )}
       </div>
     </div>
   )
