@@ -45,6 +45,17 @@
    visível, e o fundo continua ~0, preto solido). */
 .leaflet-tile-pane {
   filter: brightness(3.5) contrast(1.6) saturate(1.4);
+  /* Ao dar pinça (zoom), o Leaflet reposiciona cada tile <img> com o
+     PRÓPRIO transform dele (translate3d), mesmo sem animação — é assim
+     que ele sempre posicionou tiles, pra evitar reflow. Como o filter
+     está no pane PAI, esse transform constante nos filhos durante o
+     gesto força o navegador a re-rasterizar a camada filtrada em vez de
+     só mover uma textura já pronta — mesma classe de bug do
+     filter+transform que já resolvemos no wrapper de rotação, só que
+     essa vem de dentro do próprio Leaflet, não do nosso CSS. Isola o
+     pane na própria camada de composição pra cortar isso pela raiz. */
+  will-change: filter;
+  transform: translateZ(0);
 }
 
 /* Atribuição do OSM/CARTO é obrigatória pelos termos de uso dos tiles

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Loader2, MessageCircle, Package, Search } from 'lucide-react'
+import { Loader2, LocateFixed, MessageCircle, Package, Search } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
@@ -18,6 +18,16 @@ import { useCustomer } from '../store/customer'
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
+}
+
+// wa.me exige o número completo com código do país — o WhatsApp do
+// motoboy é cadastrado pelo admin sem esse padrão garantido (diferente do
+// WhatsApp do cliente, que já sai normalizado como 55+DDD+número desde o
+// checkout). DDD do Brasil tem 2 dígitos + número 8 ou 9 dígitos = no
+// máximo 11 dígitos sem código de país; se vier assim, prefixa 55.
+function whatsappComPais(raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+  return digits.length <= 11 ? `55${digits}` : digits
 }
 
 const TRACK_POLL_MS = 5000
@@ -176,6 +186,22 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
     }
   }, [position, route, tracking, mapRotation])
 
+  // Botão de "recentralizar": diferente do travar/seguir do motoboy, esse é
+  // uma ação única — dá um zoom-out mostrando motoboy + destino de uma vez
+  // e devolve o controle pro cliente na mesma hora (não fica "ligado",
+  // não trava mais nada; o cliente pode voltar a pinçar/arrastar à vontade
+  // logo em seguida).
+  const recentralizar = () => {
+    const map = mapRef.current
+    if (!map || !tracking || position.lat == null || position.lng == null) return
+    setMapRotation(0)
+    if (destMarkerRef.current) {
+      map.fitBounds(L.latLngBounds([[position.lat, position.lng], destMarkerRef.current.getLatLng()]), { padding: [40, 40] })
+    } else {
+      map.setView([position.lat, position.lng], 15)
+    }
+  }
+
   return (
     <div className="mt-3">
       {!position && <p className="text-xs text-son-silver-dim mb-2">Aguardando início da corrida…</p>}
@@ -201,6 +227,15 @@ function DeliveryTrackingMap({ order }: { order: Order }) {
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[500] bg-red-950/90 border border-red-500/40 text-red-200 text-[11px] px-2.5 py-1 rounded-full whitespace-nowrap">
             Mapa não carregou — verifique sua internet
           </div>
+        )}
+        {tracking && (
+          <button
+            onClick={recentralizar}
+            className="absolute bottom-2 right-2 z-[500] w-8 h-8 flex items-center justify-center rounded-full bg-son-black/80 border border-white/10 text-white backdrop-blur-sm"
+            aria-label="Centralizar mapa no trajeto"
+          >
+            <LocateFixed className="w-3.5 h-3.5" />
+          </button>
         )}
       </div>
     </div>
@@ -305,7 +340,7 @@ export default function Consultar() {
                   <>
                     {order.motoboy_whatsapp && (
                       <a
-                        href={`https://wa.me/${order.motoboy_whatsapp.replace(/\D/g, '')}`}
+                        href={`https://wa.me/${whatsappComPais(order.motoboy_whatsapp)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="mt-3 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors"
