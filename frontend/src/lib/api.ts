@@ -16,8 +16,11 @@ import type {
   MotoboySettlement,
   Order,
   PaymentMethod,
+  PdvSaleItemInput,
   Product,
   ShippingSettings,
+  Vendedor,
+  VendedorRelatorio,
 } from './types'
 
 // Ainda usado só pro login admin/motoboy e Pix, que continuam no backend
@@ -125,6 +128,11 @@ const remoteApi = {
       if (error) throw new ApiError(401, 'Credenciais inválidas.')
       return data as { token: string; name: string }
     },
+    vendedorLogin: async (email: string, password: string) => {
+      const { data, error } = await supabase.rpc('vendedor_login', { p_email: email, p_password: password })
+      if (error) throw new ApiError(401, 'Credenciais inválidas.')
+      return data as { token: string; name: string }
+    },
     setAdminPassword: async (newPassword: string) => {
       const { error } = await supabase.rpc('admin_set_password', {
         p_token: adminToken(),
@@ -154,6 +162,7 @@ const remoteApi = {
           p_image_url: payload.image_url ?? null,
           p_category_id: payload.category_id ?? null,
           p_active: payload.active ?? true,
+          p_barcode: payload.barcode ?? null,
         }),
       update: (id: string, payload: Partial<Product>) =>
         rpc<Product>('admin_update_product', {
@@ -166,6 +175,7 @@ const remoteApi = {
           p_image_url: payload.image_url ?? null,
           p_category_id: payload.category_id ?? null,
           p_active: payload.active ?? true,
+          p_barcode: payload.barcode ?? null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_product', { p_token: adminToken(), p_id: id }),
       // Upload de imagem passa pelo Rust (não pelo Supabase RPC): precisa da
@@ -216,6 +226,26 @@ const remoteApi = {
           p_payment_method: paymentMethod,
         }),
     },
+    vendedores: {
+      list: () => rpc<Vendedor[]>('admin_list_vendedores', { p_token: adminToken() }),
+      create: (payload: { name: string; email: string; password: string }) =>
+        rpc<Vendedor>('admin_create_vendedor', {
+          p_token: adminToken(),
+          p_name: payload.name,
+          p_email: payload.email,
+          p_password: payload.password,
+        }),
+      update: (id: string, payload: { name: string; email: string; active: boolean; password?: string }) =>
+        rpc<Vendedor>('admin_update_vendedor', {
+          p_token: adminToken(),
+          p_id: id,
+          p_name: payload.name,
+          p_email: payload.email,
+          p_active: payload.active,
+          p_password: payload.password || null,
+        }),
+      delete: (id: string) => rpc<void>('admin_delete_vendedor', { p_token: adminToken(), p_id: id }),
+    },
     orders: {
       list: (status?: string) => rpc<Order[]>('admin_list_orders', { p_token: adminToken(), p_status: status ?? null }),
       updateStatus: (id: string, status: string, paymentConfirmed?: boolean) =>
@@ -254,6 +284,30 @@ const remoteApi = {
       connect: () => request<EvolutionConnect>('/api/admin/whatsapp/connect', { token: adminToken() }),
       logout: () => request<void>('/api/admin/whatsapp/logout', { method: 'POST', token: adminToken() }),
     },
+  },
+  // PDV — acessível por admin OU vendedor, os dois autenticados no mesmo
+  // useAdminAuth (com role diferente) — adminToken() vale pros dois, a RPC
+  // que decide o que cada papel pode ver.
+  pdv: {
+    createSale: (payload: {
+      items: PdvSaleItemInput[]
+      payment_method: PaymentMethod
+      customer_name?: string
+      customer_whatsapp?: string
+    }) =>
+      rpc<Order>('pdv_create_sale', {
+        p_token: adminToken(),
+        p_items: payload.items,
+        p_payment_method: payload.payment_method,
+        p_customer_name: payload.customer_name || null,
+        p_customer_whatsapp: payload.customer_whatsapp || null,
+      }),
+    // Único disparo de WhatsApp da venda de balcão (o "obrigado pela
+    // compra") — nunca passa pelo passo a passo de pedido online, e sai
+    // sempre do número da loja (vendedor não tem instância própria).
+    notifySale: (orderId: string) =>
+      request<void>('/api/pdv/notify-sale', { method: 'POST', body: JSON.stringify({ order_id: orderId }) }),
+    relatorio: () => rpc<VendedorRelatorio>('vendedor_relatorio', { p_token: adminToken() }),
   },
   motoboy: {
     orders: {

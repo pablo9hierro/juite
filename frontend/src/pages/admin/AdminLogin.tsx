@@ -6,23 +6,32 @@ import { api, ApiError } from '../../lib/api'
 import { useAdminAuth } from '../../store/adminAuth'
 
 export default function AdminLogin() {
-  const { token, login } = useAdminAuth()
+  const { token, role, login } = useAdminAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('pablo2@gmail.com')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  if (token) return <Navigate to="/admin/pedidos" replace />
+  if (token) return <Navigate to={role === 'vendedor' ? '/admin/pdv' : '/admin/pedidos'} replace />
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
     try {
-      const res = await api.auth.adminLogin(email, password)
-      login(res.token, res.name)
-      navigate('/admin/pedidos')
+      // Mesma tela pros dois papéis — tenta admin primeiro (mais comum) e
+      // só tenta vendedor se as credenciais não baterem como admin, pra
+      // não vazar qual dos dois um e-mail digitado errado pertence a.
+      try {
+        const res = await api.auth.adminLogin(email, password)
+        login(res.token, res.name, 'admin')
+        navigate('/admin/pedidos')
+      } catch {
+        const res = await api.auth.vendedorLogin(email, password)
+        login(res.token, res.name, 'vendedor')
+        navigate('/admin/pdv')
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erro ao entrar.')
     } finally {

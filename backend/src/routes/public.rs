@@ -7,7 +7,7 @@ use crate::abacatepay;
 use crate::error::AppError;
 use crate::google_routes::{self, Ponto, RotaResult};
 use crate::models::OrderDto;
-use crate::orders_common::{fetch_order_dto, fetch_order_row, row_to_dto, short_id};
+use crate::orders_common::{fetch_items, fetch_order_dto, fetch_order_row, row_to_dto, short_id};
 use crate::state::AppState;
 use crate::whatsapp;
 
@@ -95,6 +95,45 @@ pub async fn compute_route(
 ) -> Result<Json<RotaResult>, AppError> {
     let rota = google_routes::calcular_rota(&state, input.de, input.ate).await?;
     Ok(Json(rota))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NotifyPdvSaleInput {
+    pub order_id: String,
+}
+
+/// Venda de balcão (PDV) só manda UMA mensagem — o "obrigado pela compra"
+/// com os itens e o valor — nunca o passo a passo (pedido feito/pronto/
+/// saiu pra entrega) que uma compra online recebe, porque não existe
+/// preparo nem entrega aqui, a venda já nasce concluída. Sempre a partir
+/// do número da PRÓPRIA LOJA (vendedor não tem instância de WhatsApp
+/// própria, diferente do motoboy). Sem WhatsApp informado na venda
+/// (cliente de balcão anônimo), não faz nada — sucesso silencioso.
+pub async fn notify_pdv_sale(
+    State(state): State<AppState>,
+    Json(input): Json<NotifyPdvSaleInput>,
+) -> Result<StatusCode, AppError> {
+    let Some(order) = fetch_order_row(&state.pool, &input.order_id).await? else {
+        return Err(AppError::NotFound("order not found".to_string()));
+    };
+
+    let digits = whatsapp::digits_only(&order.customer_whatsapp);
+    if digits.is_empty() {
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
+    let items = fetch_items(&state.pool, &order.id).await?;
+    let itens_texto = items
+        .iter()
+        .map(|i| format!("{}x {}", i.quantity, i.product_name))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let total_str = format!("{:.2}", order.total).replace('.', ",");
+    let msg = format!("Obrigado pela compra na Sunset Tabas! 🌇\n\n{itens_texto}\n\nTotal: R$ {total_str}");
+
+    whatsapp::notify(&state, &state.evolution_instance, &digits, &msg);
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn refresh_payment(

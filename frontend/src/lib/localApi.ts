@@ -17,9 +17,11 @@ import {
   type LocalDb,
   type LocalMotoboy,
   type LocalRun,
+  type LocalVendedor,
 } from './localData'
 import { distanciaKm } from './geo/rotas'
 import { FALLBACK as STORE_LOCATION } from './geo/mapa'
+import { useAdminAuth } from '../store/adminAuth'
 import { useMotoboyAuth } from '../store/motoboyAuth'
 import type {
   Category,
@@ -28,6 +30,7 @@ import type {
   Motoboy,
   MotoboyRun,
   Order,
+  OrderItem,
   OrderStatus,
   PaymentMethod,
   Product,
@@ -35,6 +38,8 @@ import type {
   ShippingSettings,
   StatusCount,
   TopProduct,
+  Vendedor,
+  VendedorRelatorio,
 } from './types'
 
 function notifyLocal(phone: string, message: string) {
@@ -472,6 +477,153 @@ async function deleteMotoboy(id: string): Promise<void> {
   saveDb(db)
 }
 
+// ---------- vendedor + PDV ----------
+
+function stripVendedorPassword(v: LocalVendedor): Vendedor {
+  const { password: _password, ...rest } = v
+  return rest
+}
+
+async function vendedorLogin(email: string, password: string): Promise<{ token: string; name: string }> {
+  const db = loadDb()
+  const v = (db.vendedores ?? []).find((x) => x.email === email)
+  if (!v || !v.active || v.password !== password) throw new ApiError(401, 'invalid credentials')
+  return { token: `local-vendedor:${v.id}`, name: v.name }
+}
+
+async function adminListVendedores(): Promise<Vendedor[]> {
+  const db = loadDb()
+  return (db.vendedores ?? []).map(stripVendedorPassword).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+async function createVendedor(payload: { name: string; email: string; password: string }): Promise<Vendedor> {
+  if (!payload.password) throw new ApiError(400, 'password is required to create a vendedor')
+  const db = loadDb()
+  db.vendedores = db.vendedores ?? []
+  if (db.vendedores.some((v) => v.email === payload.email)) throw new ApiError(400, 'email already in use')
+  const vendedor: LocalVendedor = {
+    id: uid(),
+    name: payload.name,
+    email: payload.email,
+    password: payload.password,
+    active: true,
+  }
+  db.vendedores.push(vendedor)
+  saveDb(db)
+  return stripVendedorPassword(vendedor)
+}
+
+async function updateVendedor(
+  id: string,
+  payload: { name: string; email: string; active: boolean; password?: string }
+): Promise<Vendedor> {
+  const db = loadDb()
+  const vendedor = (db.vendedores ?? []).find((v) => v.id === id)
+  if (!vendedor) throw new ApiError(404, 'vendedor not found')
+  vendedor.name = payload.name
+  vendedor.email = payload.email
+  vendedor.active = payload.active
+  if (payload.password) vendedor.password = payload.password
+  saveDb(db)
+  return stripVendedorPassword(vendedor)
+}
+
+async function deleteVendedor(id: string): Promise<void> {
+  const db = loadDb()
+  const idx = (db.vendedores ?? []).findIndex((v) => v.id === id)
+  if (idx === -1) throw new ApiError(404, 'vendedor not found')
+  db.vendedores.splice(idx, 1)
+  saveDb(db)
+}
+
+// Sessão local não distingue admin/vendedor por papel (token tem o prefixo
+// "local-vendedor:" ou é o fixo do admin) — o suficiente pra reconhecer
+// quem fez a venda nos relatórios em modo demonstração.
+function pdvActorFromToken(): { role: 'admin' | 'vendedor'; id: string } {
+  const adminToken = useAdminAuth.getState().token
+  if (adminToken?.startsWith('local-vendedor:')) {
+    return { role: 'vendedor', id: adminToken.slice('local-vendedor:'.length) }
+  }
+  return { role: 'admin', id: 'admin' }
+}
+
+async function pdvCreateSale(payload: {
+  items: { product_id: string; quantity: number }[]
+  payment_method: PaymentMethod
+  customer_name?: string
+  customer_whatsapp?: string
+}): Promise<Order> {
+  if (!payload.items.length) throw new ApiError(400, 'sale must have at least one item')
+  const db = loadDb()
+  const actor = pdvActorFromToken()
+
+  let total = 0
+  const items: OrderItem[] = []
+  for (const item of payload.items) {
+    if (item.quantity <= 0) throw new ApiError(400, 'item quantity must be positive')
+    const product = db.products.find((p) => p.id === item.product_id)
+    if (!product) throw new ApiError(400, `product ${item.product_id} not found`)
+    if (!product.active) throw new ApiError(400, `product ${product.name} is not available`)
+    if (product.quantity < item.quantity) throw new ApiError(400, `insufficient stock for product ${product.name}`)
+    total += product.price * item.quantity
+    items.push({ product_id: product.id, product_name: product.name, unit_price: product.price, quantity: item.quantity })
+  }
+  for (const item of payload.items) {
+    const product = db.products.find((p) => p.id === item.product_id)!
+    product.quantity -= item.quantity
+  }
+
+  const order: Order = {
+    id: uid(),
+    customer_name: payload.customer_name?.trim() || 'Cliente balcão',
+    customer_whatsapp: payload.customer_whatsapp?.trim() || '',
+    delivery_type: 'balcao',
+    neighborhood: null,
+    address: null,
+    payment_method: payload.payment_method,
+    payment_status: 'pago',
+    status: 'concluido',
+    shipping_price: 0,
+    total,
+    motoboy_id: null,
+    items,
+    created_at: nowIso(),
+    updated_at: nowIso(),
+    sold_by_role: actor.role,
+    sold_by_id: actor.id,
+  } as Order
+  db.orders.push(order)
+  saveDb(db)
+  return order
+}
+
+async function vendedorRelatorio(): Promise<VendedorRelatorio> {
+  const db = loadDb()
+  const actor = pdvActorFromToken()
+  const sales = db.orders.filter((o) => {
+    if (o.delivery_type !== 'balcao') return false
+    if (actor.role === 'admin') return true
+    return o.sold_by_role === 'vendedor' && o.sold_by_id === actor.id
+  })
+  return {
+    total_sales: sales.reduce((sum, o) => sum + o.total, 0),
+    total_count: sales.length,
+    sales: sales
+      .slice()
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, 100)
+      .map((o) => ({
+        id: o.id,
+        total: o.total,
+        payment_method: o.payment_method,
+        customer_name: o.customer_name,
+        created_at: o.created_at,
+        sold_by_role: (o.sold_by_role as 'admin' | 'vendedor') ?? 'admin',
+        items: o.items.map((i) => ({ product_name: i.product_name, quantity: i.quantity, unit_price: i.unit_price })),
+      })),
+  }
+}
+
 async function adminListOrders(status?: string): Promise<Order[]> {
   const db = loadDb()
   const filtered = status ? db.orders.filter((o) => o.status === status) : db.orders
@@ -797,7 +949,12 @@ export const localApi = {
     simulatePixPaid,
     notifyCreated: async () => {},
   },
-  auth: { adminLogin, motoboyLogin, setAdminPassword },
+  auth: { adminLogin, motoboyLogin, vendedorLogin, setAdminPassword },
+  pdv: {
+    createSale: pdvCreateSale,
+    notifySale: async () => {},
+    relatorio: vendedorRelatorio,
+  },
   admin: {
     categories: { list: adminListCategories, create: createCategory, delete: deleteCategory },
     products: {
@@ -814,6 +971,12 @@ export const localApi = {
       delete: deleteMotoboy,
       pending: motoboyPending,
       pay: payMotoboy,
+    },
+    vendedores: {
+      list: adminListVendedores,
+      create: createVendedor,
+      update: updateVendedor,
+      delete: deleteVendedor,
     },
     orders: { list: adminListOrders, updateStatus: adminUpdateStatus, notifyReady: async () => {} },
     shippingSettings: { get: getShippingSettings, update: updateShippingSettings },

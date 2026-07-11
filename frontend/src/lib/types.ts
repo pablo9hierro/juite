@@ -8,7 +8,7 @@ export type OrderStatus =
   | 'retiradas'
   | 'concluido'
 
-export type DeliveryType = 'entrega' | 'retirada'
+export type DeliveryType = 'entrega' | 'retirada' | 'balcao'
 export type PaymentMethod = 'pix' | 'cartao' | 'dinheiro'
 export type PaymentStatus = 'pendente' | 'pago'
 
@@ -27,6 +27,7 @@ export interface Product {
   category_id: string | null
   category_name?: string | null
   active?: boolean
+  barcode?: string | null
 }
 
 export interface OrderItem {
@@ -53,6 +54,8 @@ export interface Order {
   motoboy_id: string | null
   motoboy_name?: string | null
   motoboy_whatsapp?: string | null
+  sold_by_role?: 'admin' | 'vendedor' | null
+  sold_by_id?: string | null
   pix_payment_id?: string | null
   pix_qr_base64?: string | null
   pix_copia_cola?: string | null
@@ -73,6 +76,34 @@ export interface Motoboy {
   email: string
   whatsapp: string | null
   active: boolean
+}
+
+export interface Vendedor {
+  id: string
+  name: string
+  email: string
+  active: boolean
+}
+
+export interface PdvSaleItemInput {
+  product_id: string
+  quantity: number
+}
+
+export interface PdvSale {
+  id: string
+  total: number
+  payment_method: PaymentMethod
+  customer_name: string
+  created_at: string
+  sold_by_role: 'admin' | 'vendedor'
+  items: { product_name: string; quantity: number; unit_price: number }[]
+}
+
+export interface VendedorRelatorio {
+  total_sales: number
+  total_count: number
+  sales: PdvSale[]
 }
 
 export interface MotoboyDelivery {

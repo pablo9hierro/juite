@@ -204,6 +204,7 @@ async fn main() -> anyhow::Result<()> {
             post(routes::public::simulate_pix_paid),
         )
         .route("/api/orders/notify-created", post(routes::public::notify_order_created))
+        .route("/api/pdv/notify-sale", post(routes::public::notify_pdv_sale))
         // Rota real entre dois pontos (Google Routes com fallback OSRM) —
         // usado tanto pela navegação do motoboy quanto pelo acompanhamento
         // do cliente em /consultar, pra nenhum dos dois expor chave nenhuma

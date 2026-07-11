@@ -19,7 +19,7 @@ export const supabasePublicApi = {
     list: async (categoryId?: string) => {
       let query = supabase
         .from('products')
-        .select('id, name, description, price, quantity, image_url, category_id, active, categories(name)')
+        .select('id, name, description, price, quantity, image_url, category_id, active, barcode, categories(name)')
         .order('name')
       if (categoryId) query = query.eq('category_id', categoryId)
       const { data, error } = await query
@@ -29,7 +29,7 @@ export const supabasePublicApi = {
     get: async (id: string) => {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, description, price, quantity, image_url, category_id, active, categories(name)')
+        .select('id, name, description, price, quantity, image_url, category_id, active, barcode, categories(name)')
         .eq('id', id)
         .single()
       if (error || !data) throw new ApiError(404, 'product not found')
@@ -102,6 +102,7 @@ function toProduct(row: {
   image_url: string | null
   category_id: string | null
   active: number | boolean
+  barcode?: string | null
   categories: { name: string } | { name: string }[] | null
 }): Product {
   const category = Array.isArray(row.categories) ? row.categories[0] : row.categories
@@ -115,5 +116,6 @@ function toProduct(row: {
     category_id: row.category_id,
     category_name: category?.name ?? null,
     active: Boolean(row.active),
+    barcode: row.barcode ?? null,
   }
 }

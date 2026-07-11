@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ImagePlus, Loader2, Package, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Barcode, ImagePlus, Loader2, Package, Pencil, Plus, Trash2, X } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import { api, ApiError } from '../../lib/api'
 import type { Category, Product } from '../../lib/types'
@@ -8,7 +8,7 @@ function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
 }
 
-const EMPTY_FORM = { name: '', description: '', price: '', quantity: '', image_url: '', category_id: '' }
+const EMPTY_FORM = { name: '', description: '', price: '', quantity: '', image_url: '', category_id: '', barcode: '' }
 
 export default function AdminProdutos() {
   const [products, setProducts] = useState<Product[]>([])
@@ -49,6 +49,7 @@ export default function AdminProdutos() {
       quantity: String(p.quantity),
       image_url: p.image_url ?? '',
       category_id: p.category_id ?? '',
+      barcode: p.barcode ?? '',
     })
     setShowForm(true)
   }
@@ -62,6 +63,7 @@ export default function AdminProdutos() {
       quantity: Number(form.quantity),
       image_url: form.image_url || null,
       category_id: form.category_id || null,
+      barcode: form.barcode || null,
     }
     try {
       if (editing) await api.admin.products.update(editing.id, payload)
@@ -225,6 +227,17 @@ export default function AdminProdutos() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="label flex items-center gap-1.5">
+                  <Barcode className="w-3.5 h-3.5" /> Código de barras
+                </label>
+                <input
+                  className="input-field"
+                  placeholder="Escaneie ou digite (opcional, usado no PDV)"
+                  value={form.barcode}
+                  onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+                />
               </div>
               <div>
                 <label className="label">Imagem</label>

@@ -1,4 +1,6 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { Loader2 } from 'lucide-react'
 import Landing from './pages/Landing'
 import Catalogo from './pages/Catalogo'
 import ProdutoDetalhe from './pages/ProdutoDetalhe'
@@ -13,6 +15,7 @@ import AdminMotoboys from './pages/admin/AdminMotoboys'
 import AdminFrete from './pages/admin/AdminFrete'
 import AdminFinanceiro from './pages/admin/AdminFinanceiro'
 import AdminSenha from './pages/admin/AdminSenha'
+import AdminRelatorios from './pages/admin/AdminRelatorios'
 import MotoboyLogin from './pages/motoboy/MotoboyLogin'
 import MotoboyFila from './pages/motoboy/MotoboyFila'
 import MotoboyCorrida from './pages/motoboy/MotoboyCorrida'
@@ -20,6 +23,19 @@ import MotoboyFinanceiro from './pages/motoboy/MotoboyFinanceiro'
 import MotoboyConta from './pages/motoboy/MotoboyConta'
 import AdminLayout from './components/layout/AdminLayout'
 import MotoboyLayout from './components/layout/MotoboyLayout'
+
+// Só essa página puxa a lib de leitura de código de barras (~500KB) — carrega
+// sob demanda, pra quem visita a loja como cliente nunca baixar esse peso
+// (só admin/vendedor, logados, acessam PDV).
+const AdminPdv = lazy(() => import('./pages/admin/AdminPdv'))
+
+function PdvFallback() {
+  return (
+    <div className="flex justify-center py-16">
+      <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
+    </div>
+  )
+}
 
 export default function App() {
   return (
@@ -41,6 +57,15 @@ export default function App() {
           <Route path="motoboys" element={<AdminMotoboys />} />
           <Route path="frete" element={<AdminFrete />} />
           <Route path="financeiro" element={<AdminFinanceiro />} />
+          <Route
+            path="pdv"
+            element={
+              <Suspense fallback={<PdvFallback />}>
+                <AdminPdv />
+              </Suspense>
+            }
+          />
+          <Route path="relatorios" element={<AdminRelatorios />} />
           <Route path="senha" element={<AdminSenha />} />
         </Route>
 

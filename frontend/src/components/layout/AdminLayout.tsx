@@ -1,23 +1,46 @@
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { ClipboardList, KeyRound, LogOut, MapPinned, Package, Truck, Wallet } from 'lucide-react'
+import {
+  BarChart3,
+  ClipboardList,
+  KeyRound,
+  LogOut,
+  MapPinned,
+  Package,
+  ShoppingCart,
+  Truck,
+  Wallet,
+} from 'lucide-react'
 import Logo from '../ui/Logo'
 import { useAdminAuth } from '../../store/adminAuth'
 
+// Vendedor usa essa MESMA tela (mesmo layout, login, sidebar) só que
+// enxergando apenas PDV + Relatórios — o resto do menu nem aparece pra
+// ele, e a guarda de rota abaixo bloqueia acesso direto por URL também
+// (defesa em profundidade: cada RPC admin-only já rejeita o token de
+// vendedor sozinha, isso aqui é só pra não mostrar tela quebrada).
 const NAV_ITEMS = [
-  { href: '/admin/pedidos', label: 'Pedidos', icon: ClipboardList },
-  { href: '/admin/produtos', label: 'Produtos', icon: Package },
-  { href: '/admin/motoboys', label: 'Motoboys', icon: Truck },
-  { href: '/admin/frete', label: 'Frete', icon: MapPinned },
-  { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet },
-  { href: '/admin/senha', label: 'Senha', icon: KeyRound },
-]
+  { href: '/admin/pedidos', label: 'Pedidos', icon: ClipboardList, roles: ['admin'] },
+  { href: '/admin/produtos', label: 'Produtos', icon: Package, roles: ['admin'] },
+  { href: '/admin/motoboys', label: 'Funcionários', icon: Truck, roles: ['admin'] },
+  { href: '/admin/frete', label: 'Frete', icon: MapPinned, roles: ['admin'] },
+  { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet, roles: ['admin'] },
+  { href: '/admin/pdv', label: 'PDV', icon: ShoppingCart, roles: ['admin', 'vendedor'] },
+  { href: '/admin/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'vendedor'] },
+  { href: '/admin/senha', label: 'Senha', icon: KeyRound, roles: ['admin'] },
+] as const
 
 export default function AdminLayout() {
-  const { token, name, logout } = useAdminAuth()
+  const { token, name, role, logout } = useAdminAuth()
   const location = useLocation()
   const navigate = useNavigate()
 
   if (!token) return <Navigate to="/admin/login" state={{ from: location }} replace />
+
+  const items = NAV_ITEMS.filter((item) => (item.roles as readonly string[]).includes(role))
+  const allowedPaths: string[] = items.map((item) => item.href)
+  if (!allowedPaths.includes(location.pathname)) {
+    return <Navigate to={role === 'vendedor' ? '/admin/pdv' : '/admin/pedidos'} replace />
+  }
 
   const handleLogout = () => {
     logout()
@@ -32,7 +55,7 @@ export default function AdminLayout() {
           <p className="text-xs text-son-silver-dim mt-1">Olá, {name}</p>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {items.map(({ href, label, icon: Icon }) => {
             const active = location.pathname === href
             return (
               <Link
@@ -68,7 +91,7 @@ export default function AdminLayout() {
           </button>
         </header>
         <nav className="md:hidden flex gap-2 overflow-x-auto px-4 py-3 bg-son-black border-b border-white/5 scrollbar-hide sticky top-[65px] z-10">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {items.map(({ href, label, icon: Icon }) => {
             const active = location.pathname === href
             return (
               <Link
