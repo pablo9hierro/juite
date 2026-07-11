@@ -236,9 +236,17 @@ async function trackOrders(whatsapp: string): Promise<Order[]> {
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
 
+// Modo demo já gera o QR na hora de criar o pedido (ver createOrder) — não
+// existe uma etapa separada de "criar cobrança" aqui, então isso só devolve
+// o pedido como já está, só pra bater com a assinatura do backend real.
+async function createPixPayment(id: string): Promise<Order> {
+  return getOrder(id)
+}
+
 async function refreshPayment(id: string): Promise<Order> {
-  // No real Mercado Pago to poll in demo mode — mirrors the backend's mock
-  // mode, which also never auto-confirms without simulate-pix-paid.
+  // Nenhuma AbacatePay de verdade pra consultar em modo demo — espelha o
+  // modo mock do backend, que também nunca confirma sozinho sem
+  // simulate-pix-paid.
   return getOrder(id)
 }
 
@@ -784,6 +792,7 @@ export const localApi = {
     create: createOrder,
     get: getOrder,
     track: trackOrders,
+    createPixPayment,
     refreshPayment,
     simulatePixPaid,
     notifyCreated: async () => {},

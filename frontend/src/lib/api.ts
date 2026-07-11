@@ -96,8 +96,10 @@ const remoteApi = {
     create: supabasePublicApi.orders.create,
     get: supabasePublicApi.orders.get,
     track: supabasePublicApi.orders.track,
-    // Pix ainda depende do backend Rust (precisa do token secreto do
-    // Mercado Pago) até virar uma Supabase Edge Function.
+    // Pix ainda depende do backend Rust (precisa da chave secreta da
+    // AbacatePay) até virar uma Supabase Edge Function.
+    createPixPayment: (id: string) =>
+      request<Order>(`/api/orders/${id}/create-pix-payment`, { method: 'POST' }),
     refreshPayment: (id: string) =>
       request<Order>(`/api/orders/${id}/refresh-payment`, { method: 'POST' }),
     simulatePixPaid: (id: string) =>
@@ -263,8 +265,17 @@ const remoteApi = {
     // supabase/sunset_motoboy_runs.sql.
     runs: {
       active: () => rpc<MotoboyRun | null>('motoboy_active_run', { p_token: motoboyToken() }),
+      // Passa pelo backend Rust (não a RPC direto) — ele decide a ordem de
+      // entrega com distância real de rua via Google Routes quando
+      // configurada, e só então chama a RPC já com a ordem pronta. Sem a
+      // chave configurada ainda, o backend chama a mesma RPC sem essa
+      // etapa extra e o resultado é idêntico a antes.
       start: (orderIds: string[]) =>
-        rpc<MotoboyRun>('motoboy_start_run', { p_token: motoboyToken(), p_order_ids: orderIds }),
+        request<MotoboyRun>('/api/motoboy/runs/start', {
+          method: 'POST',
+          body: JSON.stringify({ order_ids: orderIds }),
+          token: motoboyToken(),
+        }),
       updatePosition: (lat: number, lng: number, heading?: number | null) =>
         rpc<void>('motoboy_update_run_position', {
           p_token: motoboyToken(),

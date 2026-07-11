@@ -1,10 +1,13 @@
+use std::collections::HashMap;
+
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use serde::Deserialize;
 
 use crate::auth::{MotoboyUser, SunsetMotoboySession};
 use crate::error::AppError;
+use crate::google_routes::{self, Ponto};
 use crate::models::{
     OrderDto, OrderRow, RequestLocationInput, RequestLocationResult, SkippedOrder,
     UpdateStatusInput,
@@ -13,6 +16,91 @@ use crate::orders_common::{fetch_order_dto, fetch_order_row, row_to_dto};
 use crate::state::AppState;
 use crate::status_flow;
 use crate::whatsapp;
+
+#[derive(Debug, Deserialize)]
+pub struct StartRunInput {
+    pub order_ids: Vec<String>,
+}
+
+/// Calcula a melhor ordem de entrega do lote com distância REAL de rua
+/// (Google Routes computeRouteMatrix) e só então chama a RPC
+/// sunset.motoboy_start_run já com a ordem pronta — toda a validação de
+/// negócio (pedido disponível, motoboy sem corrida ativa etc.) continua
+/// morando só na RPC, aqui só decide a ORDEM antes de chamar ela.
+pub async fn start_run(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<StartRunInput>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .ok_or_else(|| AppError::Unauthorized("missing authorization header".to_string()))?;
+
+    if input.order_ids.is_empty() {
+        return Err(AppError::BadRequest("select at least one order to start a run".to_string()));
+    }
+
+    let precomputed = if state.google_routes_key.is_some() {
+        match otimizar_com_google(&state, &input.order_ids).await {
+            Ok(ordered) => Some(ordered),
+            Err(e) => {
+                tracing::warn!("google route optimization failed, falling back to straight-line heuristic: {e:?}");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let run: serde_json::Value = match precomputed {
+        Some(ordered) => sqlx::query_scalar("SELECT motoboy_start_run($1, $2, $3)")
+            .bind(token)
+            .bind(&input.order_ids)
+            .bind(&ordered)
+            .fetch_one(&state.pool)
+            .await?,
+        None => sqlx::query_scalar("SELECT motoboy_start_run($1, $2)")
+            .bind(token)
+            .bind(&input.order_ids)
+            .fetch_one(&state.pool)
+            .await?,
+    };
+
+    Ok(Json(run))
+}
+
+async fn otimizar_com_google(state: &AppState, order_ids: &[String]) -> Result<Vec<String>, AppError> {
+    let (store_lat, store_lng): (f64, f64) = sqlx::query_as("SELECT store_lat, store_lng FROM shipping_settings WHERE id = 1")
+        .fetch_one(&state.pool)
+        .await?;
+    let loja = Ponto { lat: store_lat, lng: store_lng };
+
+    let rows: Vec<(String, f64, f64)> = sqlx::query_as(
+        "SELECT id, customer_lat, customer_lng FROM orders \
+         WHERE id = ANY($1) AND customer_lat IS NOT NULL AND customer_lng IS NOT NULL",
+    )
+    .bind(order_ids)
+    .fetch_all(&state.pool)
+    .await?;
+
+    if rows.len() != order_ids.len() {
+        return Err(AppError::Internal("some orders are missing coordinates".to_string()));
+    }
+
+    let by_id: HashMap<&str, (f64, f64)> = rows.iter().map(|(id, lat, lng)| (id.as_str(), (*lat, *lng))).collect();
+    let paradas: Vec<Ponto> = order_ids
+        .iter()
+        .map(|id| {
+            let (lat, lng) = by_id[id.as_str()];
+            Ponto { lat, lng }
+        })
+        .collect();
+
+    let ordem = google_routes::otimizar_ordem_paradas(state, loja, &paradas).await?;
+    Ok(ordem.into_iter().map(|i| order_ids[i].clone()).collect())
+}
 
 #[derive(Debug, Deserialize)]
 pub struct OrdersQuery {

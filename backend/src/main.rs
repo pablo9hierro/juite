@@ -1,6 +1,7 @@
+mod abacatepay;
 mod auth;
 mod error;
-mod mercadopago;
+mod google_routes;
 mod models;
 mod orders_common;
 mod routes;
@@ -66,14 +67,24 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
-    let mp_token = std::env::var("MP_ACCESS_TOKEN")
+    let abacatepay_key = std::env::var("ABACATEPAY_API_KEY")
         .ok()
         .filter(|s| !s.trim().is_empty());
 
-    if mp_token.is_none() {
-        tracing::info!("MP_ACCESS_TOKEN not set — running Mercado Pago Pix in MOCK mode");
+    if abacatepay_key.is_none() {
+        tracing::info!("ABACATEPAY_API_KEY not set — running Pix in MOCK mode");
     } else {
-        tracing::info!("MP_ACCESS_TOKEN set — using real Mercado Pago API");
+        tracing::info!("ABACATEPAY_API_KEY set — using real AbacatePay API");
+    }
+
+    let google_routes_key = std::env::var("GOOGLE_ROUTES_API_KEY")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+
+    if google_routes_key.is_none() {
+        tracing::info!("GOOGLE_ROUTES_API_KEY not set — routing falls back to OSRM / straight-line heuristic");
+    } else {
+        tracing::info!("GOOGLE_ROUTES_API_KEY set — using real Google Routes API");
     }
 
     let pickup_address = std::env::var("STORE_PICKUP_ADDRESS")
@@ -147,7 +158,8 @@ async fn main() -> anyhow::Result<()> {
         evolution_api_url: Arc::new(evolution_api_url),
         evolution_api_key: Arc::new(evolution_api_key),
         evolution_instance: Arc::new(evolution_instance),
-        mp_token: Arc::new(mp_token),
+        abacatepay_key: Arc::new(abacatepay_key),
+        google_routes_key: Arc::new(google_routes_key),
         pickup_address: Arc::new(pickup_address),
         backend_public_url: Arc::new(backend_public_url),
         frontend_public_url: Arc::new(frontend_public_url),
@@ -180,6 +192,10 @@ async fn main() -> anyhow::Result<()> {
         // Supabase agora (ver supabase/*.sql); só sobra o que precisa de
         // segredo (Pix, WhatsApp).
         .route(
+            "/api/orders/{id}/create-pix-payment",
+            post(routes::public::create_pix_payment),
+        )
+        .route(
             "/api/orders/{id}/refresh-payment",
             post(routes::public::refresh_payment),
         )
@@ -188,6 +204,11 @@ async fn main() -> anyhow::Result<()> {
             post(routes::public::simulate_pix_paid),
         )
         .route("/api/orders/notify-created", post(routes::public::notify_order_created))
+        // Rota real entre dois pontos (Google Routes com fallback OSRM) —
+        // usado tanto pela navegação do motoboy quanto pelo acompanhamento
+        // do cliente em /consultar, pra nenhum dos dois expor chave nenhuma
+        // no navegador.
+        .route("/api/route", post(routes::public::compute_route))
         // admin
         .route(
             "/api/admin/categories",
@@ -229,6 +250,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/admin/whatsapp/logout", post(routes::admin::whatsapp_logout))
         .route("/api/admin/whatsapp/notify-order-ready", post(routes::admin::notify_order_ready))
         // motoboy
+        // Otimiza a ordem de entrega do lote via Google Routes (distância
+        // real de rua) antes de chamar sunset.motoboy_start_run — quando
+        // não tem GOOGLE_ROUTES_API_KEY configurada ainda, deixa a própria
+        // RPC decidir sozinha com o heurístico de linha reta de sempre.
+        .route("/api/motoboy/runs/start", post(routes::motoboy::start_run))
         .route("/api/motoboy/orders", get(routes::motoboy::list_orders))
         .route(
             "/api/motoboy/orders/request-location",

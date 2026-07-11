@@ -1,6 +1,10 @@
-// Rotas pelas ruas com OSRM (servidor demo do projeto OSRM). Gratuito, sem
-// chave, sem cota oficial — mas é servidor de demonstração, sem garantia de
-// uptime. Portado de C:\Users\pablo\Documents\gliafico\src\backend\rotas.js
+// Distância em linha reta é calculada aqui mesmo (client-side, de graça).
+// A rota real pelas ruas passa pelo NOSSO backend (/api/route) em vez de
+// bater direto no OSRM ou na Google — o backend decide qual das duas usar
+// (Google Routes quando GOOGLE_ROUTES_API_KEY estiver configurada, OSRM
+// como fallback gratuito enquanto isso não acontece) sem expor nenhuma
+// chave no navegador.
+import { API_BASE } from '../api'
 import type { Ponto, Rota } from './tipos'
 
 // Distância em LINHA RETA entre dois pontos (fórmula de Haversine). Zero
@@ -16,20 +20,14 @@ export function distanciaKm(a: Ponto, b: Ponto): number {
 }
 
 // Rota real pelas ruas — usada pra desenhar o trajeto no mapa e mostrar
-// km/min. NÃO usada pro cálculo do frete (esse usa linha reta, mais barato
-// e mais estável que depender do servidor demo do OSRM).
+// km/min. NÃO usada pro cálculo do frete (esse usa linha reta, calculado
+// direto no banco).
 export async function calcularRota(de: Ponto, ate: Ponto): Promise<Rota> {
-  const url =
-    `https://router.project-osrm.org/route/v1/driving/` +
-    `${de.lng},${de.lat};${ate.lng},${ate.lat}?overview=full&geometries=geojson`
-  const r = await fetch(url)
+  const r = await fetch(`${API_BASE}/api/route`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ de, ate }),
+  })
   if (!r.ok) throw new Error('rota falhou')
-  const body = (await r.json()) as { routes?: Array<{ geometry: { coordinates: [number, number][] }; distance: number; duration: number }> }
-  const rota = body.routes?.[0]
-  if (!rota) throw new Error('sem rota')
-  return {
-    coords: rota.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
-    km: rota.distance / 1000,
-    min: Math.max(1, Math.round(rota.duration / 60)),
-  }
+  return (await r.json()) as Rota
 }

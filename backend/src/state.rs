@@ -9,7 +9,10 @@ pub struct AppState {
     pub evolution_api_url: Arc<String>,
     pub evolution_api_key: Arc<String>,
     pub evolution_instance: Arc<String>,
-    pub mp_token: Arc<Option<String>>,
+    pub abacatepay_key: Arc<Option<String>>,
+    /// Chave da Google Routes API — None = cai pro OSRM (rota) e pro
+    /// heurístico de distância em linha reta em SQL (otimização de lote).
+    pub google_routes_key: Arc<Option<String>>,
     pub pickup_address: Arc<String>,
     /// This backend's own public URL (e.g. Railway domain), registered as
     /// the Evolution API webhook target so incoming WhatsApp messages

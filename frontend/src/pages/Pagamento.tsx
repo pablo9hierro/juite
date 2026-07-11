@@ -28,7 +28,18 @@ export default function Pagamento() {
 
   useEffect(() => {
     if (!orderId) return
-    api.orders.get(orderId).then((o) => {
+    api.orders.get(orderId).then(async (o) => {
+      // Nada cria a cobrança Pix antes disso (nem o checkout, nem a RPC de
+      // criar pedido) — na primeira vez que essa tela abre pra um pedido
+      // Pix sem QR ainda, gera a cobrança de verdade agora.
+      if (o.payment_method === 'pix' && o.payment_status !== 'pago' && !o.pix_qr_base64) {
+        try {
+          o = await api.orders.createPixPayment(orderId)
+        } catch {
+          // deixa a tela mostrar "QR indisponível" — o polling de refresh
+          // abaixo tenta de novo mais adiante se o usuário recarregar.
+        }
+      }
       setOrder(o)
       setLoading(false)
     })
