@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
-import { Clock, Gift, Loader2, Package, Receipt, TrendingDown, TrendingUp, Truck, Wallet } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Clock, Gift, Loader2, Package, Receipt, TrendingDown, TrendingUp, Truck, Wallet, X } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import { StatusBadge } from '../../components/ui/Badge'
 import { api } from '../../lib/api'
 import { useAdminAuth } from '../../store/adminAuth'
-import type { FinanceiroSummary, VendedorRelatorio } from '../../lib/types'
+import type { FinanceiroSummary, Order, VendedorRelatorio } from '../../lib/types'
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
@@ -14,22 +14,72 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
+// Botões tipo aba pra escolher quais funcionários entram na conta —
+// "desempenho geral" soma todo mundo, ou seleciona um/vários indivíduos.
+function StaffTabs({
+  names,
+  selected,
+  onToggle,
+  onSelectAll,
+}: {
+  names: string[]
+  selected: string[] | 'all'
+  onToggle: (name: string) => void
+  onSelectAll: () => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5 mb-3">
+      <button
+        onClick={onSelectAll}
+        className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
+          selected === 'all' ? 'sunset-bg text-white' : 'bg-son-surface-light text-son-silver-dim'
+        }`}
+      >
+        Desempenho geral
+      </button>
+      {names.map((n) => (
+        <button
+          key={n}
+          onClick={() => onToggle(n)}
+          className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
+            selected !== 'all' && selected.includes(n) ? 'sunset-bg text-white' : 'bg-son-surface-light text-son-silver-dim'
+          }`}
+        >
+          {n}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function PdvSalesSection({ role }: { role: string }) {
   const [data, setData] = useState<VendedorRelatorio | null>(null)
   const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<string[] | 'all'>('all')
 
   useEffect(() => {
     api.pdv.relatorio().then(setData).finally(() => setLoading(false))
   }, [])
 
+  const sellerNames = useMemo(
+    () => Array.from(new Set((data?.sales ?? []).map((s) => s.sold_by_name ?? 'Sem nome'))).sort(),
+    [data]
+  )
+  const visibleSales = (data?.sales ?? []).filter((s) => selected === 'all' || selected.includes(s.sold_by_name ?? 'Sem nome'))
+  const visibleTotal = visibleSales.reduce((sum, s) => sum + s.total, 0)
+
+  const toggle = (name: string) => {
+    setSelected((cur) => {
+      const list = cur === 'all' ? [] : cur
+      return list.includes(name) ? list.filter((n) => n !== name) : [...list, name]
+    })
+  }
+
   return (
     <Card className="p-5">
-      <div className="flex items-center gap-2 label mb-1">
+      <div className="flex items-center gap-2 label mb-3">
         <Receipt className="w-3.5 h-3.5" /> Vendas de balcão (PDV)
       </div>
-      <p className="text-xs text-son-silver-dim mb-3">
-        {role === 'admin' ? 'Todas as vendas de balcão, de qualquer vendedor.' : 'Suas vendas no PDV.'}
-      </p>
 
       {loading ? (
         <div className="flex justify-center py-8">
@@ -39,25 +89,26 @@ function PdvSalesSection({ role }: { role: string }) {
         <p className="text-sm text-son-silver-dim">Nenhuma venda de balcão registrada ainda.</p>
       ) : (
         <>
+          {role === 'admin' && sellerNames.length > 1 && (
+            <StaffTabs names={sellerNames} selected={selected} onToggle={toggle} onSelectAll={() => setSelected('all')} />
+          )}
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="bg-son-surface-light rounded-xl p-3 text-center">
               <p className="text-xs text-son-silver-dim mb-1">Total vendido</p>
-              <p className="sunset-text font-black text-xl">{currency(data.total_sales)}</p>
+              <p className="sunset-text font-black text-xl">{currency(visibleTotal)}</p>
             </div>
             <div className="bg-son-surface-light rounded-xl p-3 text-center">
               <p className="text-xs text-son-silver-dim mb-1">Nº de vendas</p>
-              <p className="font-black text-xl text-white">{data.total_count}</p>
+              <p className="font-black text-xl text-white">{visibleSales.length}</p>
             </div>
           </div>
           <ul className="divide-y divide-white/5">
-            {data.sales.map((s) => (
+            {visibleSales.map((s) => (
               <li key={s.id} className="py-2.5">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-1.5 text-xs text-son-silver-dim">
                     {formatDate(s.created_at)}
-                    {role === 'admin' && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-white/10 capitalize">{s.sold_by_role}</span>
-                    )}
+                    {role === 'admin' && <span className="px-1.5 py-0.5 rounded-full bg-white/10">{s.sold_by_name}</span>}
                   </div>
                   <span className="sunset-text font-bold text-sm">{currency(s.total)}</span>
                 </div>
@@ -73,10 +124,123 @@ function PdvSalesSection({ role }: { role: string }) {
   )
 }
 
+function MotoboysSection({ motoboys }: { motoboys: FinanceiroSummary['motoboys'] }) {
+  const [selected, setSelected] = useState<string[] | 'all'>('all')
+  const names = motoboys.map((m) => m.name)
+  const visible = motoboys.filter((m) => selected === 'all' || selected.includes(m.name))
+
+  const toggle = (name: string) => {
+    setSelected((cur) => {
+      const list = cur === 'all' ? [] : cur
+      return list.includes(name) ? list.filter((n) => n !== name) : [...list, name]
+    })
+  }
+
+  return (
+    <Card className="p-5 mb-6">
+      <div className="flex items-center gap-2 label mb-3">
+        <Truck className="w-3.5 h-3.5" /> Frete dos motoboys
+      </div>
+      {motoboys.length === 0 ? (
+        <p className="text-sm text-son-silver-dim">Nenhum motoboy cadastrado.</p>
+      ) : (
+        <>
+          {names.length > 1 && <StaffTabs names={names} selected={selected} onToggle={toggle} onSelectAll={() => setSelected('all')} />}
+          {selected !== 'all' && visible.length > 1 && (
+            <div className="bg-son-surface-light rounded-xl p-3 mb-3 text-center">
+              <p className="text-xs text-son-silver-dim mb-1">Total do(s) selecionado(s)</p>
+              <p className="sunset-text font-black text-xl">
+                {currency(visible.reduce((sum, m) => sum + m.total_shipping, 0))}
+              </p>
+            </div>
+          )}
+          <ul className="divide-y divide-white/5">
+            {visible.map((m) => (
+              <li key={m.id} className="py-2.5 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm text-white truncate">{m.name}</p>
+                  <p className="text-xs text-son-silver-dim">
+                    {m.total_deliveries} entrega{m.total_deliveries === 1 ? '' : 's'} · pago {currency(m.total_paid)}
+                    {m.avg_delivery_minutes > 0 && ` · ${m.avg_delivery_minutes.toFixed(0)} min/entrega`}
+                  </p>
+                </div>
+                <span className={`font-bold text-sm flex-shrink-0 ${m.pending_amount > 0 ? 'sunset-text' : 'text-son-silver-dim'}`}>
+                  {m.pending_amount > 0 ? `a pagar: ${currency(m.pending_amount)}` : 'em dia'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Card>
+  )
+}
+
+function OrderDetailModal({ order, onClose }: { order: Order; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="glass rounded-2xl p-6 max-w-md w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-white">Pedido #{order.id.slice(0, 8)}</h3>
+          <button onClick={onClose} className="text-son-silver-dim hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="space-y-3 text-sm">
+          <div className="flex items-center justify-between">
+            <StatusBadge status={order.status} />
+            <span className="sunset-text font-black text-lg">{currency(order.total)}</span>
+          </div>
+          <p className="text-xs text-son-gold">
+            Origem: {order.sold_by_role ? `PDV ${order.sold_by_role === 'admin' ? 'admin' : `— ${order.sold_by_name ?? 'vendedor'}`}` : 'Site'}
+          </p>
+          <div>
+            <p className="text-son-silver-dim text-xs mb-0.5">Cliente</p>
+            <p className="text-white">{order.customer_name}</p>
+            <p className="text-son-silver-dim text-xs">{order.customer_whatsapp}</p>
+          </div>
+          {order.address && (
+            <div>
+              <p className="text-son-silver-dim text-xs mb-0.5">Endereço</p>
+              <p className="text-white">{order.address}{order.neighborhood ? ` · ${order.neighborhood}` : ''}</p>
+            </div>
+          )}
+          <div>
+            <p className="text-son-silver-dim text-xs mb-1">Itens</p>
+            <ul className="space-y-0.5">
+              {order.items.map((i) => (
+                <li key={i.product_id} className="flex justify-between text-white">
+                  <span>{i.quantity}x {i.product_name}</span>
+                  <span>{currency(i.unit_price * i.quantity)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="flex justify-between text-son-silver-dim text-xs pt-2 border-t border-white/10">
+            <span>Pagamento</span>
+            <span className="capitalize">{order.payment_method} · {order.payment_status}</span>
+          </div>
+          {(order.discount_amount ?? 0) > 0 || (order.shipping_discount ?? 0) > 0 ? (
+            <div className="flex justify-between text-emerald-400 text-xs">
+              <span>Desconto concedido</span>
+              <span>-{currency((order.discount_amount ?? 0) + (order.shipping_discount ?? 0))}</span>
+            </div>
+          ) : null}
+          {order.coupon_code && (
+            <p className="text-xs text-son-silver-dim">Cupom: {order.coupon_code}</p>
+          )}
+          <p className="text-xs text-son-silver-dim">Criado em {formatDate(order.created_at)}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminFinanceiro() {
   const { role } = useAdminAuth()
   const [data, setData] = useState<FinanceiroSummary | null>(null)
   const [loading, setLoading] = useState(role === 'admin')
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
   useEffect(() => {
     if (role !== 'admin') return
@@ -88,7 +252,7 @@ export default function AdminFinanceiro() {
   if (role !== 'admin') {
     return (
       <div>
-        <h1 className="text-2xl font-black mb-6">Relatórios</h1>
+        <h1 className="text-2xl font-black mb-6">Financeiro</h1>
         <PdvSalesSection role={role} />
       </div>
     )
@@ -106,7 +270,7 @@ export default function AdminFinanceiro() {
 
   return (
     <div>
-      <h1 className="text-2xl font-black mb-6">Financeiro &amp; relatórios</h1>
+      <h1 className="text-2xl font-black mb-6">Financeiro &amp; relatórios &amp; estatísticas</h1>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
         <Card className="p-5">
@@ -179,31 +343,7 @@ export default function AdminFinanceiro() {
         )}
       </Card>
 
-      <Card className="p-5 mb-6">
-        <div className="flex items-center gap-2 label mb-3">
-          <Truck className="w-3.5 h-3.5" /> Frete dos motoboys (100% é deles)
-        </div>
-        {data.motoboys.length === 0 ? (
-          <p className="text-sm text-son-silver-dim">Nenhum motoboy cadastrado.</p>
-        ) : (
-          <ul className="divide-y divide-white/5">
-            {data.motoboys.map((m) => (
-              <li key={m.id} className="py-2.5 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm text-white truncate">{m.name}</p>
-                  <p className="text-xs text-son-silver-dim">
-                    {m.total_deliveries} entrega{m.total_deliveries === 1 ? '' : 's'} · pago {currency(m.total_paid)}
-                    {m.avg_delivery_minutes > 0 && ` · ${m.avg_delivery_minutes.toFixed(0)} min/entrega`}
-                  </p>
-                </div>
-                <span className={`font-bold text-sm flex-shrink-0 ${m.pending_amount > 0 ? 'sunset-text' : 'text-son-silver-dim'}`}>
-                  {m.pending_amount > 0 ? `a pagar: ${currency(m.pending_amount)}` : 'em dia'}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+      <MotoboysSection motoboys={data.motoboys} />
 
       <div className="mb-6">
         <PdvSalesSection role={role} />
@@ -213,17 +353,24 @@ export default function AdminFinanceiro() {
         <p className="label mb-3">Histórico recente</p>
         <ul className="divide-y divide-white/5">
           {data.recent_orders.map((o) => (
-            <li key={o.id} className="py-2.5 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm text-white truncate">{o.customer_name}</p>
-                <p className="text-xs text-son-silver-dim">{o.created_at}</p>
-              </div>
-              <StatusBadge status={o.status} className="flex-shrink-0" />
-              <span className="sunset-text font-bold text-sm flex-shrink-0">{currency(o.total)}</span>
+            <li key={o.id}>
+              <button
+                onClick={() => setSelectedOrder(o)}
+                className="w-full py-2.5 flex items-center justify-between gap-3 text-left hover:bg-white/5 -mx-2 px-2 rounded-lg transition-colors"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm text-white truncate">{o.customer_name}</p>
+                  <p className="text-xs text-son-silver-dim">{o.created_at}</p>
+                </div>
+                <StatusBadge status={o.status} className="flex-shrink-0" />
+                <span className="sunset-text font-bold text-sm flex-shrink-0">{currency(o.total)}</span>
+              </button>
             </li>
           ))}
         </ul>
       </Card>
+
+      {selectedOrder && <OrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
     </div>
   )
 }

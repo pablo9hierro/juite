@@ -238,14 +238,32 @@ const remoteApi = {
     },
     vendedores: {
       list: () => rpc<Vendedor[]>('admin_list_vendedores', { p_token: adminToken() }),
-      create: (payload: { name: string; email: string; password: string }) =>
+      create: (payload: {
+        name: string
+        email: string
+        password: string
+        commission_active?: boolean
+        commission_percent?: number
+      }) =>
         rpc<Vendedor>('admin_create_vendedor', {
           p_token: adminToken(),
           p_name: payload.name,
           p_email: payload.email,
           p_password: payload.password,
+          p_commission_active: payload.commission_active ?? false,
+          p_commission_percent: payload.commission_percent ?? null,
         }),
-      update: (id: string, payload: { name: string; email: string; active: boolean; password?: string }) =>
+      update: (
+        id: string,
+        payload: {
+          name: string
+          email: string
+          active: boolean
+          password?: string
+          commission_active?: boolean
+          commission_percent?: number
+        }
+      ) =>
         rpc<Vendedor>('admin_update_vendedor', {
           p_token: adminToken(),
           p_id: id,
@@ -253,6 +271,8 @@ const remoteApi = {
           p_email: payload.email,
           p_active: payload.active,
           p_password: payload.password || null,
+          p_commission_active: payload.commission_active ?? false,
+          p_commission_percent: payload.commission_percent ?? null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_vendedor', { p_token: adminToken(), p_id: id }),
     },

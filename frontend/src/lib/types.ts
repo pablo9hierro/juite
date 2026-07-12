@@ -124,8 +124,12 @@ export interface Order {
   motoboy_id: string | null
   motoboy_name?: string | null
   motoboy_whatsapp?: string | null
+  // Origem do pedido — só vem preenchido pra admin/vendedor (admin_list_orders/
+  // admin_update_order_status); nunca aparece pro cliente nem pro motoboy,
+  // é controle interno de equipe.
   sold_by_role?: 'admin' | 'vendedor' | null
   sold_by_id?: string | null
+  sold_by_name?: string | null
   pix_payment_id?: string | null
   pix_qr_base64?: string | null
   pix_copia_cola?: string | null
@@ -153,6 +157,8 @@ export interface Vendedor {
   name: string
   email: string
   active: boolean
+  commission_active: boolean
+  commission_percent: number | null
 }
 
 export interface PdvSaleItemInput {
@@ -167,6 +173,8 @@ export interface PdvSale {
   customer_name: string
   created_at: string
   sold_by_role: 'admin' | 'vendedor'
+  sold_by_id?: string | null
+  sold_by_name?: string | null
   items: { product_name: string; quantity: number; unit_price: number }[]
 }
 

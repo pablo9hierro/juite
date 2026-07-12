@@ -1,11 +1,10 @@
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   ClipboardList,
-  KeyRound,
   LogOut,
-  MapPinned,
   Megaphone,
   Package,
+  Settings,
   ShoppingCart,
   Truck,
   Users,
@@ -16,21 +15,20 @@ import { useAdminAuth } from '../../store/adminAuth'
 
 // Vendedor usa essa MESMA tela (mesmo layout, login, sidebar) só que
 // enxergando um dashboard próprio: Pedidos + PDV + Financeiro (só a parte
-// de vendas de balcão dele) — sem acesso a Produtos/Funcionários/Frete/
-// Campanhas/CRM/Senha, que continuam exclusivos do admin. O resto do menu
+// de vendas de balcão dele) — sem acesso a Produtos/Funcionários/Campanhas/
+// CRM/Configurações, que continuam exclusivos do admin. O resto do menu
 // nem aparece pra ele, e a guarda de rota abaixo bloqueia acesso direto
 // por URL também (defesa em profundidade: cada RPC admin-only já rejeita
 // o token de vendedor sozinha, isso aqui é só pra não mostrar tela quebrada).
 const NAV_ITEMS = [
   { href: '/admin/pedidos', label: 'Pedidos', icon: ClipboardList, roles: ['admin', 'vendedor'] },
+  { href: '/admin/pdv', label: 'PDV', icon: ShoppingCart, roles: ['admin', 'vendedor'] },
   { href: '/admin/produtos', label: 'Produtos', icon: Package, roles: ['admin'] },
   { href: '/admin/motoboys', label: 'Funcionários', icon: Truck, roles: ['admin'] },
-  { href: '/admin/frete', label: 'Frete', icon: MapPinned, roles: ['admin'] },
-  { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet, roles: ['admin', 'vendedor'] },
-  { href: '/admin/pdv', label: 'PDV', icon: ShoppingCart, roles: ['admin', 'vendedor'] },
-  { href: '/admin/campanhas', label: 'Campanhas', icon: Megaphone, roles: ['admin'] },
   { href: '/admin/crm', label: 'CRM', icon: Users, roles: ['admin'] },
-  { href: '/admin/senha', label: 'Senha', icon: KeyRound, roles: ['admin'] },
+  { href: '/admin/campanhas', label: 'Campanhas', icon: Megaphone, roles: ['admin'] },
+  { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet, roles: ['admin', 'vendedor'] },
+  { href: '/admin/conta', label: 'Configurações', icon: Settings, roles: ['admin'] },
 ] as const
 
 export default function AdminLayout() {

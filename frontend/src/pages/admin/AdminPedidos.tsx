@@ -69,6 +69,9 @@ function OrderCard({
           <span className="text-xs text-son-silver-dim flex-1">#{order.id.slice(0, 8)}</span>
           <StatusBadge status={order.status} />
         </div>
+        <p className="text-xs text-son-gold mb-1">
+          Origem: {order.sold_by_role ? `PDV ${order.sold_by_role === 'admin' ? 'admin' : `— ${order.sold_by_name ?? 'vendedor'}`}` : 'Site'}
+        </p>
         <p className="font-semibold text-white">{order.customer_name}</p>
         <p className="mb-2">
           <WhatsAppLink phone={order.customer_whatsapp} />

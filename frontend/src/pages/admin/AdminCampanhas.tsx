@@ -126,11 +126,6 @@ export default function AdminCampanhas() {
           <Plus className="w-4 h-4" /> Nova campanha
         </button>
       </div>
-      <p className="text-sm text-son-silver-dim mb-6">
-        Banner clicável no carrossel da landing, com produto(s) + desconto pré-carregados no checkout. Cupons agora ficam
-        na página de CRM.
-      </p>
-
       {campaignsLoading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
@@ -291,9 +286,6 @@ export default function AdminCampanhas() {
                   />
                 </div>
               </div>
-              <p className="text-xs text-son-silver-dim -mt-1">
-                O motoboy sempre recebe o valor cheio do frete — o desconto é absorvido pela loja.
-              </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Início (opcional)</label>

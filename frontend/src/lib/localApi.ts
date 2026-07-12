@@ -653,7 +653,13 @@ async function adminListVendedores(): Promise<Vendedor[]> {
   return (db.vendedores ?? []).map(stripVendedorPassword).sort((a, b) => a.name.localeCompare(b.name))
 }
 
-async function createVendedor(payload: { name: string; email: string; password: string }): Promise<Vendedor> {
+async function createVendedor(payload: {
+  name: string
+  email: string
+  password: string
+  commission_active?: boolean
+  commission_percent?: number
+}): Promise<Vendedor> {
   if (!payload.password) throw new ApiError(400, 'password is required to create a vendedor')
   const db = loadDb()
   db.vendedores = db.vendedores ?? []
@@ -664,6 +670,8 @@ async function createVendedor(payload: { name: string; email: string; password: 
     email: payload.email,
     password: payload.password,
     active: true,
+    commission_active: payload.commission_active ?? false,
+    commission_percent: payload.commission_active ? payload.commission_percent ?? null : null,
   }
   db.vendedores.push(vendedor)
   saveDb(db)
@@ -672,7 +680,14 @@ async function createVendedor(payload: { name: string; email: string; password: 
 
 async function updateVendedor(
   id: string,
-  payload: { name: string; email: string; active: boolean; password?: string }
+  payload: {
+    name: string
+    email: string
+    active: boolean
+    password?: string
+    commission_active?: boolean
+    commission_percent?: number
+  }
 ): Promise<Vendedor> {
   const db = loadDb()
   const vendedor = (db.vendedores ?? []).find((v) => v.id === id)
@@ -680,6 +695,8 @@ async function updateVendedor(
   vendedor.name = payload.name
   vendedor.email = payload.email
   vendedor.active = payload.active
+  vendedor.commission_active = payload.commission_active ?? false
+  vendedor.commission_percent = payload.commission_active ? payload.commission_percent ?? null : null
   if (payload.password) vendedor.password = payload.password
   saveDb(db)
   return stripVendedorPassword(vendedor)
@@ -1006,15 +1023,34 @@ async function vendedorRelatorio(): Promise<VendedorRelatorio> {
         customer_name: o.customer_name,
         created_at: o.created_at,
         sold_by_role: (o.sold_by_role as 'admin' | 'vendedor') ?? 'admin',
+        sold_by_id: o.sold_by_id ?? null,
+        sold_by_name:
+          o.sold_by_role === 'admin'
+            ? 'Admin'
+            : o.sold_by_role === 'vendedor'
+              ? (db.vendedores ?? []).find((v) => v.id === o.sold_by_id)?.name ?? null
+              : null,
         items: o.items.map((i) => ({ product_name: i.product_name, quantity: i.quantity, unit_price: i.unit_price })),
       })),
   }
 }
 
+// sold_by_name é resolvido só aqui (admin_list_orders/admin_update_order_status
+// locais) — nunca em getOrder/trackOrders, que são os caminhos públicos usados
+// pelo cliente e pelo motoboy.
+function withSoldByName(db: LocalDb, order: Order): Order {
+  if (order.sold_by_role === 'admin') return { ...order, sold_by_name: 'Admin' }
+  if (order.sold_by_role === 'vendedor') {
+    const vendedor = (db.vendedores ?? []).find((v) => v.id === order.sold_by_id)
+    return { ...order, sold_by_name: vendedor?.name ?? null }
+  }
+  return { ...order, sold_by_name: null }
+}
+
 async function adminListOrders(status?: string): Promise<Order[]> {
   const db = loadDb()
   const filtered = status ? db.orders.filter((o) => o.status === status) : db.orders
-  return [...filtered].sort((a, b) => b.created_at.localeCompare(a.created_at))
+  return [...filtered].sort((a, b) => b.created_at.localeCompare(a.created_at)).map((o) => withSoldByName(db, o))
 }
 
 async function adminUpdateStatus(id: string, status: string, paymentConfirmed?: boolean): Promise<Order> {
@@ -1032,7 +1068,7 @@ async function adminUpdateStatus(id: string, status: string, paymentConfirmed?: 
     )
   }
   saveDb(db)
-  return order
+  return withSoldByName(db, order)
 }
 
 async function getShippingSettings(): Promise<ShippingSettings> {

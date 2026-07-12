@@ -12,7 +12,6 @@ import AdminLogin from './pages/admin/AdminLogin'
 import AdminPedidos from './pages/admin/AdminPedidos'
 import AdminProdutos from './pages/admin/AdminProdutos'
 import AdminMotoboys from './pages/admin/AdminMotoboys'
-import AdminFrete from './pages/admin/AdminFrete'
 import AdminFinanceiro from './pages/admin/AdminFinanceiro'
 import AdminSenha from './pages/admin/AdminSenha'
 import AdminCampanhas from './pages/admin/AdminCampanhas'
@@ -53,10 +52,6 @@ export default function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="/admin/pedidos" replace />} />
           <Route path="pedidos" element={<AdminPedidos />} />
-          <Route path="produtos" element={<AdminProdutos />} />
-          <Route path="motoboys" element={<AdminMotoboys />} />
-          <Route path="frete" element={<AdminFrete />} />
-          <Route path="financeiro" element={<AdminFinanceiro />} />
           <Route
             path="pdv"
             element={
@@ -65,9 +60,12 @@ export default function App() {
               </Suspense>
             }
           />
-          <Route path="campanhas" element={<AdminCampanhas />} />
+          <Route path="produtos" element={<AdminProdutos />} />
+          <Route path="motoboys" element={<AdminMotoboys />} />
           <Route path="crm" element={<AdminCrm />} />
-          <Route path="senha" element={<AdminSenha />} />
+          <Route path="campanhas" element={<AdminCampanhas />} />
+          <Route path="financeiro" element={<AdminFinanceiro />} />
+          <Route path="conta" element={<AdminSenha />} />
         </Route>
 
         {/* Motoboy loga na MESMA tela de admin/vendedor (/admin/login) e cai
