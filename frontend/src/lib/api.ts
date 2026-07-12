@@ -21,6 +21,7 @@ import type {
   PaymentMethod,
   PdvSaleItemInput,
   Product,
+  ProductDiscount,
   ShippingSettings,
   Vendedor,
   VendedorRelatorio,
@@ -315,30 +316,36 @@ const remoteApi = {
       // pode usar. Intransferível — cada concessão só vale pro whatsapp dela.
       createTargeted: (payload: {
         code: string
-        kind: 'desconto' | 'frete' | 'aniversario'
-        discount_type: 'percent' | 'fixed'
-        discount_value: number
         customer_whatsapps: string[]
         uses_per_customer?: number
         notify_customers?: boolean
+        custom_message?: string
         combinable_with_public?: boolean
         allow_campaign_checkout?: boolean
         expires_at?: string
         max_uses?: number
+        discount_type?: 'percent' | 'fixed'
+        discount_value?: number
+        shipping_discount_type?: 'percent' | 'fixed'
+        shipping_discount_value?: number
+        product_discounts?: ProductDiscount[]
       }) =>
         rpc<Coupon>('admin_create_targeted_coupon', {
           p_token: adminToken(),
           p_code: payload.code,
-          p_kind: payload.kind,
-          p_discount_type: payload.discount_type,
-          p_discount_value: payload.discount_value,
           p_customer_whatsapps: payload.customer_whatsapps,
           p_uses_per_customer: payload.uses_per_customer ?? 1,
           p_notify_customers: payload.notify_customers ?? true,
+          p_custom_message: payload.custom_message || null,
           p_combinable_with_public: payload.combinable_with_public ?? false,
           p_allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
           p_expires_at: payload.expires_at || null,
           p_max_uses: payload.max_uses ?? null,
+          p_discount_type: payload.discount_type ?? null,
+          p_discount_value: payload.discount_value ?? null,
+          p_shipping_discount_type: payload.shipping_discount_type ?? null,
+          p_shipping_discount_value: payload.shipping_discount_value ?? null,
+          p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
         }),
       listGrants: (couponId: string) =>
         rpc<CouponGrant[]>('admin_list_coupon_grants', { p_token: adminToken(), p_coupon_id: couponId }),
@@ -442,10 +449,10 @@ const remoteApi = {
       // Dispara pelo WhatsApp da loja pra cada cliente contemplado num
       // cupom alvo — a não ser que "não notificar clientes" tenha sido
       // marcado na criação (checado nos dois lados, front e Rust).
-      notifyCouponGrant: (couponId: string) =>
+      notifyCouponGrant: (couponId: string, customMessage?: string) =>
         request<void>('/api/admin/whatsapp/notify-coupon-grant', {
           method: 'POST',
-          body: JSON.stringify({ coupon_id: couponId }),
+          body: JSON.stringify({ coupon_id: couponId, custom_message: customMessage || null }),
           token: adminToken(),
         }),
     },

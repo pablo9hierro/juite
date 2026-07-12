@@ -244,12 +244,29 @@ async function createOrder(payload: {
       grant.used_count += 1
     }
     if (coupon.kind === 'frete') {
+      // legado: discount_type/value É a taxa de frete
       if (coupon.discount_type === 'percent') shippingDiscount += (shippingPrice * (coupon.discount_value ?? 0)) / 100
       else shippingDiscount += coupon.discount_value ?? 0
-    } else if (coupon.discount_type === 'percent') {
-      discountAmount += (subtotal * (coupon.discount_value ?? 0)) / 100
     } else {
-      discountAmount += coupon.discount_value ?? 0
+      if (coupon.kind === 'desconto' && coupon.discount_type) {
+        discountAmount +=
+          coupon.discount_type === 'percent' ? (subtotal * (coupon.discount_value ?? 0)) / 100 : coupon.discount_value ?? 0
+      }
+      if (coupon.kind === 'produto') {
+        for (const item of payload.items) {
+          const pd = (coupon.product_discounts ?? []).find((p) => p.product_id === item.product_id)
+          if (!pd) continue
+          const product = db.products.find((p) => p.id === item.product_id)!
+          const lineTotal = product.price * item.quantity
+          discountAmount += pd.discount_type === 'percent' ? (lineTotal * pd.discount_value) / 100 : Math.min(pd.discount_value * item.quantity, lineTotal)
+        }
+      }
+      if (coupon.shipping_discount_type) {
+        shippingDiscount +=
+          coupon.shipping_discount_type === 'percent'
+            ? (shippingPrice * (coupon.shipping_discount_value ?? 0)) / 100
+            : coupon.shipping_discount_value ?? 0
+      }
     }
     coupon.used_count += 1
     couponCode = coupon.code
@@ -340,12 +357,39 @@ async function getCampaignPublic(id: string): Promise<Campaign> {
   return c
 }
 
+type CouponPreviewLocal = Pick<
+  Coupon,
+  | 'code'
+  | 'kind'
+  | 'discount_type'
+  | 'discount_value'
+  | 'shipping_discount_type'
+  | 'shipping_discount_value'
+  | 'product_discounts'
+  | 'allow_campaign_checkout'
+  | 'combinable_with_public'
+>
+
+function couponPreview(c: Coupon): CouponPreviewLocal {
+  return {
+    code: c.code,
+    kind: c.kind,
+    discount_type: c.discount_type,
+    discount_value: c.discount_value,
+    shipping_discount_type: c.shipping_discount_type,
+    shipping_discount_value: c.shipping_discount_value,
+    product_discounts: c.product_discounts ?? [],
+    allow_campaign_checkout: c.allow_campaign_checkout,
+    combinable_with_public: c.combinable_with_public,
+  }
+}
+
 async function validateCouponPublic(
   code: string,
   campaignId?: string,
   customerBirthdate?: string,
   customerWhatsapp?: string
-): Promise<Pick<Coupon, 'code' | 'kind' | 'discount_type' | 'discount_value' | 'combinable_with_public'>> {
+): Promise<CouponPreviewLocal> {
   const db = loadDb()
   const coupon = (db.coupons ?? []).find((c) => c.code.toUpperCase() === code.trim().toUpperCase())
   if (!coupon) throw new ApiError(400, 'coupon not found')
@@ -370,32 +414,17 @@ async function validateCouponPublic(
     const grant = grants.find((g) => g.customer_whatsapp === customerWhatsapp && g.used_count < g.granted_uses)
     if (!grant) throw new ApiError(400, 'this coupon is not available for your account')
   }
-  return {
-    code: coupon.code,
-    kind: coupon.kind,
-    discount_type: coupon.discount_type,
-    discount_value: coupon.discount_value,
-    combinable_with_public: coupon.combinable_with_public,
-  }
+  return couponPreview(coupon)
 }
 
-async function listCustomerCouponsPublic(
-  customerWhatsapp: string
-): Promise<Pick<Coupon, 'code' | 'kind' | 'discount_type' | 'discount_value' | 'allow_campaign_checkout' | 'combinable_with_public'>[]> {
+async function listCustomerCouponsPublic(customerWhatsapp: string): Promise<CouponPreviewLocal[]> {
   const db = loadDb()
   const now = Date.now()
   return (db.couponGrants ?? [])
     .filter((g) => g.customer_whatsapp === customerWhatsapp && g.used_count < g.granted_uses)
     .map((g) => (db.coupons ?? []).find((c) => c.id === g.coupon_id))
     .filter((c): c is Coupon => !!c && c.active && (!c.expires_at || new Date(c.expires_at).getTime() > now))
-    .map((c) => ({
-      code: c.code,
-      kind: c.kind,
-      discount_type: c.discount_type,
-      discount_value: c.discount_value,
-      allow_campaign_checkout: c.allow_campaign_checkout,
-      combinable_with_public: c.combinable_with_public,
-    }))
+    .map(couponPreview)
 }
 
 // Modo demo já gera o QR na hora de criar o pedido (ver createOrder) — não
@@ -744,6 +773,9 @@ async function createCoupon(payload: {
     kind: payload.kind,
     discount_type: payload.discount_type,
     discount_value: payload.discount_value,
+    shipping_discount_type: null,
+    shipping_discount_value: null,
+    product_discounts: [],
     allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
     active: true,
     expires_at: payload.expires_at || null,
@@ -781,16 +813,19 @@ async function deleteCoupon(id: string): Promise<void> {
 
 async function createTargetedCoupon(payload: {
   code: string
-  kind: 'desconto' | 'frete' | 'aniversario'
-  discount_type: 'percent' | 'fixed'
-  discount_value: number
   customer_whatsapps: string[]
   uses_per_customer?: number
   notify_customers?: boolean
+  custom_message?: string
   combinable_with_public?: boolean
   allow_campaign_checkout?: boolean
   expires_at?: string
   max_uses?: number
+  discount_type?: 'percent' | 'fixed'
+  discount_value?: number
+  shipping_discount_type?: 'percent' | 'fixed'
+  shipping_discount_value?: number
+  product_discounts?: import('./types').ProductDiscount[]
 }): Promise<Coupon> {
   const db = loadDb()
   db.coupons = db.coupons ?? []
@@ -801,12 +836,23 @@ async function createTargetedCoupon(payload: {
   if (!payload.customer_whatsapps || payload.customer_whatsapps.length === 0) {
     throw new ApiError(400, 'at least one customer is required')
   }
+  const hasProducts = payload.product_discounts && payload.product_discounts.length > 0
+  if (hasProducts && payload.discount_type) {
+    throw new ApiError(400, 'use either a flat product discount or per-product discounts, not both')
+  }
+  if (!hasProducts && !payload.discount_type && !payload.shipping_discount_type) {
+    throw new ApiError(400, 'a targeted coupon needs at least one discount (produto, desconto and/or frete)')
+  }
+  const kind: 'desconto' | 'frete' | 'produto' = hasProducts ? 'produto' : payload.discount_type ? 'desconto' : 'frete'
   const coupon: Coupon = {
     id: uid(),
     code,
-    kind: payload.kind,
-    discount_type: payload.discount_type,
-    discount_value: payload.discount_value,
+    kind,
+    discount_type: kind === 'frete' ? payload.shipping_discount_type ?? null : payload.discount_type ?? null,
+    discount_value: kind === 'frete' ? payload.shipping_discount_value ?? null : payload.discount_value ?? null,
+    shipping_discount_type: kind === 'frete' ? null : payload.shipping_discount_type ?? null,
+    shipping_discount_value: kind === 'frete' ? null : payload.shipping_discount_value ?? null,
+    product_discounts: payload.product_discounts ?? [],
     allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
     combinable_with_public: payload.combinable_with_public ?? false,
     active: true,
@@ -1170,19 +1216,33 @@ async function adminCrmCustomers(): Promise<import('./types').CrmCustomer[]> {
       birthdate: null,
       total_spent: 0,
       order_count: 0,
+      total_items: 0,
       first_order_at: null,
       last_order_at: null,
       neighborhoods: [],
       purchases: [],
+      orders: [],
+      lat: null,
+      lng: null,
     }
     entry.name = o.customer_name
     if (o.payment_status === 'pago') {
       entry.total_spent += o.total
       entry.order_count += 1
+      entry.orders.push({ total: o.total, created_at: o.created_at })
       if (!entry.first_order_at || o.created_at < entry.first_order_at) entry.first_order_at = o.created_at
-      if (!entry.last_order_at || o.created_at > entry.last_order_at) entry.last_order_at = o.created_at
+      if (!entry.last_order_at || o.created_at > entry.last_order_at) {
+        entry.last_order_at = o.created_at
+        if (o.customer_lat != null && o.customer_lng != null) {
+          entry.lat = o.customer_lat
+          entry.lng = o.customer_lng
+        }
+      }
       if (o.neighborhood && !entry.neighborhoods.includes(o.neighborhood)) entry.neighborhoods.push(o.neighborhood)
-      for (const item of o.items) entry.purchases.push({ product_id: item.product_id, created_at: o.created_at })
+      for (const item of o.items) {
+        entry.purchases.push({ product_id: item.product_id, created_at: o.created_at })
+        entry.total_items += item.quantity
+      }
     }
     byWhatsapp.set(o.customer_whatsapp, entry)
   }

@@ -5,7 +5,8 @@ import SiteHeader from '../components/layout/SiteHeader'
 import LocationPicker from '../components/checkout/LocationPicker'
 import BirthdateInput from '../components/checkout/BirthdateInput'
 import { api, ApiError } from '../lib/api'
-import type { Campaign, Coupon, PaymentMethod, Product, ShippingEstimate } from '../lib/types'
+import type { CouponPreview } from '../lib/supabasePublicApi'
+import type { Campaign, PaymentMethod, Product, ShippingEstimate } from '../lib/types'
 import { useCart } from '../store/cart'
 import { useCustomer } from '../store/customer'
 
@@ -21,7 +22,7 @@ function formatPhone(value: string) {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`
 }
 
-type AppliedCoupon = Pick<Coupon, 'code' | 'kind' | 'discount_type' | 'discount_value' | 'combinable_with_public'>
+type AppliedCoupon = CouponPreview
 
 export default function Checkout() {
   const navigate = useNavigate()
@@ -126,19 +127,42 @@ export default function Checkout() {
   }
   const campaignDiscountTotal = campaignProductDiscount + campaignShippingDiscount
 
+  // Mapa produto -> desconto desse item pelo cupom (kind='produto') — usado
+  // aqui pro total e também pra linha "item promocional" do resumo.
+  const couponItemDiscounts = new Map<string, number>()
   let couponProductDiscount = 0
   let couponShippingDiscount = 0
   if (appliedCoupon) {
     if (appliedCoupon.kind === 'frete') {
+      // legado: discount_type/value É a taxa de frete
       couponShippingDiscount =
         appliedCoupon.discount_type === 'percent'
           ? (shippingPrice * (appliedCoupon.discount_value ?? 0)) / 100
           : appliedCoupon.discount_value ?? 0
     } else {
-      couponProductDiscount =
-        appliedCoupon.discount_type === 'percent'
-          ? (subtotal * (appliedCoupon.discount_value ?? 0)) / 100
-          : appliedCoupon.discount_value ?? 0
+      if (appliedCoupon.kind === 'desconto' && appliedCoupon.discount_type) {
+        couponProductDiscount =
+          appliedCoupon.discount_type === 'percent'
+            ? (subtotal * (appliedCoupon.discount_value ?? 0)) / 100
+            : appliedCoupon.discount_value ?? 0
+      }
+      if (appliedCoupon.kind === 'produto') {
+        for (const l of lines) {
+          const pd = appliedCoupon.product_discounts?.find((p) => p.product_id === l.product.id)
+          if (!pd) continue
+          const lineTotal = l.product.price * l.item.quantity
+          const lineDiscount =
+            pd.discount_type === 'percent' ? (lineTotal * pd.discount_value) / 100 : Math.min(pd.discount_value * l.item.quantity, lineTotal)
+          couponItemDiscounts.set(l.product.id, lineDiscount)
+          couponProductDiscount += lineDiscount
+        }
+      }
+      if (appliedCoupon.shipping_discount_type) {
+        couponShippingDiscount =
+          appliedCoupon.shipping_discount_type === 'percent'
+            ? (shippingPrice * (appliedCoupon.shipping_discount_value ?? 0)) / 100
+            : appliedCoupon.shipping_discount_value ?? 0
+      }
     }
   }
   const couponDiscountTotal = couponProductDiscount + couponShippingDiscount

@@ -4,8 +4,9 @@ import Card from '../../components/ui/Card'
 import WhatsAppLink from '../../components/ui/WhatsAppLink'
 import ExpiryInput from '../../components/admin/ExpiryInput'
 import ProductMultiSelect from '../../components/admin/ProductMultiSelect'
+import ProductDiscountList from '../../components/admin/ProductDiscountList'
 import { api, ApiError } from '../../lib/api'
-import type { Coupon, CouponKind, CrmCustomer, DiscountType, Product } from '../../lib/types'
+import type { Coupon, CouponKind, CrmCustomer, DiscountType, Product, ProductDiscount } from '../../lib/types'
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
@@ -31,6 +32,7 @@ const COUPON_KIND_LABEL: Record<CouponKind, string> = {
   desconto: 'Desconto',
   frete: 'Desconto no frete',
   aniversario: 'Aniversário',
+  produto: 'Desconto por produto',
 }
 
 type Segmentation = 'nenhuma' | 'aniversariantes' | 'frequentes' | 'maior_volume' | 'inativos' | 'novos'
@@ -119,7 +121,7 @@ function applyFilters(customers: CrmCustomer[], f: FilterState): CrmCustomer[] {
 
 type CouponForm = {
   code: string
-  kind: CouponKind
+  kind: 'desconto' | 'frete' | 'aniversario'
   discount_type: DiscountType
   discount_value: string
   allow_campaign_checkout: boolean
@@ -136,16 +138,41 @@ const EMPTY_COUPON_FORM: CouponForm = {
   max_uses: '',
 }
 
-type TargetedForm = CouponForm & {
+type ProductDiscountMode = 'nenhum' | 'flat' | 'produto'
+
+type TargetedForm = {
+  code: string
+  productMode: ProductDiscountMode
+  discount_type: DiscountType
+  discount_value: string
+  productDiscounts: ProductDiscount[]
+  shippingEnabled: boolean
+  shipping_discount_type: DiscountType
+  shipping_discount_value: string
   uses_per_customer: string
   dontNotify: boolean
+  customMessage: string
   combinable_with_public: boolean
+  allow_campaign_checkout: boolean
+  expires_at: string
+  max_uses: string
 }
 const EMPTY_TARGETED_FORM: TargetedForm = {
-  ...EMPTY_COUPON_FORM,
+  code: '',
+  productMode: 'flat',
+  discount_type: 'percent',
+  discount_value: '',
+  productDiscounts: [],
+  shippingEnabled: false,
+  shipping_discount_type: 'percent',
+  shipping_discount_value: '',
   uses_per_customer: '1',
   dontNotify: false,
+  customMessage: '',
   combinable_with_public: false,
+  allow_campaign_checkout: false,
+  expires_at: '',
+  max_uses: '',
 }
 
 export default function AdminCrm() {
@@ -261,25 +288,35 @@ export default function AdminCrm() {
     loadCoupons()
   }
 
+  const targetedMessageValid =
+    targetedForm.dontNotify || (targetedForm.customMessage.includes('/nome') && targetedForm.customMessage.includes('/cupom'))
+
   const saveTargetedCoupon = async () => {
     setTargetedError(null)
+    if (!targetedMessageValid) {
+      setTargetedError('A mensagem precisa citar /nome e /cupom.')
+      return
+    }
     setSavingTargeted(true)
     try {
       const created = await api.admin.coupons.createTargeted({
         code: targetedForm.code,
-        kind: targetedForm.kind,
-        discount_type: targetedForm.discount_type,
-        discount_value: Number(targetedForm.discount_value),
         customer_whatsapps: visible.map((c) => c.whatsapp),
         uses_per_customer: Number(targetedForm.uses_per_customer) || 1,
         notify_customers: !targetedForm.dontNotify,
+        custom_message: targetedForm.dontNotify ? undefined : targetedForm.customMessage,
         combinable_with_public: targetedForm.combinable_with_public,
         allow_campaign_checkout: targetedForm.allow_campaign_checkout,
         expires_at: targetedForm.expires_at || undefined,
         max_uses: targetedForm.max_uses ? Number(targetedForm.max_uses) : undefined,
+        discount_type: targetedForm.productMode === 'flat' ? targetedForm.discount_type : undefined,
+        discount_value: targetedForm.productMode === 'flat' ? Number(targetedForm.discount_value) : undefined,
+        shipping_discount_type: targetedForm.shippingEnabled ? targetedForm.shipping_discount_type : undefined,
+        shipping_discount_value: targetedForm.shippingEnabled ? Number(targetedForm.shipping_discount_value) : undefined,
+        product_discounts: targetedForm.productMode === 'produto' ? targetedForm.productDiscounts : undefined,
       })
       if (!targetedForm.dontNotify) {
-        api.admin.whatsapp.notifyCouponGrant(created.id).catch(() => {})
+        api.admin.whatsapp.notifyCouponGrant(created.id, targetedForm.customMessage).catch(() => {})
       }
       setShowTargetedForm(false)
       setTargetedForm(EMPTY_TARGETED_FORM)
@@ -565,9 +602,20 @@ export default function AdminCrm() {
               </div>
               <div className="flex flex-wrap gap-1 mb-1">
                 <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-xs">{COUPON_KIND_LABEL[c.kind]}</span>
-                {discountLabel(c.discount_type, c.discount_value) && (
+                {c.kind === 'produto' ? (
                   <span className="px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">
-                    {discountLabel(c.discount_type, c.discount_value)}
+                    {c.product_discounts?.length ?? 0} produto(s)
+                  </span>
+                ) : (
+                  discountLabel(c.discount_type, c.discount_value) && (
+                    <span className="px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">
+                      {discountLabel(c.discount_type, c.discount_value)}
+                    </span>
+                  )
+                )}
+                {discountLabel(c.shipping_discount_type, c.shipping_discount_value) && (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-semibold">
+                    Frete: {discountLabel(c.shipping_discount_type, c.shipping_discount_value)}
                   </span>
                 )}
                 {(c.grant_count ?? 0) > 0 ? (
@@ -727,47 +775,88 @@ export default function AdminCrm() {
                 />
               </div>
               <div>
-                <label className="label">Tipo</label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {(['desconto', 'frete', 'aniversario'] as const).map((k) => (
+                <label className="label">Desconto no produto</label>
+                <div className="grid grid-cols-3 gap-1.5 mb-2">
+                  {(
+                    [
+                      { value: 'nenhum', label: 'Nenhum' },
+                      { value: 'flat', label: 'Valor total' },
+                      { value: 'produto', label: 'Por produto' },
+                    ] as const
+                  ).map(({ value, label }) => (
                     <button
-                      key={k}
+                      key={value}
                       type="button"
-                      onClick={() => setTargetedForm({ ...targetedForm, kind: k })}
+                      onClick={() => setTargetedForm({ ...targetedForm, productMode: value })}
                       className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
-                        targetedForm.kind === k
+                        targetedForm.productMode === value
                           ? 'sunset-bg text-white border-transparent'
                           : 'bg-son-surface border-white/10 text-son-silver'
                       }`}
                     >
-                      {COUPON_KIND_LABEL[k]}
+                      {label}
                     </button>
                   ))}
                 </div>
+                {targetedForm.productMode === 'flat' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      className="input-field"
+                      value={targetedForm.discount_type}
+                      onChange={(e) => setTargetedForm({ ...targetedForm, discount_type: e.target.value as DiscountType })}
+                    >
+                      <option value="percent">Percentual</option>
+                      <option value="fixed">Valor fixo (R$)</option>
+                    </select>
+                    <input
+                      className="input-field"
+                      type="number"
+                      min="0"
+                      placeholder="Valor"
+                      value={targetedForm.discount_value}
+                      onChange={(e) => setTargetedForm({ ...targetedForm, discount_value: e.target.value })}
+                    />
+                  </div>
+                )}
+                {targetedForm.productMode === 'produto' && (
+                  <ProductDiscountList
+                    products={products}
+                    discounts={targetedForm.productDiscounts}
+                    onChange={(productDiscounts) => setTargetedForm({ ...targetedForm, productDiscounts })}
+                  />
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="label">Tipo de desconto</label>
+
+              <label className="flex items-center gap-2 text-sm text-son-silver">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 accent-son-pink"
+                  checked={targetedForm.shippingEnabled}
+                  onChange={(e) => setTargetedForm({ ...targetedForm, shippingEnabled: e.target.checked })}
+                />
+                Também dar desconto no frete
+              </label>
+              {targetedForm.shippingEnabled && (
+                <div className="grid grid-cols-2 gap-2">
                   <select
                     className="input-field"
-                    value={targetedForm.discount_type}
-                    onChange={(e) => setTargetedForm({ ...targetedForm, discount_type: e.target.value as DiscountType })}
+                    value={targetedForm.shipping_discount_type}
+                    onChange={(e) => setTargetedForm({ ...targetedForm, shipping_discount_type: e.target.value as DiscountType })}
                   >
                     <option value="percent">Percentual</option>
                     <option value="fixed">Valor fixo (R$)</option>
                   </select>
-                </div>
-                <div>
-                  <label className="label">Valor</label>
                   <input
                     className="input-field"
                     type="number"
                     min="0"
-                    value={targetedForm.discount_value}
-                    onChange={(e) => setTargetedForm({ ...targetedForm, discount_value: e.target.value })}
+                    placeholder="Valor"
+                    value={targetedForm.shipping_discount_value}
+                    onChange={(e) => setTargetedForm({ ...targetedForm, shipping_discount_value: e.target.value })}
                   />
                 </div>
-              </div>
+              )}
+
               <div>
                 <label className="label">Quantas vezes cada cliente pode usar</label>
                 <input
@@ -785,8 +874,26 @@ export default function AdminCrm() {
                   checked={targetedForm.dontNotify}
                   onChange={(e) => setTargetedForm({ ...targetedForm, dontNotify: e.target.checked })}
                 />
-                Não notificar clientes (por padrão, cada um recebe o cupom pelo WhatsApp da loja)
+                Não notificar via WhatsApp
               </label>
+              {!targetedForm.dontNotify && (
+                <div>
+                  <label className="label">Mensagem pro cliente</label>
+                  <textarea
+                    className="input-field"
+                    rows={5}
+                    placeholder={
+                      'Olá, /nome! Você ganhou o cupom /cupom, exclusivo pra você 🎁\n\nBenefícios:\n- ...'
+                    }
+                    value={targetedForm.customMessage}
+                    onChange={(e) => setTargetedForm({ ...targetedForm, customMessage: e.target.value })}
+                  />
+                  <p className="text-xs text-son-silver-dim mt-1">
+                    Precisa citar <code>/nome</code> (vira o nome do cliente) e <code>/cupom</code> (vira o código do cupom). O link do
+                    site é adicionado automaticamente no fim.
+                  </p>
+                </div>
+              )}
               <label className="flex items-center gap-2 text-sm text-son-silver">
                 <input
                   type="checkbox"
@@ -794,7 +901,7 @@ export default function AdminCrm() {
                   checked={targetedForm.combinable_with_public}
                   onChange={(e) => setTargetedForm({ ...targetedForm, combinable_with_public: e.target.checked })}
                 />
-                Pode ser combinado com um cupom avulso digitado no checkout
+                Pode ser combinado com um cupom avulso no checkout de catálogo
               </label>
               <label className="flex items-center gap-2 text-sm text-son-silver">
                 <input

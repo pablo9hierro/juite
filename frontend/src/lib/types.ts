@@ -30,17 +30,29 @@ export interface Product {
   barcode?: string | null
 }
 
-export type CouponKind = 'desconto' | 'frete' | 'aniversario'
+export type CouponKind = 'desconto' | 'frete' | 'aniversario' | 'produto'
 export type DiscountType = 'percent' | 'fixed'
+
+export interface ProductDiscount {
+  product_id: string
+  discount_type: DiscountType
+  discount_value: number
+}
 
 export interface Coupon {
   id: string
   code: string
   kind: CouponKind
-  // Vale pro desconto de produto (kind desconto/aniversario) OU pro
-  // desconto de frete (kind frete) — nunca ambos no mesmo cupom.
+  // kind='frete': discount_type/value É a taxa de frete (legado, cupom
+  // avulso). kind='desconto': desconto flat sobre o subtotal. kind='produto':
+  // discount_type/value ficam null, o desconto mora em product_discounts.
   discount_type: DiscountType | null
   discount_value: number | null
+  // Desconto de frete ADICIONAL, independente do kind — só cupom exclusivo
+  // (CRM) pode combinar frete com desconto/produto no mesmo cupom.
+  shipping_discount_type: DiscountType | null
+  shipping_discount_value: number | null
+  product_discounts?: ProductDiscount[]
   allow_campaign_checkout: boolean
   // Só relevante pra cupom alvo (com concessões) — se pode ser combinado
   // com um cupom avulso digitado manualmente no checkout.
@@ -91,6 +103,11 @@ export interface CrmPurchaseEvent {
   created_at: string
 }
 
+export interface CrmOrderEvent {
+  total: number
+  created_at: string
+}
+
 export interface CrmCustomer {
   id: string
   name: string
@@ -98,10 +115,14 @@ export interface CrmCustomer {
   birthdate: string | null
   total_spent: number
   order_count: number
+  total_items: number
   first_order_at: string | null
   last_order_at: string | null
   neighborhoods: string[]
   purchases: CrmPurchaseEvent[]
+  orders: CrmOrderEvent[]
+  lat: number | null
+  lng: number | null
 }
 
 export interface Order {

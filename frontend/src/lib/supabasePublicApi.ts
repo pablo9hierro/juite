@@ -119,20 +119,30 @@ export const supabasePublicApi = {
         p_customer_whatsapp: customerWhatsapp ?? null,
       })
       if (error) throw new ApiError(400, error.message)
-      return data as Pick<Coupon, 'code' | 'kind' | 'discount_type' | 'discount_value' | 'combinable_with_public'>
+      return data as CouponPreview
     },
     // Checkout usa isso pra auto-detectar cupom alvo assim que o whatsapp
     // digitado bate com uma concessão — cliente não precisa digitar código.
     listForCustomer: async (customerWhatsapp: string) => {
       const { data, error } = await supabase.rpc('list_customer_coupons', { p_customer_whatsapp: customerWhatsapp })
       if (error) throw new ApiError(400, error.message)
-      return (data ?? []) as Pick<
-        Coupon,
-        'code' | 'kind' | 'discount_type' | 'discount_value' | 'allow_campaign_checkout' | 'combinable_with_public'
-      >[]
+      return (data ?? []) as CouponPreview[]
     },
   },
 }
+
+export type CouponPreview = Pick<
+  Coupon,
+  | 'code'
+  | 'kind'
+  | 'discount_type'
+  | 'discount_value'
+  | 'shipping_discount_type'
+  | 'shipping_discount_value'
+  | 'product_discounts'
+  | 'allow_campaign_checkout'
+  | 'combinable_with_public'
+>
 
 function toProduct(row: {
   id: string

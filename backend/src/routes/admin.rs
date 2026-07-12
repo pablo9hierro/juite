@@ -532,6 +532,11 @@ pub async fn notify_order_ready(
 #[derive(Debug, Deserialize)]
 pub struct NotifyCouponGrantInput {
     pub coupon_id: String,
+    /// Template opcional do admin, com /nome e /cupom pra substituir por
+    /// cliente — quando ausente, cai no texto automático de sempre. O link
+    /// do site é sempre acrescentado no fim, não importa o que o admin
+    /// escreveu.
+    pub custom_message: Option<String>,
 }
 
 /// Fired right after the admin creates a cupom alvo (targeted coupon) from
@@ -565,22 +570,36 @@ pub async fn notify_coupon_grant(
         _ => "desconto".to_string(),
     };
     let on_shipping = if kind == "frete" { " no frete" } else { "" };
-    let msg = format!(
+    let default_msg = format!(
         "Você ganhou um cupom de desconto{on_shipping} na Sunset Tabas! 🎁\n\nCódigo: {code}\nDesconto: {discount_text}\n\nÉ só usar no checkout do site."
     );
 
-    let recipients: Vec<(String,)> =
-        sqlx::query_as("SELECT DISTINCT customer_whatsapp FROM sunset.coupon_grants WHERE coupon_id = $1")
-            .bind(&input.coupon_id)
-            .fetch_all(&state.pool)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+    let recipients: Vec<(String, Option<String>)> = sqlx::query_as(
+        "SELECT DISTINCT g.customer_whatsapp, c.name
+         FROM sunset.coupon_grants g
+         LEFT JOIN sunset.customers c ON c.whatsapp = g.customer_whatsapp
+         WHERE g.coupon_id = $1",
+    )
+    .bind(&input.coupon_id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    for (phone,) in recipients {
+    for (phone, name) in recipients {
         let digits = whatsapp::digits_only(&phone);
-        if !digits.is_empty() {
-            whatsapp::notify(&state, &state.evolution_instance, &digits, &msg);
+        if digits.is_empty() {
+            continue;
         }
+        let msg = match &input.custom_message {
+            Some(template) if !template.trim().is_empty() => {
+                let filled = template
+                    .replace("/nome", name.as_deref().unwrap_or("cliente"))
+                    .replace("/cupom", &code);
+                format!("{filled}\n\n{}", state.frontend_public_url)
+            }
+            _ => default_msg.clone(),
+        };
+        whatsapp::notify(&state, &state.evolution_instance, &digits, &msg);
     }
 
     Ok(StatusCode::NO_CONTENT)
