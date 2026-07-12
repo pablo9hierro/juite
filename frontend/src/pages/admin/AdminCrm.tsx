@@ -109,8 +109,8 @@ function filterIsEmpty(f: FilterState) {
   return (
     !f.minOrders &&
     !f.minItems &&
-    !(f.spentBelowAmount && f.spentBelowDays) &&
-    !(f.spentAboveAmount && f.spentAboveDays) &&
+    !f.spentBelowAmount &&
+    !f.spentAboveAmount &&
     !f.frequencyDropPercent &&
     !f.newCustomerDays &&
     !f.maxDistanceKm &&
@@ -120,14 +120,17 @@ function filterIsEmpty(f: FilterState) {
   )
 }
 
-function spentInLastDays(c: CrmCustomer, days: number): number {
+// Toda combinação valor+dias segue a mesma regra: dias é só um refinamento
+// opcional — sem preencher, generaliza pro histórico completo do cliente
+// em vez de travar a busca. Mas se dias for preenchido sem o campo
+// principal, isso é inválido (ver validatePairErrors), não silenciosamente
+// ignorado.
+function spentInWindow(c: CrmCustomer, days: number | null): number {
+  if (days == null) return c.total_spent
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
   return c.orders.filter((o) => new Date(o.created_at).getTime() >= cutoff).reduce((sum, o) => sum + o.total, 0)
 }
 
-// Dias é opcional pros dois filtros abaixo — sem preencher, a busca não
-// deixa de rolar, só generaliza (usa o total histórico do cliente em vez
-// de restringir a uma janela de tempo).
 function ordersInWindow(c: CrmCustomer, days: number | null): number {
   if (days == null) return c.order_count
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
@@ -140,6 +143,19 @@ function itemsInWindow(c: CrmCustomer, days: number | null): number {
   return c.purchases
     .filter((p) => new Date(p.created_at).getTime() >= cutoff)
     .reduce((sum, p) => sum + (p.quantity ?? 1), 0)
+}
+
+const PAIR_ERROR_MESSAGE = 'Se você preencher o campo "Dias" precisa preencher este campo também ou deixe ambos em branco.'
+
+type PairErrors = Partial<Record<'minOrders' | 'minItems' | 'spentBelow' | 'spentAbove', string>>
+
+function validatePairErrors(f: FilterState): PairErrors {
+  const errors: PairErrors = {}
+  if (f.minOrdersDays && !f.minOrders) errors.minOrders = PAIR_ERROR_MESSAGE
+  if (f.minItemsDays && !f.minItems) errors.minItems = PAIR_ERROR_MESSAGE
+  if (f.spentBelowDays && !f.spentBelowAmount) errors.spentBelow = PAIR_ERROR_MESSAGE
+  if (f.spentAboveDays && !f.spentAboveAmount) errors.spentAbove = PAIR_ERROR_MESSAGE
+  return errors
 }
 
 // Compara pedidos dos últimos 30 dias com os 30 dias anteriores — sem
@@ -160,12 +176,8 @@ function applyFilters(customers: CrmCustomer[], f: FilterState): CrmCustomer[] {
   return customers.filter((c) => {
     if (f.minOrders && ordersInWindow(c, f.minOrdersDays ? Number(f.minOrdersDays) : null) < Number(f.minOrders)) return false
     if (f.minItems && itemsInWindow(c, f.minItemsDays ? Number(f.minItemsDays) : null) < Number(f.minItems)) return false
-    if (f.spentBelowAmount && f.spentBelowDays) {
-      if (spentInLastDays(c, Number(f.spentBelowDays)) >= Number(f.spentBelowAmount)) return false
-    }
-    if (f.spentAboveAmount && f.spentAboveDays) {
-      if (spentInLastDays(c, Number(f.spentAboveDays)) <= Number(f.spentAboveAmount)) return false
-    }
+    if (f.spentBelowAmount && spentInWindow(c, f.spentBelowDays ? Number(f.spentBelowDays) : null) >= Number(f.spentBelowAmount)) return false
+    if (f.spentAboveAmount && spentInWindow(c, f.spentAboveDays ? Number(f.spentAboveDays) : null) <= Number(f.spentAboveAmount)) return false
     if (f.frequencyDropPercent && frequencyDropPercent(c) < Number(f.frequencyDropPercent)) return false
     if (f.newCustomerDays) {
       if (!c.first_order_at || daysSince(c.first_order_at) > Number(f.newCustomerDays)) return false
@@ -258,6 +270,7 @@ export default function AdminCrm() {
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
   const [appliedFilter, setAppliedFilter] = useState<FilterState | null>(null)
   const [filterFormError, setFilterFormError] = useState<string | null>(null)
+  const [pairErrors, setPairErrors] = useState<PairErrors>({})
 
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [couponsLoading, setCouponsLoading] = useState(true)
@@ -307,6 +320,13 @@ export default function AdminCrm() {
   const birthdayCount = customers.filter((c) => isBirthdayMonth(c.birthdate)).length
 
   const applyFilterPanel = () => {
+    const errors = validatePairErrors(filter)
+    if (Object.keys(errors).length > 0) {
+      setPairErrors(errors)
+      setFilterFormError(null)
+      return
+    }
+    setPairErrors({})
     if (filterIsEmpty(filter)) {
       setFilterFormError('Preencha pelo menos um campo de filtro.')
       return
@@ -320,6 +340,7 @@ export default function AdminCrm() {
     setFilter(EMPTY_FILTER)
     setAppliedFilter(null)
     setFilterFormError(null)
+    setPairErrors({})
   }
 
   const saveCoupon = async () => {
@@ -408,17 +429,12 @@ export default function AdminCrm() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-black">CRM &amp; cupons</h1>
         <button onClick={() => setShowCouponForm(true)} className="btn-primary text-sm py-2 px-4">
           <Plus className="w-4 h-4" /> Novo cupom
         </button>
       </div>
-      <p className="text-sm text-son-silver-dim mb-6">
-        Clientes que já compraram, segmentação e cupons — o cupom criado a partir de um filtro fica exclusivo pra quem
-        aparece na lista, o "+ Novo cupom" é um código público que qualquer cliente pode digitar.
-      </p>
-
       <div className="grid grid-cols-3 gap-3 mb-6">
         <Card className="p-4 text-center">
           <p className="text-xs text-son-silver-dim mb-1">Clientes</p>
@@ -482,7 +498,7 @@ export default function AdminCrm() {
                 value={filter.minOrdersDays}
                 onChange={(e) => setFilter({ ...filter, minOrdersDays: e.target.value })}
               />
-              Dias
+              Dias <span className="text-son-silver-dim font-normal">(Opcional)</span>
             </label>
             <input
               className="input-field mt-2 max-w-xs"
@@ -492,6 +508,7 @@ export default function AdminCrm() {
               value={filter.minOrders}
               onChange={(e) => setFilter({ ...filter, minOrders: e.target.value })}
             />
+            {pairErrors.minOrders && <p className="error-msg mt-1">{pairErrors.minOrders}</p>}
           </div>
 
           <div className="border border-white/10 rounded-xl p-3">
@@ -505,7 +522,7 @@ export default function AdminCrm() {
                 value={filter.minItemsDays}
                 onChange={(e) => setFilter({ ...filter, minItemsDays: e.target.value })}
               />
-              Dias
+              Dias <span className="text-son-silver-dim font-normal">(Opcional)</span>
             </label>
             <input
               className="input-field mt-2 max-w-xs"
@@ -515,10 +532,13 @@ export default function AdminCrm() {
               value={filter.minItems}
               onChange={(e) => setFilter({ ...filter, minItems: e.target.value })}
             />
+            {pairErrors.minItems && <p className="error-msg mt-1">{pairErrors.minItems}</p>}
           </div>
 
           <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Distância de no máximo (km)</label>
+            <label className="label">
+              Distância de no máximo (km) <span className="text-son-silver-dim font-normal">(Opcional)</span>
+            </label>
             <input
               className="input-field w-28"
               type="number"
@@ -547,8 +567,9 @@ export default function AdminCrm() {
                 value={filter.spentBelowDays}
                 onChange={(e) => setFilter({ ...filter, spentBelowDays: e.target.value })}
               />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">dias (Opcional)</span>
             </div>
+            {pairErrors.spentBelow && <p className="error-msg mt-1">{pairErrors.spentBelow}</p>}
           </div>
 
           <div className="border border-white/10 rounded-xl p-3">
@@ -570,12 +591,15 @@ export default function AdminCrm() {
                 value={filter.spentAboveDays}
                 onChange={(e) => setFilter({ ...filter, spentAboveDays: e.target.value })}
               />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">dias (Opcional)</span>
             </div>
+            {pairErrors.spentAbove && <p className="error-msg mt-1">{pairErrors.spentAbove}</p>}
           </div>
 
           <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Reduziu a frequência de compra em (%)</label>
+            <label className="label">
+              Reduziu a frequência de compra em (%) <span className="text-son-silver-dim font-normal">(Opcional)</span>
+            </label>
             <input
               className="input-field w-24"
               type="number"
@@ -587,7 +611,9 @@ export default function AdminCrm() {
           </div>
 
           <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Cliente novo em (dias)</label>
+            <label className="label">
+              Cliente novo em (dias) <span className="text-son-silver-dim font-normal">(Opcional)</span>
+            </label>
             <input
               className="input-field w-28"
               type="number"
