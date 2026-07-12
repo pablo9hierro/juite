@@ -9,6 +9,10 @@ import ProductDiscountList from '../../components/admin/ProductDiscountList'
 import { api, ApiError } from '../../lib/api'
 import type { Coupon, CouponKind, CrmCustomer, DiscountType, Product, ProductDiscount } from '../../lib/types'
 
+// Some browsers only show the native number spinner on hover/focus, which
+// looks broken in these narrow filter inputs — hidden consistently here.
+const NO_SPINNER = '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
+
 const MONTH_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
@@ -491,7 +495,7 @@ export default function AdminCrm() {
             <label className="label flex items-center gap-1.5 flex-wrap">
               Frequência de compra em
               <input
-                className="input-field w-16 py-1 px-2 text-xs text-center inline-block"
+                className={`input-field w-20 py-1 px-2 text-xs text-center inline-block ${NO_SPINNER}`}
                 type="number"
                 min="1"
                 placeholder="25"
@@ -515,7 +519,7 @@ export default function AdminCrm() {
             <label className="label flex items-center gap-1.5 flex-wrap">
               Volume de produtos em
               <input
-                className="input-field w-16 py-1 px-2 text-xs text-center inline-block"
+                className={`input-field w-20 py-1 px-2 text-xs text-center inline-block ${NO_SPINNER}`}
                 type="number"
                 min="1"
                 placeholder="25"
@@ -540,7 +544,7 @@ export default function AdminCrm() {
               Distância de no máximo (km) <span className="text-son-silver-dim font-normal">(Opcional)</span>
             </label>
             <input
-              className="input-field w-28"
+              className={`input-field w-28 ${NO_SPINNER}`}
               type="number"
               min="0"
               value={filter.maxDistanceKm}
@@ -553,7 +557,7 @@ export default function AdminCrm() {
             <div className="flex items-center gap-2">
               <span className="text-son-silver-dim text-sm">R$</span>
               <input
-                className="input-field w-32"
+                className={`input-field w-32 ${NO_SPINNER}`}
                 type="number"
                 min="0"
                 value={filter.spentBelowAmount}
@@ -561,7 +565,7 @@ export default function AdminCrm() {
               />
               <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
               <input
-                className="input-field w-24"
+                className={`input-field w-24 ${NO_SPINNER}`}
                 type="number"
                 min="1"
                 value={filter.spentBelowDays}
@@ -577,7 +581,7 @@ export default function AdminCrm() {
             <div className="flex items-center gap-2">
               <span className="text-son-silver-dim text-sm">R$</span>
               <input
-                className="input-field w-32"
+                className={`input-field w-32 ${NO_SPINNER}`}
                 type="number"
                 min="0"
                 value={filter.spentAboveAmount}
@@ -585,7 +589,7 @@ export default function AdminCrm() {
               />
               <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
               <input
-                className="input-field w-24"
+                className={`input-field w-24 ${NO_SPINNER}`}
                 type="number"
                 min="1"
                 value={filter.spentAboveDays}
@@ -601,7 +605,7 @@ export default function AdminCrm() {
               Reduziu a frequência de compra em (%) <span className="text-son-silver-dim font-normal">(Opcional)</span>
             </label>
             <input
-              className="input-field w-24"
+              className={`input-field w-24 ${NO_SPINNER}`}
               type="number"
               min="1"
               max="100"
@@ -615,7 +619,7 @@ export default function AdminCrm() {
               Cliente novo em (dias) <span className="text-son-silver-dim font-normal">(Opcional)</span>
             </label>
             <input
-              className="input-field w-28"
+              className={`input-field w-28 ${NO_SPINNER}`}
               type="number"
               min="1"
               value={filter.newCustomerDays}
