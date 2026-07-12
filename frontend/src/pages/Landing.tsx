@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import heroBanner from '../assets/hero-banner.png'
@@ -10,49 +10,68 @@ import type { Campaign } from '../lib/types'
 
 const CAROUSEL_INTERVAL_MS = 2000
 
+type Slide = { kind: 'hero' } | { kind: 'campaign'; campaign: Campaign }
+
 function BannerCarousel() {
   const navigate = useNavigate()
+  const [heroUrl, setHeroUrl] = useState<string | null>(null)
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [index, setIndex] = useState(0)
 
   useEffect(() => {
+    api.siteSettings.get().then((s) => setHeroUrl(s.hero_image_url)).catch(() => setHeroUrl(null))
     api.campaigns.listActive().then(setCampaigns).catch(() => setCampaigns([]))
   }, [])
 
+  // Imagem inicial é sempre a primeira do carrossel — mesmo com campanhas
+  // cadastradas — só depois ele desliza pras campanhas, em loop.
+  const slides: Slide[] = [{ kind: 'hero' }, ...campaigns.map((c) => ({ kind: 'campaign' as const, campaign: c }))]
+
   useEffect(() => {
-    if (campaigns.length < 2) return
-    const timer = setInterval(() => setIndex((i) => (i + 1) % campaigns.length), CAROUSEL_INTERVAL_MS)
+    if (slides.length < 2) return
+    const timer = setInterval(() => setIndex((i) => (i + 1) % slides.length), CAROUSEL_INTERVAL_MS)
     return () => clearInterval(timer)
-  }, [campaigns.length])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slides.length])
 
-  const containerClass = 'relative z-10 block mx-6 sm:mx-10 mt-3 sm:mt-4 rounded-2xl overflow-hidden shadow-lg shadow-black/40'
+  const containerClass = 'relative z-10 mx-6 sm:mx-10 mt-3 sm:mt-4 rounded-2xl overflow-hidden shadow-lg shadow-black/40'
+  const safeIndex = index % slides.length
+  const current = slides[safeIndex]
 
-  // Sem campanha registrada -> banner estático de sempre, só decorativo.
-  if (campaigns.length === 0) {
-    return (
-      <div className={containerClass}>
-        <img src={heroBanner} alt="Sunset Tabas" className="w-full h-auto block" />
-      </div>
-    )
-  }
-
-  const current = campaigns[index]
   return (
-    <button
-      type="button"
-      onClick={() => navigate(`/banner?campanha=${current.id}`)}
-      className={`${containerClass} w-full text-left`}
-      aria-label={current.title}
-    >
-      <img src={current.image_url} alt={current.title} className="w-full h-auto block" />
-      {campaigns.length > 1 && (
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
-          {campaigns.map((c, i) => (
-            <span key={c.id} className={`w-1.5 h-1.5 rounded-full ${i === index ? 'bg-white' : 'bg-white/40'}`} />
+    <div className={`${containerClass} aspect-[2/1]`}>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.button
+          key={current.kind === 'hero' ? 'hero' : current.campaign.id}
+          type="button"
+          onClick={() => {
+            if (current.kind === 'campaign') navigate(`/banner?campanha=${current.campaign.id}`)
+          }}
+          initial={{ x: '100%', opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: '-100%', opacity: 0 }}
+          transition={{ duration: 0.5, ease: 'easeInOut' }}
+          className="absolute inset-0 w-full h-full text-left"
+          aria-label={current.kind === 'campaign' ? current.campaign.title : 'Sunset Tabas'}
+        >
+          <img
+            src={current.kind === 'hero' ? heroUrl ?? heroBanner : current.campaign.image_url}
+            alt=""
+            className="w-full h-full object-cover block"
+          />
+        </motion.button>
+      </AnimatePresence>
+      {slides.length > 1 && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
+          {slides.map((s, i) => (
+            <span
+              key={s.kind === 'hero' ? 'hero' : s.campaign.id}
+              className={`w-1.5 h-1.5 rounded-full ${i === safeIndex ? 'bg-white' : 'bg-white/40'}`}
+            />
           ))}
         </div>
       )}
-    </button>
+    </div>
   )
 }
 

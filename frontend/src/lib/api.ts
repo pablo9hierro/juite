@@ -103,6 +103,7 @@ const remoteApi = {
   categories: supabasePublicApi.categories,
   products: supabasePublicApi.products,
   shippingSettings: supabasePublicApi.shippingSettings,
+  siteSettings: supabasePublicApi.siteSettings,
   estimateShipping: supabasePublicApi.estimateShipping,
   trackDeliveryPosition: supabasePublicApi.trackDeliveryPosition,
   // Carrossel da landing (campanhas ativas) + cupom digitado no checkout.
@@ -449,6 +450,10 @@ const remoteApi = {
       get: () => rpc<FinanceiroSummary>('admin_financeiro', { p_token: adminToken() }),
       timeseries: (days?: number) =>
         rpc<FinanceiroTimeseriesPoint[]>('admin_financeiro_timeseries', { p_token: adminToken(), p_days: days ?? 30 }),
+    },
+    siteSettings: {
+      updateHeroImage: (imageUrl: string) =>
+        rpc<{ hero_image_url: string }>('admin_update_hero_image', { p_token: adminToken(), p_image_url: imageUrl }),
     },
     crm: {
       customers: () => rpc<CrmCustomer[]>('admin_crm_customers', { p_token: adminToken() }),

@@ -1194,6 +1194,19 @@ async function updateShippingSettings(pricePerKm: number, maxKm: number | null):
   return { price_per_km: db.pricePerKm, max_km: db.maxKm }
 }
 
+async function getSiteSettings(): Promise<{ hero_image_url: string | null }> {
+  const db = loadDb()
+  return { hero_image_url: db.heroImageUrl ?? null }
+}
+
+async function updateHeroImage(imageUrl: string): Promise<{ hero_image_url: string }> {
+  const db = loadDb()
+  if (!imageUrl.trim()) throw new ApiError(400, 'image is required')
+  db.heroImageUrl = imageUrl
+  saveDb(db)
+  return { hero_image_url: imageUrl }
+}
+
 async function estimateShipping(lat: number, lng: number): Promise<ShippingEstimate> {
   const db = loadDb()
   return estimateShippingLocal(lat, lng, db.pricePerKm, db.maxKm ?? null)
@@ -1547,6 +1560,7 @@ export const localApi = {
   categories: { list: listCategoriesPublic },
   products: { list: listProducts, get: getProduct },
   shippingSettings: { get: getShippingSettings },
+  siteSettings: { get: getSiteSettings },
   estimateShipping,
   trackDeliveryPosition: trackDeliveryPositionLocal,
   campaigns: { listActive: listActiveCampaigns, get: getCampaignPublic },
@@ -1605,6 +1619,7 @@ export const localApi = {
     },
     orders: { list: adminListOrders, updateStatus: adminUpdateStatus, notifyReady: async () => {} },
     shippingSettings: { get: getShippingSettings, update: updateShippingSettings },
+    siteSettings: { updateHeroImage },
     financeiro: { get: financeiro, timeseries: financeiroTimeseries },
     crm: { customers: adminCrmCustomers },
     whatsapp: {

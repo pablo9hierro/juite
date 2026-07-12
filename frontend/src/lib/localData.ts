@@ -41,6 +41,7 @@ export interface LocalDb {
   couponGrants: LocalCouponGrant[]
   pricePerKm: number
   maxKm: number | null
+  heroImageUrl: string | null
 }
 
 // Mesma conta de sunset._distance_km/estimate_shipping do backend, só que
@@ -114,6 +115,7 @@ function seedDb(): LocalDb {
     couponGrants: [],
     pricePerKm: 1.5,
     maxKm: null,
+    heroImageUrl: null,
   }
 }
 

@@ -46,6 +46,79 @@ const CAMPAIGN_TYPE_LABEL: Record<CampaignType, string> = {
   selfie_service: 'Selfie service (cliente monta o carrinho)',
 }
 
+// Imagem inicial do carrossel da landing: sempre obrigatória, sempre a
+// primeira a aparecer (mesmo com campanhas cadastradas) — o admin pode
+// trocá-la aqui a qualquer momento.
+function HeroImageCard() {
+  const [heroUrl, setHeroUrl] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    api.siteSettings.get().then((s) => setHeroUrl(s.hero_image_url))
+  }, [])
+
+  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setError(null)
+    if (file.size > MAX_BANNER_MB * 1024 * 1024) {
+      setError(`O arquivo tem ${(file.size / (1024 * 1024)).toFixed(1)}MB — o máximo é ${MAX_BANNER_MB}MB.`)
+      return
+    }
+    setUploading(true)
+    try {
+      const { url } = await api.admin.products.uploadImage(file)
+      const result = await api.admin.siteSettings.updateHeroImage(url)
+      setHeroUrl(result.hero_image_url)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Erro ao enviar a imagem.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <Card className="p-5 mb-6">
+      <p className="font-bold text-white mb-1">Imagem inicial do carrossel</p>
+      <p className="text-xs text-son-silver-dim mb-3">
+        Sempre obrigatória — é a primeira coisa que aparece na landing, mesmo quando há campanhas cadastradas. Depois de 2s o
+        carrossel desliza pras campanhas ativas, se houver.
+      </p>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"
+        className="hidden"
+        onChange={handleChange}
+      />
+      <div className="flex items-center gap-3">
+        <div className="w-28 h-14 rounded-xl bg-son-surface-light flex items-center justify-center overflow-hidden flex-shrink-0">
+          {uploading ? (
+            <Loader2 className="w-5 h-5 animate-spin text-son-silver-dim" />
+          ) : heroUrl ? (
+            <img src={heroUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <Megaphone className="w-6 h-6 text-son-silver-dim/40" />
+          )}
+        </div>
+        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="btn-secondary text-sm py-2 px-3">
+          <ImagePlus className="w-3.5 h-3.5" />
+          {heroUrl ? 'Trocar imagem' : 'Enviar imagem'}
+        </button>
+      </div>
+      {!heroUrl && <p className="text-xs text-amber-400 mt-2">Nenhuma imagem enviada ainda — a landing está usando o banner padrão.</p>}
+      <p className="text-xs text-son-silver-dim mt-2">
+        Dimensão recomendada: 1200×600px (proporção 2:1), formatos aceitos: JPG, PNG, WEBP, GIF, MP4 ou WEBM. Tamanho máximo por
+        arquivo: {MAX_BANNER_MB}MB.
+      </p>
+      {error && <p className="error-msg mt-1">{error}</p>}
+    </Card>
+  )
+}
+
 export default function AdminCampanhas() {
   const [products, setProducts] = useState<Product[]>([])
 
@@ -145,6 +218,8 @@ export default function AdminCampanhas() {
 
   return (
     <div>
+      <HeroImageCard />
+
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-black">Campanhas</h1>
         <button onClick={() => setShowCampaignForm(true)} className="btn-primary text-sm py-2 px-4">

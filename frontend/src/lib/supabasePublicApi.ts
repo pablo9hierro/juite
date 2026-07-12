@@ -42,6 +42,12 @@ export const supabasePublicApi = {
         await supabase.from('shipping_settings').select('price_per_km, max_km').single()
       ),
   },
+  siteSettings: {
+    get: async () => {
+      const { data } = await supabase.from('site_settings').select('hero_image_url').single()
+      return { hero_image_url: (data?.hero_image_url as string | null) ?? null }
+    },
+  },
   estimateShipping: async (lat: number, lng: number) => {
     const { data, error } = await supabase.rpc('estimate_shipping', { p_lat: lat, p_lng: lng })
     if (error) throw new ApiError(400, error.message)
