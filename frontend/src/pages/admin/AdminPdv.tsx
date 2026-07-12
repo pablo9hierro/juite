@@ -134,8 +134,19 @@ export default function AdminPdv() {
     const reader = new BrowserMultiFormatReader()
     reader
       .decodeFromVideoDevice(undefined, videoRef.current, (result, _err, controls) => {
+        // Esse callback é assíncrono e dispara depois que a câmera já está
+        // de fato transmitindo — se o usuário já fechou o scanner ANTES
+        // disso, o cleanup abaixo rodou com controlsRef.current ainda nulo
+        // (nada pra parar) e ninguém mais chama stop() depois. Checar
+        // "cancelled" aqui dentro, a cada chamada, garante que a câmera
+        // para na hora que os controles finalmente chegam, mesmo que o
+        // widget já tenha sido fechado antes disso.
+        if (cancelled) {
+          controls.stop()
+          return
+        }
         controlsRef.current = controls
-        if (cancelled || !result) return
+        if (!result) return
         const code = result.getText()
         const product = products.find((p) => p.barcode === code)
         if (!product) {
