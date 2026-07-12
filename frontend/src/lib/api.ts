@@ -195,16 +195,46 @@ const remoteApi = {
       // Upload de imagem passa pelo Rust (não pelo Supabase RPC): precisa da
       // service_role key pra escrever no Storage, que não pode ir pro navegador.
       uploadImage: async (file: File) => {
+        const url = `${API_BASE}/api/admin/products/upload-image`
         const body = new FormData()
         body.append('file', file)
-        const res = await fetch(`${API_BASE}/api/admin/products/upload-image`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${adminToken()}` },
-          body,
-        })
+        let res: Response
+        try {
+          res = await fetch(url, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${adminToken()}` },
+            body,
+          })
+        } catch (networkErr) {
+          // fetch() falhou ANTES de virar resposta HTTP (backend fora do ar,
+          // CORS bloqueado, ou VITE_API_BASE_URL apontando pra localhost em
+          // produção) — sem isso virar ApiError, some como "Erro ao enviar
+          // a imagem." genérico em todo call site.
+          console.error('[uploadImage] falha de rede ao chamar', url, networkErr)
+          const hint = url.includes('localhost')
+            ? 'O backend está configurado como localhost — isso nunca funciona em produção. Configure VITE_API_BASE_URL na Vercel com a URL pública do backend (Railway).'
+            : 'Não foi possível conectar ao backend. Verifique se ele está no ar (Railway) e se CORS libera este domínio.'
+          throw new ApiError(0, `Erro de conexão ao enviar a imagem: ${hint}`)
+        }
         if (!res.ok) {
-          const msg = await res.json().catch(() => null)
-          throw new ApiError(res.status, msg?.error ?? `Erro ${res.status}`)
+          const rawText = await res.text().catch(() => '')
+          console.error('[uploadImage] resposta de erro do backend', res.status, rawText)
+          let serverMsg: string | undefined
+          try {
+            serverMsg = JSON.parse(rawText)?.error
+          } catch {
+            // corpo não é JSON
+          }
+          const message =
+            serverMsg ||
+            (res.status === 413
+              ? 'Arquivo grande demais — o servidor recusou o envio (limite de tamanho excedido).'
+              : res.status === 401 || res.status === 403
+                ? 'Sessão de admin expirada ou sem permissão — faça login novamente.'
+                : rawText
+                  ? `Erro ${res.status}: ${rawText.slice(0, 200)}`
+                  : `Erro ${res.status} ao enviar a imagem.`)
+          throw new ApiError(res.status, message)
         }
         return (await res.json()) as { url: string }
       },

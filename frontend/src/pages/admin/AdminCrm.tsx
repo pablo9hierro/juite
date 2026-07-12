@@ -482,10 +482,10 @@ export default function AdminCrm() {
                 value={filter.minOrdersDays}
                 onChange={(e) => setFilter({ ...filter, minOrdersDays: e.target.value })}
               />
-              Dias <span className="text-son-silver-dim font-normal">(opcional)</span>
+              Dias
             </label>
             <input
-              className="input-field mt-2"
+              className="input-field mt-2 max-w-xs"
               type="number"
               min="1"
               placeholder="Ex: clientes que compraram 50 vezes"
@@ -505,10 +505,10 @@ export default function AdminCrm() {
                 value={filter.minItemsDays}
                 onChange={(e) => setFilter({ ...filter, minItemsDays: e.target.value })}
               />
-              Dias <span className="text-son-silver-dim font-normal">(opcional)</span>
+              Dias
             </label>
             <input
-              className="input-field mt-2"
+              className="input-field mt-2 max-w-xs"
               type="number"
               min="1"
               placeholder="Ex: clientes que compraram 500 produtos"
@@ -520,7 +520,7 @@ export default function AdminCrm() {
           <div className="border border-white/10 rounded-xl p-3">
             <label className="label">Distância de no máximo (km)</label>
             <input
-              className="input-field"
+              className="input-field w-28"
               type="number"
               min="0"
               value={filter.maxDistanceKm}
@@ -533,7 +533,7 @@ export default function AdminCrm() {
             <div className="flex items-center gap-2">
               <span className="text-son-silver-dim text-sm">R$</span>
               <input
-                className="input-field"
+                className="input-field w-32"
                 type="number"
                 min="0"
                 value={filter.spentBelowAmount}
@@ -541,7 +541,7 @@ export default function AdminCrm() {
               />
               <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
               <input
-                className="input-field"
+                className="input-field w-24"
                 type="number"
                 min="1"
                 value={filter.spentBelowDays}
@@ -556,7 +556,7 @@ export default function AdminCrm() {
             <div className="flex items-center gap-2">
               <span className="text-son-silver-dim text-sm">R$</span>
               <input
-                className="input-field"
+                className="input-field w-32"
                 type="number"
                 min="0"
                 value={filter.spentAboveAmount}
@@ -564,7 +564,7 @@ export default function AdminCrm() {
               />
               <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
               <input
-                className="input-field"
+                className="input-field w-24"
                 type="number"
                 min="1"
                 value={filter.spentAboveDays}
@@ -577,7 +577,7 @@ export default function AdminCrm() {
           <div className="border border-white/10 rounded-xl p-3">
             <label className="label">Reduziu a frequência de compra em (%)</label>
             <input
-              className="input-field"
+              className="input-field w-24"
               type="number"
               min="1"
               max="100"
@@ -589,7 +589,7 @@ export default function AdminCrm() {
           <div className="border border-white/10 rounded-xl p-3">
             <label className="label">Cliente novo em (dias)</label>
             <input
-              className="input-field"
+              className="input-field w-28"
               type="number"
               min="1"
               value={filter.newCustomerDays}
@@ -600,7 +600,7 @@ export default function AdminCrm() {
           <div className="border border-white/10 rounded-xl p-3">
             <label className="label">Clientes que aniversariam em</label>
             <select
-              className="input-field appearance-none cursor-pointer"
+              className="input-field max-w-xs appearance-none cursor-pointer"
               value={filter.birthdayMonth}
               onChange={(e) => setFilter({ ...filter, birthdayMonth: e.target.value })}
             >
@@ -616,7 +616,7 @@ export default function AdminCrm() {
           <div className="border border-white/10 rounded-xl p-3">
             <label className="label">Bairro</label>
             <select
-              className="input-field appearance-none cursor-pointer"
+              className="input-field max-w-xs appearance-none cursor-pointer"
               value=""
               onChange={(e) => {
                 if (!e.target.value || filter.neighborhoods.includes(e.target.value)) return

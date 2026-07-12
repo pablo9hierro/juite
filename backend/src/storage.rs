@@ -40,9 +40,25 @@ pub async fn upload_image(
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        return Err(AppError::Internal(format!(
-            "supabase storage upload failed ({status}): {body}"
-        )));
+        tracing::error!("supabase storage upload failed ({status}): {body}");
+
+        // Supabase Storage devolve JSON tipo {"statusCode":"404","error":"Bucket
+        // not found","message":"..."} — tenta extrair algo legível pro admin em
+        // vez de despejar o corpo cru, e dá um diagnóstico específico pros
+        // status mais comuns (bucket não existe, chave errada, arquivo grande).
+        let parsed_message = serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|v| v.get("message").and_then(|m| m.as_str()).map(|s| s.to_string()));
+
+        let message = match status.as_u16() {
+            404 => format!(
+                "Bucket \"{BUCKET}\" não existe no Supabase Storage — crie esse bucket (público) no painel do Supabase."
+            ),
+            401 | 403 => "Supabase recusou a chave de serviço (SUPABASE_SERVICE_ROLE_KEY inválida ou sem permissão no Storage).".to_string(),
+            413 => "Arquivo grande demais para o Supabase Storage aceitar.".to_string(),
+            _ => parsed_message.unwrap_or_else(|| format!("Supabase Storage recusou o upload (HTTP {status}).")),
+        };
+        return Err(AppError::BadRequest(message));
     }
 
     Ok(format!("{base}/storage/v1/object/public/{BUCKET}/{filename}"))
