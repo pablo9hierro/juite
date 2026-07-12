@@ -5,15 +5,38 @@ import { motion } from 'framer-motion'
 import SiteHeader from '../components/layout/SiteHeader'
 import { api } from '../lib/api'
 import type { Category, Product } from '../lib/types'
+import type { PromotionalProduct } from '../lib/supabasePublicApi'
 import { useCart } from '../store/cart'
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
 }
 
+function discountLabel(promo: PromotionalProduct) {
+  return promo.discount_type === 'percent' ? `-${promo.discount_value}%` : `-${currency(promo.discount_value)}`
+}
+
+function finalPrice(price: number, promo: PromotionalProduct) {
+  const raw = promo.discount_type === 'percent' ? price - (price * promo.discount_value) / 100 : price - promo.discount_value
+  return Math.max(raw, 0)
+}
+
+// Preço original riscado (X vermelho) + valor do desconto + preço final —
+// usado tanto no card do catálogo quanto (versão orange) no checkout.
+function PromoPriceBlock({ price, promo }: { price: number; promo: PromotionalProduct }) {
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap mt-auto">
+      <span className="text-xs text-red-500 line-through decoration-2">{currency(price)}</span>
+      <span className="text-xs font-semibold text-orange-400">{discountLabel(promo)}</span>
+      <span className="sunset-text font-bold">{currency(finalPrice(price, promo))}</span>
+    </div>
+  )
+}
+
 export default function Catalogo() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [promos, setPromos] = useState<PromotionalProduct[]>([])
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [loading, setLoading] = useState(true)
@@ -25,10 +48,11 @@ export default function Catalogo() {
   const searchBoxRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    Promise.all([api.products.list(), api.categories.list()])
-      .then(([p, c]) => {
+    Promise.all([api.products.list(), api.categories.list(), api.coupons.listPromotionalProducts()])
+      .then(([p, c, promo]) => {
         setProducts(p)
         setCategories(c)
+        setPromos(promo)
       })
       .finally(() => setLoading(false))
   }, [])
@@ -41,10 +65,33 @@ export default function Catalogo() {
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [])
 
+  const promoByProduct = useMemo(() => {
+    const map = new Map<string, PromotionalProduct>()
+    for (const promo of promos) if (!map.has(promo.product_id)) map.set(promo.product_id, promo)
+    return map
+  }, [promos])
+
+  const isPromo = categoryFilter === 'promo'
+
   const filtered = useMemo(() => {
+    if (isPromo) return products.filter((p) => promoByProduct.has(p.id))
     if (categoryFilter === 'all') return products
     return products.filter((p) => p.category_id === categoryFilter)
-  }, [products, categoryFilter])
+  }, [products, categoryFilter, isPromo, promoByProduct])
+
+  // Na categoria "Promoção" os itens continuam separados por categoria
+  // original (Lanches, Bebidas...), só a lista de exibição é filtrada.
+  const promoGroups = useMemo(() => {
+    if (!isPromo) return []
+    const byId = new Map(categories.map((c) => [c.id, c.name]))
+    const groups = new Map<string, Product[]>()
+    for (const p of filtered) {
+      const label = (p.category_id && byId.get(p.category_id)) || 'Sem categoria'
+      if (!groups.has(label)) groups.set(label, [])
+      groups.get(label)!.push(p)
+    }
+    return [...groups.entries()]
+  }, [isPromo, filtered, categories])
 
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -58,6 +105,118 @@ export default function Catalogo() {
   }
 
   const qtyInCart = (id: string) => items.find((i) => i.productId === id)?.quantity ?? 0
+
+  function GridCard({ product, i }: { product: Product; i: number }) {
+    const inCart = qtyInCart(product.id)
+    const outOfStock = product.quantity <= 0
+    const promo = promoByProduct.get(product.id)
+    return (
+      <motion.div
+        key={product.id}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: Math.min(i * 0.03, 0.3) }}
+        className="bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex flex-col hover:border-son-pink/30 transition-colors"
+      >
+        <Link to={`/produto/${product.id}`} className="flex flex-col flex-1">
+          <div className="aspect-square bg-son-surface-light flex items-center justify-center overflow-hidden">
+            {product.image_url ? (
+              <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+            ) : (
+              <Package className="w-10 h-10 text-son-silver-dim/40" />
+            )}
+          </div>
+          <div className="p-3 flex flex-col gap-2 flex-1">
+            <div>
+              <p className="text-sm font-semibold text-white leading-snug">{product.name}</p>
+              {product.category_name && <p className="text-xs text-son-silver-dim">{product.category_name}</p>}
+            </div>
+            {promo ? <PromoPriceBlock price={product.price} promo={promo} /> : <p className="sunset-text font-bold mt-auto">{currency(product.price)}</p>}
+          </div>
+        </Link>
+        <div className="px-3 pb-3">
+          {outOfStock ? (
+            <span className="block text-xs font-semibold text-son-silver-dim text-center py-2">Esgotado</span>
+          ) : inCart > 0 ? (
+            <div className="flex items-center justify-between bg-son-surface-light rounded-xl px-2 py-1">
+              <button onClick={() => changeQty(product.id, -1)} className="w-7 h-7 flex items-center justify-center text-son-pink">
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-sm font-semibold text-white">{inCart}</span>
+              <button
+                onClick={() => addItem(product)}
+                disabled={inCart >= product.quantity}
+                className="w-7 h-7 flex items-center justify-center text-son-pink disabled:opacity-30"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => addItem(product)}
+              className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold sunset-bg text-white rounded-xl py-2 hover:brightness-110 transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Adicionar
+            </button>
+          )}
+        </div>
+      </motion.div>
+    )
+  }
+
+  function ListCard({ product, i }: { product: Product; i: number }) {
+    const inCart = qtyInCart(product.id)
+    const outOfStock = product.quantity <= 0
+    const promo = promoByProduct.get(product.id)
+    return (
+      <motion.div
+        key={product.id}
+        initial={{ opacity: 0, x: -12 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.3) }}
+        className="bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex items-center gap-4 p-3 hover:border-son-pink/30 transition-colors"
+      >
+        <Link to={`/produto/${product.id}`} className="w-16 h-16 flex-shrink-0 rounded-xl bg-son-surface-light flex items-center justify-center overflow-hidden">
+          {product.image_url ? (
+            <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+          ) : (
+            <Package className="w-6 h-6 text-son-silver-dim/40" />
+          )}
+        </Link>
+        <Link to={`/produto/${product.id}`} className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white truncate">{product.name}</p>
+          {product.category_name && <p className="text-xs text-son-silver-dim">{product.category_name}</p>}
+          {promo ? <PromoPriceBlock price={product.price} promo={promo} /> : <p className="sunset-text font-bold mt-0.5">{currency(product.price)}</p>}
+        </Link>
+        {outOfStock ? (
+          <span className="text-xs font-semibold text-son-silver-dim px-3">Esgotado</span>
+        ) : inCart > 0 ? (
+          <div className="flex items-center gap-1.5 bg-son-surface-light rounded-xl px-2 py-1.5">
+            <button onClick={() => changeQty(product.id, -1)} className="w-6 h-6 flex items-center justify-center text-son-pink">
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-sm w-4 text-center">{inCart}</span>
+            <button
+              onClick={() => addItem(product)}
+              disabled={inCart >= product.quantity}
+              className="w-6 h-6 flex items-center justify-center text-son-pink disabled:opacity-30"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => addItem(product)}
+            className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold sunset-bg text-white rounded-xl px-3 py-2"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Adicionar
+          </button>
+        )}
+      </motion.div>
+    )
+  }
 
   return (
     <main className="min-h-screen bg-son-black text-white">
@@ -136,29 +295,37 @@ export default function Catalogo() {
           )}
         </div>
 
-        {categories.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1 mb-6 scrollbar-hide">
+        <div className="flex gap-2 overflow-x-auto pb-1 mb-6 scrollbar-hide">
+          <button
+            onClick={() => setCategoryFilter('all')}
+            className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+              categoryFilter === 'all' ? 'sunset-bg text-white' : 'bg-son-surface border border-white/5 text-son-silver hover:bg-son-surface-light'
+            }`}
+          >
+            Todos
+          </button>
+          {promoByProduct.size > 0 && (
             <button
-              onClick={() => setCategoryFilter('all')}
-              className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                categoryFilter === 'all' ? 'sunset-bg text-white' : 'bg-son-surface border border-white/5 text-son-silver hover:bg-son-surface-light'
+              onClick={() => setCategoryFilter('promo')}
+              className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                isPromo ? 'bg-orange-500 text-white' : 'bg-orange-500/10 border border-orange-500/40 text-orange-400 hover:bg-orange-500/20'
               }`}
             >
-              Todos
+              🔥 Promoção
             </button>
-            {categories.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setCategoryFilter(c.id)}
-                className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                  categoryFilter === c.id ? 'sunset-bg text-white' : 'bg-son-surface border border-white/5 text-son-silver hover:bg-son-surface-light'
-                }`}
-              >
-                {c.name}
-              </button>
-            ))}
-          </div>
-        )}
+          )}
+          {categories.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setCategoryFilter(c.id)}
+              className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                categoryFilter === c.id ? 'sunset-bg text-white' : 'bg-son-surface border border-white/5 text-son-silver hover:bg-son-surface-light'
+              }`}
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
 
         {loading ? (
           <div className="flex justify-center py-20">
@@ -169,119 +336,38 @@ export default function Catalogo() {
             <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p>Nenhum produto disponível no momento.</p>
           </div>
+        ) : isPromo ? (
+          <div className="flex flex-col gap-8">
+            {promoGroups.map(([label, groupProducts]) => (
+              <div key={label}>
+                <h2 className="text-sm font-bold text-son-silver-dim uppercase tracking-wide mb-3">{label}</h2>
+                {view === 'grid' ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {groupProducts.map((product, i) => (
+                      <GridCard key={product.id} product={product} i={i} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {groupProducts.map((product, i) => (
+                      <ListCard key={product.id} product={product} i={i} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         ) : view === 'grid' ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filtered.map((product, i) => {
-              const inCart = qtyInCart(product.id)
-              const outOfStock = product.quantity <= 0
-              return (
-                <motion.div
-                  key={product.id}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.35, delay: Math.min(i * 0.03, 0.3) }}
-                  className="bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex flex-col hover:border-son-pink/30 transition-colors"
-                >
-                  <Link to={`/produto/${product.id}`} className="flex flex-col flex-1">
-                    <div className="aspect-square bg-son-surface-light flex items-center justify-center overflow-hidden">
-                      {product.image_url ? (
-                        <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Package className="w-10 h-10 text-son-silver-dim/40" />
-                      )}
-                    </div>
-                    <div className="p-3 flex flex-col gap-2 flex-1">
-                      <div>
-                        <p className="text-sm font-semibold text-white leading-snug">{product.name}</p>
-                        {product.category_name && <p className="text-xs text-son-silver-dim">{product.category_name}</p>}
-                      </div>
-                      <p className="sunset-text font-bold mt-auto">{currency(product.price)}</p>
-                    </div>
-                  </Link>
-                  <div className="px-3 pb-3">
-                    {outOfStock ? (
-                      <span className="block text-xs font-semibold text-son-silver-dim text-center py-2">Esgotado</span>
-                    ) : inCart > 0 ? (
-                      <div className="flex items-center justify-between bg-son-surface-light rounded-xl px-2 py-1">
-                        <button onClick={() => changeQty(product.id, -1)} className="w-7 h-7 flex items-center justify-center text-son-pink">
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-sm font-semibold text-white">{inCart}</span>
-                        <button
-                          onClick={() => addItem(product)}
-                          disabled={inCart >= product.quantity}
-                          className="w-7 h-7 flex items-center justify-center text-son-pink disabled:opacity-30"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => addItem(product)}
-                        className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold sunset-bg text-white rounded-xl py-2 hover:brightness-110 transition-all"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Adicionar
-                      </button>
-                    )}
-                  </div>
-                </motion.div>
-              )
-            })}
+            {filtered.map((product, i) => (
+              <GridCard key={product.id} product={product} i={i} />
+            ))}
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {filtered.map((product, i) => {
-              const inCart = qtyInCart(product.id)
-              const outOfStock = product.quantity <= 0
-              return (
-                <motion.div
-                  key={product.id}
-                  initial={{ opacity: 0, x: -12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.3) }}
-                  className="bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex items-center gap-4 p-3 hover:border-son-pink/30 transition-colors"
-                >
-                  <Link to={`/produto/${product.id}`} className="w-16 h-16 flex-shrink-0 rounded-xl bg-son-surface-light flex items-center justify-center overflow-hidden">
-                    {product.image_url ? (
-                      <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <Package className="w-6 h-6 text-son-silver-dim/40" />
-                    )}
-                  </Link>
-                  <Link to={`/produto/${product.id}`} className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{product.name}</p>
-                    {product.category_name && <p className="text-xs text-son-silver-dim">{product.category_name}</p>}
-                    <p className="sunset-text font-bold mt-0.5">{currency(product.price)}</p>
-                  </Link>
-                  {outOfStock ? (
-                    <span className="text-xs font-semibold text-son-silver-dim px-3">Esgotado</span>
-                  ) : inCart > 0 ? (
-                    <div className="flex items-center gap-1.5 bg-son-surface-light rounded-xl px-2 py-1.5">
-                      <button onClick={() => changeQty(product.id, -1)} className="w-6 h-6 flex items-center justify-center text-son-pink">
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="text-sm w-4 text-center">{inCart}</span>
-                      <button
-                        onClick={() => addItem(product)}
-                        disabled={inCart >= product.quantity}
-                        className="w-6 h-6 flex items-center justify-center text-son-pink disabled:opacity-30"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => addItem(product)}
-                      className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold sunset-bg text-white rounded-xl px-3 py-2"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Adicionar
-                    </button>
-                  )}
-                </motion.div>
-              )
-            })}
+            {filtered.map((product, i) => (
+              <ListCard key={product.id} product={product} i={i} />
+            ))}
           </div>
         )}
       </div>

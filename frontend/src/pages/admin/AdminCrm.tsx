@@ -171,9 +171,10 @@ function applyFilters(customers: CrmCustomer[], f: FilterState): CrmCustomer[] {
 
 type CouponForm = {
   code: string
-  kind: 'desconto' | 'frete' | 'aniversario'
+  kind: 'desconto' | 'frete' | 'aniversario' | 'produto'
   discount_type: DiscountType
   discount_value: string
+  productDiscounts: ProductDiscount[]
   allow_campaign_checkout: boolean
   expires_at: string
   max_uses: string
@@ -183,6 +184,7 @@ const EMPTY_COUPON_FORM: CouponForm = {
   kind: 'desconto',
   discount_type: 'percent',
   discount_value: '',
+  productDiscounts: [],
   allow_campaign_checkout: false,
   expires_at: '',
   max_uses: '',
@@ -301,13 +303,18 @@ export default function AdminCrm() {
 
   const saveCoupon = async () => {
     setCouponError(null)
+    if (couponForm.kind === 'produto' && couponForm.productDiscounts.length === 0) {
+      setCouponError('Busque e adicione ao menos um produto.')
+      return
+    }
     setSavingCoupon(true)
     try {
       await api.admin.coupons.create({
         code: couponForm.code,
         kind: couponForm.kind,
-        discount_type: couponForm.discount_type,
-        discount_value: Number(couponForm.discount_value),
+        discount_type: couponForm.kind === 'produto' ? undefined : couponForm.discount_type,
+        discount_value: couponForm.kind === 'produto' ? undefined : Number(couponForm.discount_value),
+        product_discounts: couponForm.kind === 'produto' ? couponForm.productDiscounts : undefined,
         allow_campaign_checkout: couponForm.allow_campaign_checkout,
         expires_at: couponForm.expires_at || undefined,
         max_uses: couponForm.max_uses ? Number(couponForm.max_uses) : undefined,
@@ -769,8 +776,8 @@ export default function AdminCrm() {
               </div>
               <div>
                 <label className="label">Tipo</label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {(['desconto', 'frete', 'aniversario'] as const).map((k) => (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(['desconto', 'frete', 'produto', 'aniversario'] as const).map((k) => (
                     <button
                       key={k}
                       type="button"
@@ -791,30 +798,47 @@ export default function AdminCrm() {
                 {couponForm.kind === 'aniversario' && (
                   <p className="text-xs text-son-silver-dim mt-1.5">Só é aceito durante o mês de aniversário do cliente.</p>
                 )}
+                {couponForm.kind === 'produto' && (
+                  <p className="text-xs text-son-silver-dim mt-1.5">
+                    Os produtos escolhidos aparecem destacados em /catalogo na categoria "Promoção" com o desconto já visível, e o
+                    desconto se aplica sozinho assim que o produto entra no carrinho — sem precisar digitar código.
+                  </p>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              {couponForm.kind === 'produto' ? (
                 <div>
-                  <label className="label">Tipo de desconto</label>
-                  <select
-                    className="input-field"
-                    value={couponForm.discount_type}
-                    onChange={(e) => setCouponForm({ ...couponForm, discount_type: e.target.value as DiscountType })}
-                  >
-                    <option value="percent">Percentual</option>
-                    <option value="fixed">Valor fixo (R$)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Valor</label>
-                  <input
-                    className="input-field"
-                    type="number"
-                    min="0"
-                    value={couponForm.discount_value}
-                    onChange={(e) => setCouponForm({ ...couponForm, discount_value: e.target.value })}
+                  <label className="label">Produtos em promoção</label>
+                  <ProductDiscountList
+                    products={products}
+                    discounts={couponForm.productDiscounts}
+                    onChange={(productDiscounts) => setCouponForm({ ...couponForm, productDiscounts })}
                   />
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="label">Tipo de desconto</label>
+                    <select
+                      className="input-field"
+                      value={couponForm.discount_type}
+                      onChange={(e) => setCouponForm({ ...couponForm, discount_type: e.target.value as DiscountType })}
+                    >
+                      <option value="percent">Percentual</option>
+                      <option value="fixed">Valor fixo (R$)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Valor</label>
+                    <input
+                      className="input-field"
+                      type="number"
+                      min="0"
+                      value={couponForm.discount_value}
+                      onChange={(e) => setCouponForm({ ...couponForm, discount_value: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
               <label className="flex items-center gap-2 text-sm text-son-silver">
                 <input
                   type="checkbox"

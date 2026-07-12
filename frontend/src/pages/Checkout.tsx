@@ -5,7 +5,7 @@ import SiteHeader from '../components/layout/SiteHeader'
 import LocationPicker from '../components/checkout/LocationPicker'
 import BirthdateInput from '../components/checkout/BirthdateInput'
 import { api, ApiError } from '../lib/api'
-import type { CouponPreview } from '../lib/supabasePublicApi'
+import type { CouponPreview, PromotionalProduct } from '../lib/supabasePublicApi'
 import type { Campaign, PaymentMethod, Product, ShippingEstimate } from '../lib/types'
 import { useCart } from '../store/cart'
 import { useCustomer } from '../store/customer'
@@ -54,9 +54,14 @@ export default function Checkout() {
   // saber se o que tá aplicado agora veio daqui (trava o campo manual, a
   // não ser que o próprio cupom libere combinar com um avulso).
   const [autoCoupon, setAutoCoupon] = useState<AppliedCoupon | null>(null)
+  // Produto(s) em promoção que já entraram no carrinho — mesmo destaque
+  // laranja usado em /catalogo, desconto aplicado sozinho sem digitar cupom.
+  const [promoProducts, setPromoProducts] = useState<PromotionalProduct[]>([])
+  const [autoPromoCode, setAutoPromoCode] = useState<string | null>(null)
 
   useEffect(() => {
     api.products.list().then(setProducts)
+    api.coupons.listPromotionalProducts().then(setPromoProducts).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -110,6 +115,42 @@ export default function Checkout() {
         .map((item) => ({ item, product: productById.get(item.productId) }))
         .filter((l): l is { item: typeof items[number]; product: Product } => !!l.product)
   const subtotal = lines.reduce((sum, l) => sum + l.product.price * l.item.quantity, 0)
+
+  const promoByProduct = useMemo(() => {
+    const map = new Map<string, PromotionalProduct>()
+    for (const p of promoProducts) if (!map.has(p.product_id)) map.set(p.product_id, p)
+    return map
+  }, [promoProducts])
+
+  // Assim que um produto em promoção entra no carrinho, o cupom dele é
+  // aplicado sozinho — não compete com um cupom já digitado/detectado.
+  useEffect(() => {
+    if (appliedCoupon) return
+    const match = lines.find((l) => promoByProduct.has(l.product.id))
+    if (!match) return
+    const promo = promoByProduct.get(match.product.id)!
+    if (autoPromoCode === promo.coupon_code) return
+    const digits = customer.whatsapp.replace(/\D/g, '')
+    api.coupons
+      .validate(promo.coupon_code, campaign?.id, customer.birthdate, digits ? `55${digits}` : undefined)
+      .then((result) => {
+        setAutoPromoCode(promo.coupon_code)
+        setAppliedCoupon((current) => current ?? result)
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, promoByProduct, appliedCoupon])
+
+  // Se o item que trouxe o desconto sai do carrinho, o cupom automático some junto.
+  useEffect(() => {
+    if (!autoPromoCode || appliedCoupon?.code !== autoPromoCode) return
+    const stillInCart = lines.some((l) => promoByProduct.get(l.product.id)?.coupon_code === autoPromoCode)
+    if (!stillInCart) {
+      setAppliedCoupon(null)
+      setAutoPromoCode(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, promoByProduct, autoPromoCode])
 
   const shippingPrice = pickupAtStore ? 0 : shippingEstimate?.price ?? 0
 
@@ -445,7 +486,7 @@ export default function Checkout() {
                   </div>
                 )}
               </div>
-            ) : appliedCoupon ? (
+            ) : appliedCoupon && appliedCoupon.code !== autoPromoCode ? (
               <div className="flex items-center justify-between bg-son-surface border border-son-pink/30 rounded-2xl px-4 py-3">
                 <span className="flex items-center gap-2 text-sm font-medium text-white">
                   <Tag className="w-4 h-4 text-son-pink" /> {appliedCoupon.code}
@@ -462,21 +503,28 @@ export default function Checkout() {
                 </button>
               </div>
             ) : (
-              <div className="flex gap-2">
-                <input
-                  className="input-field flex-1 uppercase"
-                  value={couponInput}
-                  onChange={(e) => setCouponInput(e.target.value)}
-                  placeholder="Código do cupom"
-                />
-                <button
-                  type="button"
-                  onClick={applyCoupon}
-                  disabled={couponChecking || !couponInput.trim()}
-                  className="btn-secondary px-4"
-                >
-                  {couponChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
-                </button>
+              <div>
+                {appliedCoupon && appliedCoupon.code === autoPromoCode && (
+                  <p className="text-xs text-orange-400 mb-2">
+                    Desconto de item(ns) em promoção já aplicado automaticamente — veja o detalhe no resumo abaixo.
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    className="input-field flex-1 uppercase"
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value)}
+                    placeholder="Código do cupom"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyCoupon}
+                    disabled={couponChecking || !couponInput.trim()}
+                    className="btn-secondary px-4"
+                  >
+                    {couponChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
+                  </button>
+                </div>
               </div>
             )}
             {couponError && <p className="error-msg mt-1">{couponError}</p>}
@@ -487,15 +535,38 @@ export default function Checkout() {
               <span>Subtotal</span>
               <span>{currency(subtotal)}</span>
             </div>
-            {lines.map((l) => (
-              <div key={l.product.id} className="flex justify-between text-xs text-son-silver-dim pl-3">
-                <span className="truncate pr-2">
-                  {l.product.name}
-                  {l.item.quantity > 1 ? ` x${l.item.quantity}` : ''}
-                </span>
-                <span className="flex-shrink-0">{currency(l.product.price * l.item.quantity)}</span>
-              </div>
-            ))}
+            {lines.map((l) => {
+              const lineTotal = l.product.price * l.item.quantity
+              const pd = appliedCoupon?.kind === 'produto' ? appliedCoupon.product_discounts?.find((p) => p.product_id === l.product.id) : undefined
+              if (pd) {
+                const lineDiscount = couponItemDiscounts.get(l.product.id) ?? 0
+                const finalTotal = Math.max(lineTotal - lineDiscount, 0)
+                const discountText = pd.discount_type === 'percent' ? `-${pd.discount_value}%` : `-${currency(pd.discount_value)}`
+                return (
+                  <div key={l.product.id} className="flex justify-between items-baseline text-xs pl-3 gap-2">
+                    <span className="truncate pr-2 text-orange-400">
+                      {l.product.name}
+                      {l.item.quantity > 1 ? ` x${l.item.quantity}` : ''}
+                      <span className="font-semibold"> - item promocional</span>
+                    </span>
+                    <span className="flex-shrink-0 flex items-center gap-1.5">
+                      <span className="text-red-500 line-through decoration-2">{currency(lineTotal)}</span>
+                      <span className="text-orange-400">{discountText}</span>
+                      <span className="text-orange-400 font-bold">{currency(finalTotal)}</span>
+                    </span>
+                  </div>
+                )
+              }
+              return (
+                <div key={l.product.id} className="flex justify-between text-xs text-son-silver-dim pl-3">
+                  <span className="truncate pr-2">
+                    {l.product.name}
+                    {l.item.quantity > 1 ? ` x${l.item.quantity}` : ''}
+                  </span>
+                  <span className="flex-shrink-0">{currency(lineTotal)}</span>
+                </div>
+              )
+            })}
             {campaignDiscountTotal > 0 && (
               <div className="flex justify-between text-emerald-400">
                 <span>Desconto de promoção{campaign ? ` - ${campaign.title}` : ''}</span>

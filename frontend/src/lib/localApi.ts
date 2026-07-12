@@ -19,6 +19,7 @@ import {
   type LocalRun,
   type LocalVendedor,
 } from './localData'
+import type { PromotionalProduct } from './supabasePublicApi'
 import { distanciaKm } from './geo/rotas'
 import { FALLBACK as STORE_LOCATION } from './geo/mapa'
 import { useAdminAuth } from '../store/adminAuth'
@@ -427,6 +428,23 @@ async function listCustomerCouponsPublic(customerWhatsapp: string): Promise<Coup
     .map(couponPreview)
 }
 
+async function listPromotionalProducts(): Promise<PromotionalProduct[]> {
+  const db = loadDb()
+  const now = Date.now()
+  const grantedCouponIds = new Set((db.couponGrants ?? []).map((g) => g.coupon_id))
+  const out: PromotionalProduct[] = []
+  for (const c of db.coupons ?? []) {
+    if (c.kind !== 'produto' || !c.active) continue
+    if (c.expires_at && new Date(c.expires_at).getTime() <= now) continue
+    if (c.max_uses != null && c.used_count >= c.max_uses) continue
+    if (grantedCouponIds.has(c.id)) continue
+    for (const pd of c.product_discounts ?? []) {
+      out.push({ product_id: pd.product_id, coupon_code: c.code, discount_type: pd.discount_type, discount_value: pd.discount_value })
+    }
+  }
+  return out
+}
+
 // Modo demo já gera o QR na hora de criar o pedido (ver createOrder) — não
 // existe uma etapa separada de "criar cobrança" aqui, então isso só devolve
 // o pedido como já está, só pra bater com a assinatura do backend real.
@@ -752,30 +770,34 @@ async function adminListCoupons(): Promise<Coupon[]> {
 
 async function createCoupon(payload: {
   code: string
-  kind: 'desconto' | 'frete' | 'aniversario'
-  discount_type: 'percent' | 'fixed'
-  discount_value: number
+  kind: 'desconto' | 'frete' | 'aniversario' | 'produto'
+  discount_type?: 'percent' | 'fixed'
+  discount_value?: number
   allow_campaign_checkout?: boolean
   expires_at?: string
   max_uses?: number
+  product_discounts?: import('./types').ProductDiscount[]
 }): Promise<Coupon> {
   const db = loadDb()
   db.coupons = db.coupons ?? []
   const code = payload.code.trim().toUpperCase()
   if (!code) throw new ApiError(400, 'code is required')
   if (db.coupons.some((c) => c.code === code)) throw new ApiError(400, 'a coupon with this code already exists')
-  if (!payload.discount_type || payload.discount_value == null) {
+  const hasProducts = payload.kind === 'produto' && payload.product_discounts && payload.product_discounts.length > 0
+  if (payload.kind === 'produto') {
+    if (!hasProducts) throw new ApiError(400, 'at least one product is required for kind=produto')
+  } else if (!payload.discount_type || payload.discount_value == null) {
     throw new ApiError(400, 'discount_type and discount_value are required')
   }
   const coupon: Coupon = {
     id: uid(),
     code,
     kind: payload.kind,
-    discount_type: payload.discount_type,
-    discount_value: payload.discount_value,
+    discount_type: payload.kind === 'produto' ? null : payload.discount_type ?? null,
+    discount_value: payload.kind === 'produto' ? null : payload.discount_value ?? null,
     shipping_discount_type: null,
     shipping_discount_value: null,
-    product_discounts: [],
+    product_discounts: hasProducts ? payload.product_discounts! : [],
     allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
     active: true,
     expires_at: payload.expires_at || null,
@@ -1459,7 +1481,7 @@ export const localApi = {
   estimateShipping,
   trackDeliveryPosition: trackDeliveryPositionLocal,
   campaigns: { listActive: listActiveCampaigns, get: getCampaignPublic },
-  coupons: { validate: validateCouponPublic, listForCustomer: listCustomerCouponsPublic },
+  coupons: { validate: validateCouponPublic, listForCustomer: listCustomerCouponsPublic, listPromotionalProducts },
   orders: {
     create: createOrder,
     get: getOrder,

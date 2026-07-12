@@ -281,22 +281,24 @@ const remoteApi = {
       list: () => rpc<Coupon[]>('admin_list_coupons', { p_token: adminToken() }),
       create: (payload: {
         code: string
-        kind: 'desconto' | 'frete' | 'aniversario'
-        discount_type: 'percent' | 'fixed'
-        discount_value: number
+        kind: 'desconto' | 'frete' | 'aniversario' | 'produto'
+        discount_type?: 'percent' | 'fixed'
+        discount_value?: number
         allow_campaign_checkout?: boolean
         expires_at?: string
         max_uses?: number
+        product_discounts?: ProductDiscount[]
       }) =>
         rpc<Coupon>('admin_create_coupon', {
           p_token: adminToken(),
           p_code: payload.code,
           p_kind: payload.kind,
-          p_discount_type: payload.discount_type,
-          p_discount_value: payload.discount_value,
+          p_discount_type: payload.discount_type ?? null,
+          p_discount_value: payload.discount_value ?? null,
           p_allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
           p_expires_at: payload.expires_at || null,
           p_max_uses: payload.max_uses ?? null,
+          p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
         }),
       update: (
         id: string,

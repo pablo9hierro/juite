@@ -128,7 +128,22 @@ export const supabasePublicApi = {
       if (error) throw new ApiError(400, error.message)
       return (data ?? []) as CouponPreview[]
     },
+    // Produtos em promoção (cupom avulso kind='produto', sem concessão) —
+    // categoria "Promoção" do catálogo. Desconto já se aplica sozinho
+    // assim que o produto entra no carrinho, sem digitar código.
+    listPromotionalProducts: async () => {
+      const { data, error } = await supabase.rpc('list_promotional_products')
+      if (error) throw new ApiError(400, error.message)
+      return (data ?? []) as PromotionalProduct[]
+    },
   },
+}
+
+export interface PromotionalProduct {
+  product_id: string
+  coupon_code: string
+  discount_type: 'percent' | 'fixed'
+  discount_value: number
 }
 
 export type CouponPreview = Pick<
