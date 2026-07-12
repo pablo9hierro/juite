@@ -695,9 +695,13 @@ async function deleteVendedor(id: string): Promise<void> {
 
 // ---------- cupons (admin) ----------
 
+function withGrantCount(db: LocalDb, coupon: Coupon): Coupon {
+  return { ...coupon, grant_count: (db.couponGrants ?? []).filter((g) => g.coupon_id === coupon.id).length }
+}
+
 async function adminListCoupons(): Promise<Coupon[]> {
   const db = loadDb()
-  return [...(db.coupons ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at))
+  return [...(db.coupons ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)).map((c) => withGrantCount(db, c))
 }
 
 async function createCoupon(payload: {
@@ -732,7 +736,7 @@ async function createCoupon(payload: {
   }
   db.coupons.push(coupon)
   saveDb(db)
-  return coupon
+  return withGrantCount(db, coupon)
 }
 
 async function updateCoupon(
@@ -747,7 +751,7 @@ async function updateCoupon(
   coupon.expires_at = payload.expires_at || null
   coupon.max_uses = payload.max_uses ?? null
   saveDb(db)
-  return coupon
+  return withGrantCount(db, coupon)
 }
 
 async function deleteCoupon(id: string): Promise<void> {
@@ -805,7 +809,7 @@ async function createTargetedCoupon(payload: {
     })
   }
   saveDb(db)
-  return coupon
+  return withGrantCount(db, coupon)
 }
 
 async function adminListCouponGrants(couponId: string): Promise<CouponGrant[]> {

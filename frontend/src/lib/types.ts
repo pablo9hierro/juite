@@ -50,6 +50,9 @@ export interface Coupon {
   max_uses: number | null
   used_count: number
   created_at: string
+  // > 0 quando o cupom nasceu de um filtro no CRM (cupom alvo,
+  // intransferível) — 0 é cupom avulso, qualquer um pode digitar o código.
+  grant_count?: number
 }
 
 export interface CouponGrant {
