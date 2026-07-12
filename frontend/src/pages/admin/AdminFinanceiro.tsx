@@ -1,21 +1,98 @@
 import { useEffect, useState } from 'react'
-import { Clock, Loader2, Package, TrendingUp, Truck, Wallet } from 'lucide-react'
+import { Clock, Gift, Loader2, Package, Receipt, TrendingDown, TrendingUp, Truck, Wallet } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import { StatusBadge } from '../../components/ui/Badge'
 import { api } from '../../lib/api'
-import type { FinanceiroSummary } from '../../lib/types'
+import { useAdminAuth } from '../../store/adminAuth'
+import type { FinanceiroSummary, VendedorRelatorio } from '../../lib/types'
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
 }
 
-export default function AdminFinanceiro() {
-  const [data, setData] = useState<FinanceiroSummary | null>(null)
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+function PdvSalesSection({ role }: { role: string }) {
+  const [data, setData] = useState<VendedorRelatorio | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.admin.financeiro.get().then(setData).finally(() => setLoading(false))
+    api.pdv.relatorio().then(setData).finally(() => setLoading(false))
   }, [])
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center gap-2 label mb-1">
+        <Receipt className="w-3.5 h-3.5" /> Vendas de balcão (PDV)
+      </div>
+      <p className="text-xs text-son-silver-dim mb-3">
+        {role === 'admin' ? 'Todas as vendas de balcão, de qualquer vendedor.' : 'Suas vendas no PDV.'}
+      </p>
+
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="w-5 h-5 animate-spin text-son-pink" />
+        </div>
+      ) : !data || data.total_count === 0 ? (
+        <p className="text-sm text-son-silver-dim">Nenhuma venda de balcão registrada ainda.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-son-surface-light rounded-xl p-3 text-center">
+              <p className="text-xs text-son-silver-dim mb-1">Total vendido</p>
+              <p className="sunset-text font-black text-xl">{currency(data.total_sales)}</p>
+            </div>
+            <div className="bg-son-surface-light rounded-xl p-3 text-center">
+              <p className="text-xs text-son-silver-dim mb-1">Nº de vendas</p>
+              <p className="font-black text-xl text-white">{data.total_count}</p>
+            </div>
+          </div>
+          <ul className="divide-y divide-white/5">
+            {data.sales.map((s) => (
+              <li key={s.id} className="py-2.5">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5 text-xs text-son-silver-dim">
+                    {formatDate(s.created_at)}
+                    {role === 'admin' && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-white/10 capitalize">{s.sold_by_role}</span>
+                    )}
+                  </div>
+                  <span className="sunset-text font-bold text-sm">{currency(s.total)}</span>
+                </div>
+                <p className="text-xs text-son-silver truncate">
+                  {s.items.map((i) => `${i.quantity}x ${i.product_name}`).join(', ')}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Card>
+  )
+}
+
+export default function AdminFinanceiro() {
+  const { role } = useAdminAuth()
+  const [data, setData] = useState<FinanceiroSummary | null>(null)
+  const [loading, setLoading] = useState(role === 'admin')
+
+  useEffect(() => {
+    if (role !== 'admin') return
+    api.admin.financeiro.get().then(setData).finally(() => setLoading(false))
+  }, [role])
+
+  // Vendedor só enxerga as próprias vendas de balcão — o resto do
+  // financeiro (receita geral, motoboys, desconto concedido) é admin-only.
+  if (role !== 'admin') {
+    return (
+      <div>
+        <h1 className="text-2xl font-black mb-6">Relatórios</h1>
+        <PdvSalesSection role={role} />
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -29,7 +106,7 @@ export default function AdminFinanceiro() {
 
   return (
     <div>
-      <h1 className="text-2xl font-black mb-6">Financeiro</h1>
+      <h1 className="text-2xl font-black mb-6">Financeiro &amp; relatórios</h1>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
         <Card className="p-5">
@@ -51,6 +128,20 @@ export default function AdminFinanceiro() {
           <p className="font-black text-2xl text-white">
             {data.avg_delivery_minutes > 0 ? `${data.avg_delivery_minutes.toFixed(1).replace('.', ',')} min` : '—'}
           </p>
+        </Card>
+        <Card className="p-5">
+          <div className="flex items-center gap-2 text-son-silver-dim text-xs mb-2">
+            <Gift className="w-3.5 h-3.5" /> Concedido em campanha/cupom
+          </div>
+          <p className={`font-black text-2xl ${data.total_discount_given > 0 ? 'text-amber-400' : 'text-white'}`}>
+            {currency(data.total_discount_given)}
+          </p>
+        </Card>
+        <Card className="p-5">
+          <div className="flex items-center gap-2 text-son-silver-dim text-xs mb-2">
+            <TrendingDown className="w-3.5 h-3.5" /> Faturaria sem desconto
+          </div>
+          <p className="font-black text-2xl text-white">{currency(data.total_revenue + data.total_discount_given)}</p>
         </Card>
       </div>
 
@@ -113,6 +204,10 @@ export default function AdminFinanceiro() {
           </ul>
         )}
       </Card>
+
+      <div className="mb-6">
+        <PdvSalesSection role={role} />
+      </div>
 
       <Card className="p-5">
         <p className="label mb-3">Histórico recente</p>

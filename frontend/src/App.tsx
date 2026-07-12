@@ -15,7 +15,6 @@ import AdminMotoboys from './pages/admin/AdminMotoboys'
 import AdminFrete from './pages/admin/AdminFrete'
 import AdminFinanceiro from './pages/admin/AdminFinanceiro'
 import AdminSenha from './pages/admin/AdminSenha'
-import AdminRelatorios from './pages/admin/AdminRelatorios'
 import AdminCampanhas from './pages/admin/AdminCampanhas'
 import AdminCrm from './pages/admin/AdminCrm'
 import MotoboyFila from './pages/motoboy/MotoboyFila'
@@ -66,7 +65,6 @@ export default function App() {
               </Suspense>
             }
           />
-          <Route path="relatorios" element={<AdminRelatorios />} />
           <Route path="campanhas" element={<AdminCampanhas />} />
           <Route path="crm" element={<AdminCrm />} />
           <Route path="senha" element={<AdminSenha />} />

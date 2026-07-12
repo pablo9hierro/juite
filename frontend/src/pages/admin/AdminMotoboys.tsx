@@ -207,7 +207,7 @@ export default function AdminMotoboys() {
           <div className="text-center py-16 text-son-silver-dim">
             <Store className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p>Nenhum vendedor cadastrado.</p>
-            <p className="text-xs mt-1">Vendedor acessa só a tela de PDV e Relatórios, com login próprio.</p>
+            <p className="text-xs mt-1">Vendedor acessa só a tela de PDV e Financeiro (suas vendas), com login próprio.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -319,7 +319,7 @@ export default function AdminMotoboys() {
                 />
               </div>
               <p className="text-xs text-son-silver-dim">
-                O vendedor loga na mesma tela do admin (/admin/login), mas só enxerga PDV e Relatórios.
+                O vendedor loga na mesma tela do admin (/admin/login), mas só enxerga PDV e Financeiro (suas vendas).
               </p>
               <button onClick={saveVendedor} disabled={savingVendedor} className="btn-primary w-full mt-2">
                 {savingVendedor ? <Loader2 className="w-4 h-4 animate-spin" /> : null}

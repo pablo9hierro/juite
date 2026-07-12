@@ -298,6 +298,9 @@ export interface TopProduct {
 
 export interface FinanceiroSummary {
   total_revenue: number
+  // Soma de discount_amount + shipping_discount de pedidos pagos — quanto
+  // foi "abrir mão da grana" em campanha/cupom. total_revenue já é líquido.
+  total_discount_given: number
   total_orders: number
   orders_by_status: StatusCount[]
   top_products: TopProduct[]

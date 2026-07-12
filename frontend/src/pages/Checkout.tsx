@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CreditCard, Home, Loader2, MapPin, QrCode, Tag, Wallet } from 'lucide-react'
+import { CreditCard, Gift, Home, Loader2, MapPin, QrCode, Tag, Wallet } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
 import LocationPicker from '../components/checkout/LocationPicker'
 import BirthdateInput from '../components/checkout/BirthdateInput'
@@ -21,7 +21,7 @@ function formatPhone(value: string) {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`
 }
 
-type AppliedCoupon = Pick<Coupon, 'code' | 'kind' | 'discount_type' | 'discount_value'>
+type AppliedCoupon = Pick<Coupon, 'code' | 'kind' | 'discount_type' | 'discount_value' | 'combinable_with_public'>
 
 export default function Checkout() {
   const navigate = useNavigate()
@@ -48,6 +48,11 @@ export default function Checkout() {
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null)
   const [couponError, setCouponError] = useState<string | null>(null)
   const [couponChecking, setCouponChecking] = useState(false)
+  // Cupom exclusivo detectado automaticamente pelo whatsapp digitado — sem
+  // precisar digitar código nenhum. Guardado à parte de appliedCoupon pra
+  // saber se o que tá aplicado agora veio daqui (trava o campo manual, a
+  // não ser que o próprio cupom libere combinar com um avulso).
+  const [autoCoupon, setAutoCoupon] = useState<AppliedCoupon | null>(null)
 
   useEffect(() => {
     api.products.list().then(setProducts)
@@ -69,6 +74,30 @@ export default function Checkout() {
     api.estimateShipping(customer.lat, customer.lng).then(setShippingEstimate).catch(() => setShippingEstimate(null))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Identidade do cliente é sempre o telefone (chave primária de verdade,
+  // não o nome digitado) — assim que o whatsapp completo é digitado, checa
+  // se esse número foi contemplado com algum cupom exclusivo e aplica na
+  // hora, sem precisar digitar código.
+  useEffect(() => {
+    const digits = customer.whatsapp.replace(/\D/g, '')
+    if (digits.length < 10) {
+      setAutoCoupon(null)
+      return
+    }
+    const timer = setTimeout(() => {
+      api.coupons
+        .listForCustomer(`55${digits}`)
+        .then((available) => {
+          if (available.length === 0) return
+          const coupon = available[0]
+          setAutoCoupon(coupon)
+          setAppliedCoupon((current) => current ?? coupon)
+        })
+        .catch(() => {})
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [customer.whatsapp])
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
   const lines = campaign
@@ -123,7 +152,8 @@ export default function Checkout() {
     setCouponError(null)
     setCouponChecking(true)
     try {
-      const result = await api.coupons.validate(couponInput.trim(), campaign?.id, customer.birthdate)
+      const digits = customer.whatsapp.replace(/\D/g, '')
+      const result = await api.coupons.validate(couponInput.trim(), campaign?.id, customer.birthdate, digits ? `55${digits}` : undefined)
       setAppliedCoupon(result)
     } catch (e) {
       setAppliedCoupon(null)
@@ -354,7 +384,44 @@ export default function Checkout() {
 
           <div>
             <label className="label">Cupom de desconto (opcional)</label>
-            {appliedCoupon ? (
+            {appliedCoupon && appliedCoupon.code === autoCoupon?.code ? (
+              <div>
+                <div className="flex items-center justify-between bg-son-surface border border-amber-400/40 rounded-2xl px-4 py-3">
+                  <span className="flex items-center gap-2 text-sm font-medium text-white">
+                    <Gift className="w-4 h-4 text-amber-400" /> {appliedCoupon.code}
+                    <span className="text-xs text-amber-400/80 font-normal">exclusivo pra você</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppliedCoupon(null)
+                      setCouponInput('')
+                    }}
+                    className="text-xs text-son-silver-dim hover:text-son-pink"
+                  >
+                    Remover
+                  </button>
+                </div>
+                {autoCoupon?.combinable_with_public && (
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      className="input-field flex-1 uppercase"
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value)}
+                      placeholder="Ou digite outro código"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyCoupon}
+                      disabled={couponChecking || !couponInput.trim()}
+                      className="btn-secondary px-4"
+                    >
+                      {couponChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : appliedCoupon ? (
               <div className="flex items-center justify-between bg-son-surface border border-son-pink/30 rounded-2xl px-4 py-3">
                 <span className="flex items-center gap-2 text-sm font-medium text-white">
                   <Tag className="w-4 h-4 text-son-pink" /> {appliedCoupon.code}

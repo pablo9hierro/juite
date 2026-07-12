@@ -1057,6 +1057,7 @@ async function financeiro(): Promise<FinanceiroSummary> {
   const db = loadDb()
   const paid = db.orders.filter((o) => o.payment_status === 'pago')
   const total_revenue = paid.reduce((sum, o) => sum + o.total, 0)
+  const total_discount_given = paid.reduce((sum, o) => sum + (o.discount_amount ?? 0) + (o.shipping_discount ?? 0), 0)
   const total_orders = db.orders.length
 
   const statusCounts = new Map<OrderStatus, number>()
@@ -1107,6 +1108,7 @@ async function financeiro(): Promise<FinanceiroSummary> {
 
   return {
     total_revenue,
+    total_discount_given,
     total_orders,
     orders_by_status,
     top_products,
