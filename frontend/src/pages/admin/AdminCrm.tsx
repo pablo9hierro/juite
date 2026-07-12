@@ -71,7 +71,9 @@ function applySegmentation(customers: CrmCustomer[], seg: Segmentation): CrmCust
 
 type FilterState = {
   minOrders: string
+  minOrdersDays: string
   minItems: string
+  minItemsDays: string
   spentBelowAmount: string
   spentBelowDays: string
   spentAboveAmount: string
@@ -87,7 +89,9 @@ type FilterState = {
 }
 const EMPTY_FILTER: FilterState = {
   minOrders: '',
+  minOrdersDays: '',
   minItems: '',
+  minItemsDays: '',
   spentBelowAmount: '',
   spentBelowDays: '',
   spentAboveAmount: '',
@@ -121,6 +125,23 @@ function spentInLastDays(c: CrmCustomer, days: number): number {
   return c.orders.filter((o) => new Date(o.created_at).getTime() >= cutoff).reduce((sum, o) => sum + o.total, 0)
 }
 
+// Dias é opcional pros dois filtros abaixo — sem preencher, a busca não
+// deixa de rolar, só generaliza (usa o total histórico do cliente em vez
+// de restringir a uma janela de tempo).
+function ordersInWindow(c: CrmCustomer, days: number | null): number {
+  if (days == null) return c.order_count
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+  return c.orders.filter((o) => new Date(o.created_at).getTime() >= cutoff).length
+}
+
+function itemsInWindow(c: CrmCustomer, days: number | null): number {
+  if (days == null) return c.total_items
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+  return c.purchases
+    .filter((p) => new Date(p.created_at).getTime() >= cutoff)
+    .reduce((sum, p) => sum + (p.quantity ?? 1), 0)
+}
+
 // Compara pedidos dos últimos 30 dias com os 30 dias anteriores — sem
 // pedido nenhum no período anterior, não dá pra falar em "redução".
 function frequencyDropPercent(c: CrmCustomer): number {
@@ -137,8 +158,8 @@ function frequencyDropPercent(c: CrmCustomer): number {
 
 function applyFilters(customers: CrmCustomer[], f: FilterState): CrmCustomer[] {
   return customers.filter((c) => {
-    if (f.minOrders && c.order_count < Number(f.minOrders)) return false
-    if (f.minItems && c.total_items < Number(f.minItems)) return false
+    if (f.minOrders && ordersInWindow(c, f.minOrdersDays ? Number(f.minOrdersDays) : null) < Number(f.minOrders)) return false
+    if (f.minItems && itemsInWindow(c, f.minItemsDays ? Number(f.minItemsDays) : null) < Number(f.minItems)) return false
     if (f.spentBelowAmount && f.spentBelowDays) {
       if (spentInLastDays(c, Number(f.spentBelowDays)) >= Number(f.spentBelowAmount)) return false
     }
@@ -449,176 +470,206 @@ export default function AdminCrm() {
       </div>
 
       {filterOpen && (
-        <Card className="p-5 mb-4 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="label">Quantidade de pedidos realizados</label>
+        <Card className="p-5 mb-4 space-y-3">
+          <div className="border border-white/10 rounded-xl p-3">
+            <label className="label flex items-center gap-1.5 flex-wrap">
+              Frequência de compra em
               <input
-                className="input-field"
+                className="input-field w-16 py-1 px-2 text-xs text-center inline-block"
                 type="number"
                 min="1"
-                placeholder="Nº de vezes"
-                value={filter.minOrders}
-                onChange={(e) => setFilter({ ...filter, minOrders: e.target.value })}
+                placeholder="25"
+                value={filter.minOrdersDays}
+                onChange={(e) => setFilter({ ...filter, minOrdersDays: e.target.value })}
               />
-            </div>
-            <div>
-              <label className="label">Maior volume de compras</label>
+              Dias <span className="text-son-silver-dim font-normal">(opcional)</span>
+            </label>
+            <input
+              className="input-field mt-2"
+              type="number"
+              min="1"
+              placeholder="Ex: clientes que compraram 50 vezes"
+              value={filter.minOrders}
+              onChange={(e) => setFilter({ ...filter, minOrders: e.target.value })}
+            />
+          </div>
+
+          <div className="border border-white/10 rounded-xl p-3">
+            <label className="label flex items-center gap-1.5 flex-wrap">
+              Volume de produtos em
               <input
-                className="input-field"
+                className="input-field w-16 py-1 px-2 text-xs text-center inline-block"
                 type="number"
                 min="1"
-                placeholder="Nº de itens"
-                value={filter.minItems}
-                onChange={(e) => setFilter({ ...filter, minItems: e.target.value })}
+                placeholder="25"
+                value={filter.minItemsDays}
+                onChange={(e) => setFilter({ ...filter, minItemsDays: e.target.value })}
               />
-            </div>
-            <div>
-              <label className="label">Distância de no máximo (km)</label>
+              Dias <span className="text-son-silver-dim font-normal">(opcional)</span>
+            </label>
+            <input
+              className="input-field mt-2"
+              type="number"
+              min="1"
+              placeholder="Ex: clientes que compraram 500 produtos"
+              value={filter.minItems}
+              onChange={(e) => setFilter({ ...filter, minItems: e.target.value })}
+            />
+          </div>
+
+          <div className="border border-white/10 rounded-xl p-3">
+            <label className="label">Distância de no máximo (km)</label>
+            <input
+              className="input-field"
+              type="number"
+              min="0"
+              value={filter.maxDistanceKm}
+              onChange={(e) => setFilter({ ...filter, maxDistanceKm: e.target.value })}
+            />
+          </div>
+
+          <div className="border border-white/10 rounded-xl p-3">
+            <label className="label">Gastou abaixo de</label>
+            <div className="flex items-center gap-2">
+              <span className="text-son-silver-dim text-sm">R$</span>
               <input
                 className="input-field"
                 type="number"
                 min="0"
-                value={filter.maxDistanceKm}
-                onChange={(e) => setFilter({ ...filter, maxDistanceKm: e.target.value })}
+                value={filter.spentBelowAmount}
+                onChange={(e) => setFilter({ ...filter, spentBelowAmount: e.target.value })}
               />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="label">Gastou abaixo de</label>
-              <div className="flex items-center gap-2">
-                <span className="text-son-silver-dim text-sm">R$</span>
-                <input
-                  className="input-field"
-                  type="number"
-                  min="0"
-                  value={filter.spentBelowAmount}
-                  onChange={(e) => setFilter({ ...filter, spentBelowAmount: e.target.value })}
-                />
-                <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
-                <input
-                  className="input-field"
-                  type="number"
-                  min="1"
-                  value={filter.spentBelowDays}
-                  onChange={(e) => setFilter({ ...filter, spentBelowDays: e.target.value })}
-                />
-                <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
-              </div>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="label">Gastou acima de</label>
-              <div className="flex items-center gap-2">
-                <span className="text-son-silver-dim text-sm">R$</span>
-                <input
-                  className="input-field"
-                  type="number"
-                  min="0"
-                  value={filter.spentAboveAmount}
-                  onChange={(e) => setFilter({ ...filter, spentAboveAmount: e.target.value })}
-                />
-                <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
-                <input
-                  className="input-field"
-                  type="number"
-                  min="1"
-                  value={filter.spentAboveDays}
-                  onChange={(e) => setFilter({ ...filter, spentAboveDays: e.target.value })}
-                />
-                <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
-              </div>
-            </div>
-            <div>
-              <label className="label">Reduziu a frequência de compra em (%)</label>
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
               <input
                 className="input-field"
                 type="number"
                 min="1"
-                max="100"
-                value={filter.frequencyDropPercent}
-                onChange={(e) => setFilter({ ...filter, frequencyDropPercent: e.target.value })}
+                value={filter.spentBelowDays}
+                onChange={(e) => setFilter({ ...filter, spentBelowDays: e.target.value })}
               />
-            </div>
-            <div>
-              <label className="label">Cliente novo em (dias)</label>
-              <input
-                className="input-field"
-                type="number"
-                min="1"
-                value={filter.newCustomerDays}
-                onChange={(e) => setFilter({ ...filter, newCustomerDays: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="label">Clientes que aniversariam em</label>
-              <select
-                className="input-field appearance-none cursor-pointer"
-                value={filter.birthdayMonth}
-                onChange={(e) => setFilter({ ...filter, birthdayMonth: e.target.value })}
-              >
-                <option value="">Qualquer mês</option>
-                {MONTH_NAMES.map((m, i) => (
-                  <option key={m} value={i}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">Bairro</label>
-              <select
-                className="input-field appearance-none cursor-pointer"
-                value=""
-                onChange={(e) => {
-                  if (!e.target.value || filter.neighborhoods.includes(e.target.value)) return
-                  setFilter({ ...filter, neighborhoods: [...filter.neighborhoods, e.target.value] })
-                }}
-              >
-                <option value="">Adicionar bairro...</option>
-                {neighborhoods
-                  .filter((n) => !filter.neighborhoods.includes(n))
-                  .map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-              </select>
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
             </div>
           </div>
-          {filter.neighborhoods.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {filter.neighborhoods.map((n) => (
-                <span key={n} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-son-pink/15 text-son-pink text-xs font-medium">
-                  {n}
-                  <button
-                    type="button"
-                    onClick={() => setFilter({ ...filter, neighborhoods: filter.neighborhoods.filter((x) => x !== n) })}
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
+
+          <div className="border border-white/10 rounded-xl p-3">
+            <label className="label">Gastou acima de</label>
+            <div className="flex items-center gap-2">
+              <span className="text-son-silver-dim text-sm">R$</span>
+              <input
+                className="input-field"
+                type="number"
+                min="0"
+                value={filter.spentAboveAmount}
+                onChange={(e) => setFilter({ ...filter, spentAboveAmount: e.target.value })}
+              />
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
+              <input
+                className="input-field"
+                type="number"
+                min="1"
+                value={filter.spentAboveDays}
+                onChange={(e) => setFilter({ ...filter, spentAboveDays: e.target.value })}
+              />
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
             </div>
-          )}
-          <div>
+          </div>
+
+          <div className="border border-white/10 rounded-xl p-3">
+            <label className="label">Reduziu a frequência de compra em (%)</label>
+            <input
+              className="input-field"
+              type="number"
+              min="1"
+              max="100"
+              value={filter.frequencyDropPercent}
+              onChange={(e) => setFilter({ ...filter, frequencyDropPercent: e.target.value })}
+            />
+          </div>
+
+          <div className="border border-white/10 rounded-xl p-3">
+            <label className="label">Cliente novo em (dias)</label>
+            <input
+              className="input-field"
+              type="number"
+              min="1"
+              value={filter.newCustomerDays}
+              onChange={(e) => setFilter({ ...filter, newCustomerDays: e.target.value })}
+            />
+          </div>
+
+          <div className="border border-white/10 rounded-xl p-3">
+            <label className="label">Clientes que aniversariam em</label>
+            <select
+              className="input-field appearance-none cursor-pointer"
+              value={filter.birthdayMonth}
+              onChange={(e) => setFilter({ ...filter, birthdayMonth: e.target.value })}
+            >
+              <option value="">Qualquer mês</option>
+              {MONTH_NAMES.map((m, i) => (
+                <option key={m} value={i}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="border border-white/10 rounded-xl p-3">
+            <label className="label">Bairro</label>
+            <select
+              className="input-field appearance-none cursor-pointer"
+              value=""
+              onChange={(e) => {
+                if (!e.target.value || filter.neighborhoods.includes(e.target.value)) return
+                setFilter({ ...filter, neighborhoods: [...filter.neighborhoods, e.target.value] })
+              }}
+            >
+              <option value="">Adicionar bairro...</option>
+              {neighborhoods
+                .filter((n) => !filter.neighborhoods.includes(n))
+                .map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+            </select>
+            {filter.neighborhoods.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {filter.neighborhoods.map((n) => (
+                  <span key={n} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-son-pink/15 text-son-pink text-xs font-medium">
+                    {n}
+                    <button
+                      type="button"
+                      onClick={() => setFilter({ ...filter, neighborhoods: filter.neighborhoods.filter((x) => x !== n) })}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="border border-white/10 rounded-xl p-3">
             <label className="label">Comprou o(s) produto(s)</label>
             <ProductMultiSelect
               products={products}
               selectedIds={filter.productIds}
               onChange={(productIds) => setFilter({ ...filter, productIds })}
             />
+            {filter.productIds.length > 0 && (
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div>
+                  <label className="label">No período de (opcional)</label>
+                  <DateInput value={filter.periodStart} onChange={(periodStart) => setFilter({ ...filter, periodStart })} />
+                </div>
+                <div>
+                  <label className="label">Até (opcional)</label>
+                  <DateInput value={filter.periodEnd} onChange={(periodEnd) => setFilter({ ...filter, periodEnd })} />
+                </div>
+              </div>
+            )}
           </div>
-          {filter.productIds.length > 0 && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">No período de (opcional)</label>
-                <DateInput value={filter.periodStart} onChange={(periodStart) => setFilter({ ...filter, periodStart })} />
-              </div>
-              <div>
-                <label className="label">Até (opcional)</label>
-                <DateInput value={filter.periodEnd} onChange={(periodEnd) => setFilter({ ...filter, periodEnd })} />
-              </div>
-            </div>
-          )}
+
           {filterFormError && <p className="error-msg">{filterFormError}</p>}
           <div className="flex gap-2">
             <button onClick={applyFilterPanel} className="btn-primary flex-1">

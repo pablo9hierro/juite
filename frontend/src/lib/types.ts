@@ -108,6 +108,7 @@ export interface OrderItem {
 export interface CrmPurchaseEvent {
   product_id: string
   created_at: string
+  quantity: number
 }
 
 export interface CrmOrderEvent {

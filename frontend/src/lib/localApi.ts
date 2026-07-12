@@ -1329,7 +1329,7 @@ async function adminCrmCustomers(): Promise<import('./types').CrmCustomer[]> {
       }
       if (o.neighborhood && !entry.neighborhoods.includes(o.neighborhood)) entry.neighborhoods.push(o.neighborhood)
       for (const item of o.items) {
-        entry.purchases.push({ product_id: item.product_id, created_at: o.created_at })
+        entry.purchases.push({ product_id: item.product_id, created_at: o.created_at, quantity: item.quantity })
         entry.total_items += item.quantity
       }
     }
