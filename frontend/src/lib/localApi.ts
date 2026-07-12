@@ -1005,6 +1005,35 @@ async function financeiro(): Promise<FinanceiroSummary> {
   }
 }
 
+// Modo demo não tem uma tabela de clientes separada (o pedido já embute
+// nome/whatsapp) — agrupa direto pelos pedidos. birthdate não é rastreado
+// localmente, sempre null aqui (só existe de verdade no Supabase).
+async function adminCrmCustomers(): Promise<import('./types').CrmCustomer[]> {
+  const db = loadDb()
+  const byWhatsapp = new Map<string, import('./types').CrmCustomer>()
+  for (const o of db.orders) {
+    if (!o.customer_whatsapp) continue
+    const existing = byWhatsapp.get(o.customer_whatsapp)
+    const entry: import('./types').CrmCustomer = existing ?? {
+      id: o.customer_whatsapp,
+      name: o.customer_name,
+      whatsapp: o.customer_whatsapp,
+      birthdate: null,
+      total_spent: 0,
+      order_count: 0,
+      last_order_at: null,
+    }
+    entry.name = o.customer_name
+    if (o.payment_status === 'pago') {
+      entry.total_spent += o.total
+      entry.order_count += 1
+      if (!entry.last_order_at || o.created_at > entry.last_order_at) entry.last_order_at = o.created_at
+    }
+    byWhatsapp.set(o.customer_whatsapp, entry)
+  }
+  return Array.from(byWhatsapp.values()).sort((a, b) => b.total_spent - a.total_spent)
+}
+
 async function motoboyFinanceiro(): Promise<import('./types').MotoboyFinanceiro> {
   const db = loadDb()
   const delivered = db.orders.filter(
@@ -1271,6 +1300,7 @@ export const localApi = {
     orders: { list: adminListOrders, updateStatus: adminUpdateStatus, notifyReady: async () => {} },
     shippingSettings: { get: getShippingSettings, update: updateShippingSettings },
     financeiro: { get: financeiro },
+    crm: { customers: adminCrmCustomers },
     whatsapp: {
       status: async () => ({ instance: { state: 'close' } }),
       connect: async () => {

@@ -7,6 +7,7 @@ import type {
   Campaign,
   Category,
   Coupon,
+  CrmCustomer,
   EvolutionConnect,
   EvolutionStatus,
   FinanceiroSummary,
@@ -374,6 +375,9 @@ const remoteApi = {
     },
     financeiro: {
       get: () => rpc<FinanceiroSummary>('admin_financeiro', { p_token: adminToken() }),
+    },
+    crm: {
+      customers: () => rpc<CrmCustomer[]>('admin_crm_customers', { p_token: adminToken() }),
     },
     // Único pedaço do admin que ainda fala com o backend Rust (Railway) em
     // vez do Supabase — a chave da Evolution API precisa ficar fora do

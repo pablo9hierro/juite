@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { Barcode, ImagePlus, Loader2, Package, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Barcode, ImagePlus, Loader2, Package, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import Card from '../../components/ui/Card'
+import BarcodePreview from '../../components/admin/BarcodePreview'
 import { api, ApiError } from '../../lib/api'
 import type { Category, Product } from '../../lib/types'
+
+// Timestamp (10 dígitos) + 2 dígitos aleatórios — não é um EAN de verdade
+// (sem dígito verificador), só um código único o bastante pra escanear no
+// PDV com CODE128, que aceita qualquer texto.
+function generateBarcode(): string {
+  return `${String(Date.now()).slice(-10)}${String(Math.floor(Math.random() * 90) + 10)}`
+}
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
@@ -232,12 +240,27 @@ export default function AdminProdutos() {
                 <label className="label flex items-center gap-1.5">
                   <Barcode className="w-3.5 h-3.5" /> Código de barras
                 </label>
-                <input
-                  className="input-field"
-                  placeholder="Escaneie ou digite (opcional, usado no PDV)"
-                  value={form.barcode}
-                  onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-                />
+                <div className="flex gap-2">
+                  <input
+                    className="input-field"
+                    placeholder="Escaneie, digite ou gere um novo (opcional, usado no PDV)"
+                    value={form.barcode}
+                    onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, barcode: generateBarcode() })}
+                    className="btn-secondary text-sm py-2 px-3 flex-shrink-0"
+                    title="Gerar código de barras automaticamente"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" /> Gerar
+                  </button>
+                </div>
+                {form.barcode && (
+                  <div className="mt-2">
+                    <BarcodePreview value={form.barcode} />
+                  </div>
+                )}
               </div>
               <div>
                 <label className="label">Imagem</label>

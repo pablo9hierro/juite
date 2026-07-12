@@ -72,6 +72,16 @@ export interface OrderItem {
   quantity: number
 }
 
+export interface CrmCustomer {
+  id: string
+  name: string
+  whatsapp: string
+  birthdate: string | null
+  total_spent: number
+  order_count: number
+  last_order_at: string | null
+}
+
 export interface Order {
   id: string
   customer_name: string

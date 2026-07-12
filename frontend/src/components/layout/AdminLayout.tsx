@@ -9,6 +9,7 @@ import {
   Package,
   ShoppingCart,
   Truck,
+  Users,
   Wallet,
 } from 'lucide-react'
 import Logo from '../ui/Logo'
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { href: '/admin/pdv', label: 'PDV', icon: ShoppingCart, roles: ['admin', 'vendedor'] },
   { href: '/admin/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'vendedor'] },
   { href: '/admin/campanhas', label: 'Campanhas', icon: Megaphone, roles: ['admin'] },
+  { href: '/admin/crm', label: 'CRM', icon: Users, roles: ['admin'] },
   { href: '/admin/senha', label: 'Senha', icon: KeyRound, roles: ['admin'] },
 ] as const
 
