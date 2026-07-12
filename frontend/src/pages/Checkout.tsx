@@ -69,6 +69,15 @@ export default function Checkout() {
       setError('Informe um WhatsApp válido.')
       return
     }
+    if (!customer.birthdate) {
+      setError('Informe sua data de nascimento.')
+      return
+    }
+    const age = (Date.now() - new Date(customer.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+    if (age < 18) {
+      setError('Você precisa ser maior de idade para comprar produtos de tabacaria.')
+      return
+    }
     if (!pickupAtStore && (customer.lat == null || customer.lng == null)) {
       setError('Escolha sua localização no mapa ou marque retirada no local.')
       return
@@ -79,6 +88,7 @@ export default function Checkout() {
       const order = await api.orders.create({
         customer_name: customer.name.trim(),
         customer_whatsapp: `55${digits}`,
+        customer_birthdate: customer.birthdate,
         delivery_type: pickupAtStore ? 'retirada' : 'entrega',
         neighborhood: pickupAtStore ? undefined : customer.neighborhood,
         address: pickupAtStore ? undefined : customer.address,
@@ -130,6 +140,19 @@ export default function Checkout() {
               placeholder="(83) 99999-9999"
               maxLength={15}
             />
+          </div>
+
+          <div>
+            <label className="label">Data de nascimento *</label>
+            <input
+              className="input-field"
+              value={customer.birthdate}
+              onChange={(e) => customer.set({ birthdate: e.target.value })}
+              type="date"
+              max={new Date().toISOString().slice(0, 10)}
+              required
+            />
+            <p className="text-xs text-son-silver-dim mt-1">Exigido por lei — venda de produtos de tabacaria só para maiores de 18 anos.</p>
           </div>
 
           <label className="flex items-center gap-2 text-sm text-son-silver">

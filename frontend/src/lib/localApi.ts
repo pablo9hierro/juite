@@ -129,6 +129,7 @@ async function getProduct(id: string): Promise<Product> {
 async function createOrder(payload: {
   customer_name: string
   customer_whatsapp: string
+  customer_birthdate: string
   delivery_type: 'entrega' | 'retirada'
   neighborhood?: string
   address?: string
@@ -151,6 +152,14 @@ async function createOrder(payload: {
   }
   if (!payload.customer_name.trim() || !payload.customer_whatsapp.trim()) {
     throw new ApiError(400, 'customer_name and customer_whatsapp are required')
+  }
+  if (!payload.customer_birthdate) {
+    throw new ApiError(400, 'birthdate is required')
+  }
+  const birthdate = new Date(payload.customer_birthdate)
+  const age = (Date.now() - birthdate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+  if (age < 18) {
+    throw new ApiError(400, 'you must be 18 or older to purchase tobacco products')
   }
 
   let total = 0
