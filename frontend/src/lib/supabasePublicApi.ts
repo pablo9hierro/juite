@@ -1,6 +1,6 @@
 import { ApiError } from './apiError'
 import { supabase } from './supabaseClient'
-import type { Category, DeliveryPosition, Order, Product, ShippingEstimate, ShippingSettings } from './types'
+import type { Campaign, Category, Coupon, DeliveryPosition, Order, Product, ShippingEstimate, ShippingSettings } from './types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new ApiError(400, result.error.message)
@@ -60,6 +60,8 @@ export const supabasePublicApi = {
       customer_lng?: number
       payment_method: 'pix' | 'cartao' | 'dinheiro'
       items: { product_id: string; quantity: number }[]
+      coupon_code?: string
+      campaign_id?: string
     }) => {
       const { data, error } = await supabase.rpc('create_order', {
         p_customer_name: payload.customer_name,
@@ -73,6 +75,8 @@ export const supabasePublicApi = {
         p_customer_lng: payload.customer_lng ?? null,
         p_reference_point: payload.reference_point ?? null,
         p_customer_birthdate: payload.customer_birthdate,
+        p_coupon_code: payload.coupon_code || null,
+        p_campaign_id: payload.campaign_id || null,
       })
       if (error) throw new ApiError(400, error.message)
       return data as Order
@@ -92,6 +96,26 @@ export const supabasePublicApi = {
     const { data, error } = await supabase.rpc('track_delivery_position', { p_order_id: orderId })
     if (error) throw new ApiError(400, error.message)
     return (data ?? null) as DeliveryPosition | null
+  },
+  // Carrossel da landing + checkout de campanha/cupom.
+  campaigns: {
+    listActive: async () => {
+      const { data, error } = await supabase.rpc('list_active_campaigns')
+      if (error) throw new ApiError(400, error.message)
+      return (data ?? []) as Campaign[]
+    },
+    get: async (id: string) => {
+      const { data, error } = await supabase.rpc('get_campaign', { p_id: id })
+      if (error || !data) throw new ApiError(404, error?.message ?? 'campaign not found')
+      return data as Campaign
+    },
+  },
+  coupons: {
+    validate: async (code: string, campaignId?: string) => {
+      const { data, error } = await supabase.rpc('validate_coupon', { p_code: code, p_campaign_id: campaignId ?? null })
+      if (error) throw new ApiError(400, error.message)
+      return data as Pick<Coupon, 'code' | 'kind' | 'discount_type' | 'discount_value'>
+    },
   },
 }
 

@@ -30,6 +30,37 @@ export interface Product {
   barcode?: string | null
 }
 
+export type CouponKind = 'desconto' | 'frete'
+export type DiscountType = 'percent' | 'fixed'
+
+export interface Coupon {
+  id: string
+  code: string
+  kind: CouponKind
+  discount_type: DiscountType | null
+  discount_value: number | null
+  allow_campaign_checkout: boolean
+  active: boolean
+  expires_at: string | null
+  max_uses: number | null
+  used_count: number
+  created_at: string
+}
+
+export interface Campaign {
+  id: string
+  title: string
+  image_url: string
+  product_ids: string[]
+  discount_type: DiscountType | null
+  discount_value: number | null
+  free_shipping: boolean
+  active?: boolean
+  starts_at: string | null
+  expires_at: string | null
+  created_at?: string
+}
+
 export interface OrderItem {
   id?: string
   product_id: string
@@ -51,6 +82,10 @@ export interface Order {
   status: OrderStatus
   shipping_price: number
   total: number
+  discount_amount?: number
+  shipping_discount?: number
+  coupon_code?: string | null
+  campaign_id?: string | null
   motoboy_id: string | null
   motoboy_name?: string | null
   motoboy_whatsapp?: string | null

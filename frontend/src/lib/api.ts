@@ -4,7 +4,9 @@ import { localApi } from './localApi'
 import { supabasePublicApi } from './supabasePublicApi'
 import { supabase } from './supabaseClient'
 import type {
+  Campaign,
   Category,
+  Coupon,
   EvolutionConnect,
   EvolutionStatus,
   FinanceiroSummary,
@@ -98,6 +100,9 @@ const remoteApi = {
   shippingSettings: supabasePublicApi.shippingSettings,
   estimateShipping: supabasePublicApi.estimateShipping,
   trackDeliveryPosition: supabasePublicApi.trackDeliveryPosition,
+  // Carrossel da landing (campanhas ativas) + cupom digitado no checkout.
+  campaigns: supabasePublicApi.campaigns,
+  coupons: supabasePublicApi.coupons,
   orders: {
     create: supabasePublicApi.orders.create,
     get: supabasePublicApi.orders.get,
@@ -248,6 +253,93 @@ const remoteApi = {
           p_password: payload.password || null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_vendedor', { p_token: adminToken(), p_id: id }),
+    },
+    coupons: {
+      list: () => rpc<Coupon[]>('admin_list_coupons', { p_token: adminToken() }),
+      create: (payload: {
+        code: string
+        kind: 'desconto' | 'frete'
+        discount_type?: 'percent' | 'fixed'
+        discount_value?: number
+        allow_campaign_checkout?: boolean
+        expires_at?: string
+        max_uses?: number
+      }) =>
+        rpc<Coupon>('admin_create_coupon', {
+          p_token: adminToken(),
+          p_code: payload.code,
+          p_kind: payload.kind,
+          p_discount_type: payload.discount_type ?? null,
+          p_discount_value: payload.discount_value ?? null,
+          p_allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
+          p_expires_at: payload.expires_at || null,
+          p_max_uses: payload.max_uses ?? null,
+        }),
+      update: (
+        id: string,
+        payload: { active: boolean; allow_campaign_checkout: boolean; expires_at?: string; max_uses?: number }
+      ) =>
+        rpc<Coupon>('admin_update_coupon', {
+          p_token: adminToken(),
+          p_id: id,
+          p_active: payload.active,
+          p_allow_campaign_checkout: payload.allow_campaign_checkout,
+          p_expires_at: payload.expires_at || null,
+          p_max_uses: payload.max_uses ?? null,
+        }),
+      delete: (id: string) => rpc<void>('admin_delete_coupon', { p_token: adminToken(), p_id: id }),
+    },
+    campaigns: {
+      list: () => rpc<Campaign[]>('admin_list_campaigns', { p_token: adminToken() }),
+      create: (payload: {
+        title: string
+        image_url: string
+        product_ids: string[]
+        discount_type?: 'percent' | 'fixed'
+        discount_value?: number
+        free_shipping?: boolean
+        starts_at?: string
+        expires_at?: string
+      }) =>
+        rpc<Campaign>('admin_create_campaign', {
+          p_token: adminToken(),
+          p_title: payload.title,
+          p_image_url: payload.image_url,
+          p_product_ids: payload.product_ids,
+          p_discount_type: payload.discount_type ?? null,
+          p_discount_value: payload.discount_value ?? null,
+          p_free_shipping: payload.free_shipping ?? false,
+          p_starts_at: payload.starts_at || null,
+          p_expires_at: payload.expires_at || null,
+        }),
+      update: (
+        id: string,
+        payload: {
+          title: string
+          image_url: string
+          product_ids: string[]
+          discount_type?: 'percent' | 'fixed'
+          discount_value?: number
+          free_shipping?: boolean
+          active: boolean
+          starts_at?: string
+          expires_at?: string
+        }
+      ) =>
+        rpc<Campaign>('admin_update_campaign', {
+          p_token: adminToken(),
+          p_id: id,
+          p_title: payload.title,
+          p_image_url: payload.image_url,
+          p_product_ids: payload.product_ids,
+          p_discount_type: payload.discount_type ?? null,
+          p_discount_value: payload.discount_value ?? null,
+          p_free_shipping: payload.free_shipping ?? false,
+          p_active: payload.active,
+          p_starts_at: payload.starts_at || null,
+          p_expires_at: payload.expires_at || null,
+        }),
+      delete: (id: string) => rpc<void>('admin_delete_campaign', { p_token: adminToken(), p_id: id }),
     },
     orders: {
       list: (status?: string) => rpc<Order[]>('admin_list_orders', { p_token: adminToken(), p_status: status ?? null }),

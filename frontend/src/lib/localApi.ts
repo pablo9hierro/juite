@@ -23,7 +23,9 @@ import { distanciaKm } from './geo/rotas'
 import { FALLBACK as STORE_LOCATION } from './geo/mapa'
 import { useAdminAuth } from '../store/adminAuth'
 import type {
+  Campaign,
   Category,
+  Coupon,
   DeliveryPosition,
   FinanceiroSummary,
   Motoboy,
@@ -138,6 +140,8 @@ async function createOrder(payload: {
   customer_lng?: number
   payment_method: 'pix' | 'cartao' | 'dinheiro'
   items: { product_id: string; quantity: number }[]
+  coupon_code?: string
+  campaign_id?: string
 }): Promise<Order> {
   const db = loadDb()
 
@@ -162,7 +166,16 @@ async function createOrder(payload: {
     throw new ApiError(400, 'you must be 18 or older to purchase tobacco products')
   }
 
-  let total = 0
+  let campaign: Campaign | undefined
+  if (payload.campaign_id) {
+    campaign = (db.campaigns ?? []).find((c) => c.id === payload.campaign_id && c.active !== false)
+    if (!campaign) throw new ApiError(400, 'campaign is not available')
+    if (payload.items.some((item) => !campaign!.product_ids.includes(item.product_id))) {
+      throw new ApiError(400, 'this campaign checkout can only contain the campaign products')
+    }
+  }
+
+  let subtotal = 0
   const items = []
   for (const item of payload.items) {
     if (item.quantity <= 0) throw new ApiError(400, 'item quantity must be positive')
@@ -172,7 +185,7 @@ async function createOrder(payload: {
     if (product.quantity < item.quantity) {
       throw new ApiError(400, `insufficient stock for product ${product.name}`)
     }
-    total += product.price * item.quantity
+    subtotal += product.price * item.quantity
     items.push({
       product_id: product.id,
       product_name: product.name,
@@ -192,7 +205,44 @@ async function createOrder(payload: {
     }
     shippingPrice = estimate.price
   }
-  total += shippingPrice
+
+  let discountAmount = 0
+  let shippingDiscount = 0
+
+  if (campaign) {
+    if (campaign.discount_type === 'percent') discountAmount += (subtotal * (campaign.discount_value ?? 0)) / 100
+    else if (campaign.discount_type === 'fixed') discountAmount += campaign.discount_value ?? 0
+    if (campaign.free_shipping) shippingDiscount = shippingPrice
+  }
+
+  let couponCode: string | null = null
+  if (payload.coupon_code && payload.coupon_code.trim()) {
+    const coupon = (db.coupons ?? []).find((c) => c.code.toUpperCase() === payload.coupon_code!.trim().toUpperCase())
+    if (!coupon) throw new ApiError(400, 'coupon not found')
+    if (!coupon.active) throw new ApiError(400, 'coupon is not active')
+    if (coupon.expires_at && new Date(coupon.expires_at).getTime() <= Date.now()) {
+      throw new ApiError(400, 'coupon has expired')
+    }
+    if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) {
+      throw new ApiError(400, 'coupon usage limit reached')
+    }
+    if (campaign && !coupon.allow_campaign_checkout) {
+      throw new ApiError(400, 'this coupon cannot be combined with a campaign checkout')
+    }
+    if (coupon.kind === 'frete') {
+      shippingDiscount = shippingPrice
+    } else if (coupon.discount_type === 'percent') {
+      discountAmount += (subtotal * (coupon.discount_value ?? 0)) / 100
+    } else {
+      discountAmount += coupon.discount_value ?? 0
+    }
+    coupon.used_count += 1
+    couponCode = coupon.code
+  }
+
+  discountAmount = Math.min(Math.max(discountAmount, 0), subtotal)
+  shippingDiscount = Math.min(Math.max(shippingDiscount, 0), shippingPrice)
+  const total = subtotal - discountAmount + shippingPrice - shippingDiscount
 
   for (const item of payload.items) {
     const product = db.products.find((p) => p.id === item.product_id)!
@@ -214,6 +264,10 @@ async function createOrder(payload: {
     status: 'pendente',
     shipping_price: shippingPrice,
     total,
+    discount_amount: discountAmount,
+    shipping_discount: shippingDiscount,
+    coupon_code: couponCode,
+    campaign_id: campaign?.id ?? null,
     motoboy_id: null,
     pix_payment_id: null,
     pix_qr_base64: null,
@@ -247,6 +301,48 @@ async function trackOrders(whatsapp: string): Promise<Order[]> {
   return db.orders
     .filter((o) => o.customer_whatsapp === whatsapp)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
+}
+
+// ---------- campanhas / cupons (público) ----------
+
+function campaignIsActive(c: Campaign): boolean {
+  const now = Date.now()
+  if (c.active === false) return false
+  if (c.starts_at && new Date(c.starts_at).getTime() > now) return false
+  if (c.expires_at && new Date(c.expires_at).getTime() <= now) return false
+  return true
+}
+
+async function listActiveCampaigns(): Promise<Campaign[]> {
+  const db = loadDb()
+  return (db.campaigns ?? []).filter(campaignIsActive).sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+}
+
+async function getCampaignPublic(id: string): Promise<Campaign> {
+  const db = loadDb()
+  const c = (db.campaigns ?? []).find((x) => x.id === id && campaignIsActive(x))
+  if (!c) throw new ApiError(404, 'campaign not found')
+  return c
+}
+
+async function validateCouponPublic(
+  code: string,
+  campaignId?: string
+): Promise<Pick<Coupon, 'code' | 'kind' | 'discount_type' | 'discount_value'>> {
+  const db = loadDb()
+  const coupon = (db.coupons ?? []).find((c) => c.code.toUpperCase() === code.trim().toUpperCase())
+  if (!coupon) throw new ApiError(400, 'coupon not found')
+  if (!coupon.active) throw new ApiError(400, 'coupon is not active')
+  if (coupon.expires_at && new Date(coupon.expires_at).getTime() <= Date.now()) {
+    throw new ApiError(400, 'coupon has expired')
+  }
+  if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) {
+    throw new ApiError(400, 'coupon usage limit reached')
+  }
+  if (campaignId && !coupon.allow_campaign_checkout) {
+    throw new ApiError(400, 'this coupon cannot be combined with a campaign checkout')
+  }
+  return { code: coupon.code, kind: coupon.kind, discount_type: coupon.discount_type, discount_value: coupon.discount_value }
 }
 
 // Modo demo já gera o QR na hora de criar o pedido (ver createOrder) — não
@@ -541,6 +637,157 @@ async function deleteVendedor(id: string): Promise<void> {
   const idx = (db.vendedores ?? []).findIndex((v) => v.id === id)
   if (idx === -1) throw new ApiError(404, 'vendedor not found')
   db.vendedores.splice(idx, 1)
+  saveDb(db)
+}
+
+// ---------- cupons (admin) ----------
+
+async function adminListCoupons(): Promise<Coupon[]> {
+  const db = loadDb()
+  return [...(db.coupons ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at))
+}
+
+async function createCoupon(payload: {
+  code: string
+  kind: 'desconto' | 'frete'
+  discount_type?: 'percent' | 'fixed'
+  discount_value?: number
+  allow_campaign_checkout?: boolean
+  expires_at?: string
+  max_uses?: number
+}): Promise<Coupon> {
+  const db = loadDb()
+  db.coupons = db.coupons ?? []
+  const code = payload.code.trim().toUpperCase()
+  if (!code) throw new ApiError(400, 'code is required')
+  if (db.coupons.some((c) => c.code === code)) throw new ApiError(400, 'a coupon with this code already exists')
+  if (payload.kind === 'desconto' && (!payload.discount_type || payload.discount_value == null)) {
+    throw new ApiError(400, 'discount_type and discount_value are required for kind=desconto')
+  }
+  const coupon: Coupon = {
+    id: uid(),
+    code,
+    kind: payload.kind,
+    discount_type: payload.kind === 'frete' ? null : payload.discount_type ?? null,
+    discount_value: payload.kind === 'frete' ? null : payload.discount_value ?? null,
+    allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
+    active: true,
+    expires_at: payload.expires_at || null,
+    max_uses: payload.max_uses ?? null,
+    used_count: 0,
+    created_at: nowIso(),
+  }
+  db.coupons.push(coupon)
+  saveDb(db)
+  return coupon
+}
+
+async function updateCoupon(
+  id: string,
+  payload: { active: boolean; allow_campaign_checkout: boolean; expires_at?: string; max_uses?: number }
+): Promise<Coupon> {
+  const db = loadDb()
+  const coupon = (db.coupons ?? []).find((c) => c.id === id)
+  if (!coupon) throw new ApiError(404, 'coupon not found')
+  coupon.active = payload.active
+  coupon.allow_campaign_checkout = payload.allow_campaign_checkout
+  coupon.expires_at = payload.expires_at || null
+  coupon.max_uses = payload.max_uses ?? null
+  saveDb(db)
+  return coupon
+}
+
+async function deleteCoupon(id: string): Promise<void> {
+  const db = loadDb()
+  const idx = (db.coupons ?? []).findIndex((c) => c.id === id)
+  if (idx === -1) throw new ApiError(404, 'coupon not found')
+  db.coupons.splice(idx, 1)
+  saveDb(db)
+}
+
+// ---------- campanhas (admin) ----------
+
+async function adminListCampaigns(): Promise<Campaign[]> {
+  const db = loadDb()
+  return [...(db.campaigns ?? [])].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+}
+
+async function createCampaign(payload: {
+  title: string
+  image_url: string
+  product_ids: string[]
+  discount_type?: 'percent' | 'fixed'
+  discount_value?: number
+  free_shipping?: boolean
+  starts_at?: string
+  expires_at?: string
+}): Promise<Campaign> {
+  const db = loadDb()
+  db.campaigns = db.campaigns ?? []
+  if (!payload.title.trim()) throw new ApiError(400, 'title is required')
+  if (!payload.image_url) throw new ApiError(400, 'image is required to create a campaign')
+  if (!payload.product_ids || payload.product_ids.length === 0) throw new ApiError(400, 'at least one product is required')
+  if (!payload.free_shipping && (!payload.discount_type || payload.discount_value == null)) {
+    throw new ApiError(400, 'a campaign needs a product discount and/or free shipping')
+  }
+  const campaign: Campaign = {
+    id: uid(),
+    title: payload.title.trim(),
+    image_url: payload.image_url,
+    product_ids: payload.product_ids,
+    discount_type: payload.discount_type ?? null,
+    discount_value: payload.discount_value ?? null,
+    free_shipping: payload.free_shipping ?? false,
+    active: true,
+    starts_at: payload.starts_at || null,
+    expires_at: payload.expires_at || null,
+    created_at: nowIso(),
+  }
+  db.campaigns.push(campaign)
+  saveDb(db)
+  return campaign
+}
+
+async function updateCampaign(
+  id: string,
+  payload: {
+    title: string
+    image_url: string
+    product_ids: string[]
+    discount_type?: 'percent' | 'fixed'
+    discount_value?: number
+    free_shipping?: boolean
+    active: boolean
+    starts_at?: string
+    expires_at?: string
+  }
+): Promise<Campaign> {
+  const db = loadDb()
+  const campaign = (db.campaigns ?? []).find((c) => c.id === id)
+  if (!campaign) throw new ApiError(404, 'campaign not found')
+  if (!payload.image_url) throw new ApiError(400, 'image is required')
+  if (!payload.product_ids || payload.product_ids.length === 0) throw new ApiError(400, 'at least one product is required')
+  if (!payload.free_shipping && (!payload.discount_type || payload.discount_value == null)) {
+    throw new ApiError(400, 'a campaign needs a product discount and/or free shipping')
+  }
+  campaign.title = payload.title.trim()
+  campaign.image_url = payload.image_url
+  campaign.product_ids = payload.product_ids
+  campaign.discount_type = payload.discount_type ?? null
+  campaign.discount_value = payload.discount_value ?? null
+  campaign.free_shipping = payload.free_shipping ?? false
+  campaign.active = payload.active
+  campaign.starts_at = payload.starts_at || null
+  campaign.expires_at = payload.expires_at || null
+  saveDb(db)
+  return campaign
+}
+
+async function deleteCampaign(id: string): Promise<void> {
+  const db = loadDb()
+  const idx = (db.campaigns ?? []).findIndex((c) => c.id === id)
+  if (idx === -1) throw new ApiError(404, 'campaign not found')
+  db.campaigns.splice(idx, 1)
   saveDb(db)
 }
 
@@ -948,6 +1195,8 @@ export const localApi = {
   shippingSettings: { get: getShippingSettings },
   estimateShipping,
   trackDeliveryPosition: trackDeliveryPositionLocal,
+  campaigns: { listActive: listActiveCampaigns, get: getCampaignPublic },
+  coupons: { validate: validateCouponPublic },
   orders: {
     create: createOrder,
     get: getOrder,
@@ -985,6 +1234,18 @@ export const localApi = {
       create: createVendedor,
       update: updateVendedor,
       delete: deleteVendedor,
+    },
+    coupons: {
+      list: adminListCoupons,
+      create: createCoupon,
+      update: updateCoupon,
+      delete: deleteCoupon,
+    },
+    campaigns: {
+      list: adminListCampaigns,
+      create: createCampaign,
+      update: updateCampaign,
+      delete: deleteCampaign,
     },
     orders: { list: adminListOrders, updateStatus: adminUpdateStatus, notifyReady: async () => {} },
     shippingSettings: { get: getShippingSettings, update: updateShippingSettings },

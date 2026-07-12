@@ -1,9 +1,60 @@
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import heroBanner from '../assets/hero-banner.png'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
+import { api } from '../lib/api'
+import type { Campaign } from '../lib/types'
+
+const CAROUSEL_INTERVAL_MS = 2000
+
+function BannerCarousel() {
+  const navigate = useNavigate()
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [index, setIndex] = useState(0)
+
+  useEffect(() => {
+    api.campaigns.listActive().then(setCampaigns).catch(() => setCampaigns([]))
+  }, [])
+
+  useEffect(() => {
+    if (campaigns.length < 2) return
+    const timer = setInterval(() => setIndex((i) => (i + 1) % campaigns.length), CAROUSEL_INTERVAL_MS)
+    return () => clearInterval(timer)
+  }, [campaigns.length])
+
+  const containerClass = 'relative z-10 block mx-6 sm:mx-10 mt-3 sm:mt-4 rounded-2xl overflow-hidden shadow-lg shadow-black/40'
+
+  // Sem campanha registrada -> banner estático de sempre, só decorativo.
+  if (campaigns.length === 0) {
+    return (
+      <div className={containerClass}>
+        <img src={heroBanner} alt="Sunset Tabas" className="w-full h-auto block" />
+      </div>
+    )
+  }
+
+  const current = campaigns[index]
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(`/checkout?campanha=${current.id}`)}
+      className={`${containerClass} w-full text-left`}
+      aria-label={current.title}
+    >
+      <img src={current.image_url} alt={current.title} className="w-full h-auto block" />
+      {campaigns.length > 1 && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+          {campaigns.map((c, i) => (
+            <span key={c.id} className={`w-1.5 h-1.5 rounded-full ${i === index ? 'bg-white' : 'bg-white/40'}`} />
+          ))}
+        </div>
+      )}
+    </button>
+  )
+}
 
 export default function Landing() {
   return (
@@ -13,25 +64,15 @@ export default function Landing() {
       <div className="absolute bottom-0 left-1/3 w-80 h-80 rounded-full bg-son-pink/15 blur-[120px]" />
 
       {/* Banner scrolls with the page (not fixed) — only the WhatsApp button stays put.
-          Padding mostly on the sides + a small top gap; height is auto so the
-          original image is never cropped top/bottom. */}
-      <Link to="/" className="relative z-10 block mx-6 sm:mx-10 mt-3 sm:mt-4 rounded-2xl overflow-hidden shadow-lg shadow-black/40">
-        <img src={heroBanner} alt="Sunset Tabas" className="w-full h-auto block" />
-      </Link>
+          Sem campanha ativa cadastrada, cai no banner estático de sempre; com
+          campanha(s), vira um carrossel que troca a cada 2s e leva direto pro
+          checkout com o desconto já aplicado. */}
+      <BannerCarousel />
 
       <WhatsAppFab />
       <CartFab />
 
       <section className="relative z-10 max-w-4xl mx-auto px-6 sm:px-10 pt-8 sm:pt-10 pb-20 text-center">
-        <motion.h1
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.1 }}
-          className="text-4xl sm:text-6xl font-black tracking-tight leading-[1.05] mb-8"
-        >
-          Bem-vindo à <span className="sunset-text">Sunset Tabas</span>
-        </motion.h1>
-
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}

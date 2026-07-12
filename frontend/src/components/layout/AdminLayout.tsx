@@ -5,6 +5,7 @@ import {
   KeyRound,
   LogOut,
   MapPinned,
+  Megaphone,
   Package,
   ShoppingCart,
   Truck,
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet, roles: ['admin'] },
   { href: '/admin/pdv', label: 'PDV', icon: ShoppingCart, roles: ['admin', 'vendedor'] },
   { href: '/admin/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'vendedor'] },
+  { href: '/admin/campanhas', label: 'Campanhas', icon: Megaphone, roles: ['admin'] },
   { href: '/admin/senha', label: 'Senha', icon: KeyRound, roles: ['admin'] },
 ] as const
 
