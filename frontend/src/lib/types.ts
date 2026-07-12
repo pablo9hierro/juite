@@ -326,6 +326,17 @@ export interface TopProduct {
   revenue: number
 }
 
+export interface FinanceiroTimeseriesPoint {
+  date: string
+  quantity_sold: number
+  revenue: number
+  orders_count: number
+  coupon_orders: number
+  coupon_discount: number
+  campaign_orders: number
+  campaign_discount: number
+}
+
 export interface FinanceiroSummary {
   total_revenue: number
   // Soma de discount_amount + shipping_discount de pedidos pagos — quanto

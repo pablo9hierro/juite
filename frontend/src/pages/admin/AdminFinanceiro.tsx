@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Clock, Gift, Loader2, Package, Receipt, TrendingDown, TrendingUp, Truck, Wallet, X } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import { StatusBadge } from '../../components/ui/Badge'
+import UsageChart from '../../components/admin/UsageChart'
 import { api } from '../../lib/api'
 import { useAdminAuth } from '../../store/adminAuth'
-import type { FinanceiroSummary, Order, VendedorRelatorio } from '../../lib/types'
+import type { FinanceiroSummary, FinanceiroTimeseriesPoint, Order, VendedorRelatorio } from '../../lib/types'
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
@@ -239,12 +240,14 @@ function OrderDetailModal({ order, onClose }: { order: Order; onClose: () => voi
 export default function AdminFinanceiro() {
   const { role } = useAdminAuth()
   const [data, setData] = useState<FinanceiroSummary | null>(null)
+  const [timeseries, setTimeseries] = useState<FinanceiroTimeseriesPoint[]>([])
   const [loading, setLoading] = useState(role === 'admin')
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
   useEffect(() => {
     if (role !== 'admin') return
     api.admin.financeiro.get().then(setData).finally(() => setLoading(false))
+    api.admin.financeiro.timeseries(30).then(setTimeseries).catch(() => {})
   }, [role])
 
   // Vendedor só enxerga as próprias vendas de balcão — o resto do
@@ -308,6 +311,12 @@ export default function AdminFinanceiro() {
           <p className="font-black text-2xl text-white">{currency(data.total_revenue + data.total_discount_given)}</p>
         </Card>
       </div>
+
+      {timeseries.length > 0 && (
+        <Card className="p-5 mb-6">
+          <UsageChart points={timeseries} />
+        </Card>
+      )}
 
       <Card className="p-5 mb-6">
         <p className="label mb-3">Pedidos por status</p>

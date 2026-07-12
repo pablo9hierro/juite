@@ -1222,6 +1222,33 @@ async function financeiro(): Promise<FinanceiroSummary> {
   }
 }
 
+async function financeiroTimeseries(days = 30): Promise<import('./types').FinanceiroTimeseriesPoint[]> {
+  const db = loadDb()
+  const paid = db.orders.filter((o) => o.payment_status === 'pago')
+  const n = Math.max(1, Math.min(days, 180))
+  const points: import('./types').FinanceiroTimeseriesPoint[] = []
+  for (let i = n - 1; i >= 0; i--) {
+    const day = new Date()
+    day.setHours(0, 0, 0, 0)
+    day.setDate(day.getDate() - i)
+    const dateStr = day.toISOString().slice(0, 10)
+    const dayOrders = paid.filter((o) => o.created_at.slice(0, 10) === dateStr)
+    const couponOrders = dayOrders.filter((o) => o.coupon_code)
+    const campaignOrders = dayOrders.filter((o) => o.campaign_id)
+    points.push({
+      date: dateStr,
+      quantity_sold: dayOrders.reduce((sum, o) => sum + o.items.reduce((s, it) => s + it.quantity, 0), 0),
+      revenue: dayOrders.reduce((sum, o) => sum + o.total, 0),
+      orders_count: dayOrders.length,
+      coupon_orders: couponOrders.length,
+      coupon_discount: couponOrders.reduce((sum, o) => sum + (o.discount_amount ?? 0) + (o.shipping_discount ?? 0), 0),
+      campaign_orders: campaignOrders.length,
+      campaign_discount: campaignOrders.reduce((sum, o) => sum + (o.discount_amount ?? 0) + (o.shipping_discount ?? 0), 0),
+    })
+  }
+  return points
+}
+
 // Modo demo não tem uma tabela de clientes separada (o pedido já embute
 // nome/whatsapp) — agrupa direto pelos pedidos. birthdate não é rastreado
 // localmente, sempre null aqui (só existe de verdade no Supabase).
@@ -1536,7 +1563,7 @@ export const localApi = {
     },
     orders: { list: adminListOrders, updateStatus: adminUpdateStatus, notifyReady: async () => {} },
     shippingSettings: { get: getShippingSettings, update: updateShippingSettings },
-    financeiro: { get: financeiro },
+    financeiro: { get: financeiro, timeseries: financeiroTimeseries },
     crm: { customers: adminCrmCustomers },
     whatsapp: {
       status: async () => ({ instance: { state: 'close' } }),

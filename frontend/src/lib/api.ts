@@ -12,6 +12,7 @@ import type {
   EvolutionConnect,
   EvolutionStatus,
   FinanceiroSummary,
+  FinanceiroTimeseriesPoint,
   Motoboy,
   MotoboyFinanceiro,
   MotoboyPending,
@@ -437,6 +438,8 @@ const remoteApi = {
     },
     financeiro: {
       get: () => rpc<FinanceiroSummary>('admin_financeiro', { p_token: adminToken() }),
+      timeseries: (days?: number) =>
+        rpc<FinanceiroTimeseriesPoint[]>('admin_financeiro_timeseries', { p_token: adminToken(), p_days: days ?? 30 }),
     },
     crm: {
       customers: () => rpc<CrmCustomer[]>('admin_crm_customers', { p_token: adminToken() }),
