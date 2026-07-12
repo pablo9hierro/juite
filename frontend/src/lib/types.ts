@@ -121,8 +121,9 @@ export interface CrmCustomer {
   neighborhoods: string[]
   purchases: CrmPurchaseEvent[]
   orders: CrmOrderEvent[]
-  lat: number | null
-  lng: number | null
+  // Calculada no servidor (as coordenadas da loja nunca saem do banco) —
+  // distância até o endereço de entrega mais recente do cliente.
+  distance_km: number | null
 }
 
 export interface Order {

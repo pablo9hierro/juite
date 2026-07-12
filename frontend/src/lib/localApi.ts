@@ -1222,8 +1222,7 @@ async function adminCrmCustomers(): Promise<import('./types').CrmCustomer[]> {
       neighborhoods: [],
       purchases: [],
       orders: [],
-      lat: null,
-      lng: null,
+      distance_km: null,
     }
     entry.name = o.customer_name
     if (o.payment_status === 'pago') {
@@ -1234,8 +1233,7 @@ async function adminCrmCustomers(): Promise<import('./types').CrmCustomer[]> {
       if (!entry.last_order_at || o.created_at > entry.last_order_at) {
         entry.last_order_at = o.created_at
         if (o.customer_lat != null && o.customer_lng != null) {
-          entry.lat = o.customer_lat
-          entry.lng = o.customer_lng
+          entry.distance_km = distanciaKm(STORE_LOCATION, { lat: o.customer_lat, lng: o.customer_lng })
         }
       }
       if (o.neighborhood && !entry.neighborhoods.includes(o.neighborhood)) entry.neighborhoods.push(o.neighborhood)

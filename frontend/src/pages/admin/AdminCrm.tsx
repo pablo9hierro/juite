@@ -3,10 +3,16 @@ import { Cake, Filter, Gift, Loader2, Plus, Search, Tag, Trash2, Users, X } from
 import Card from '../../components/ui/Card'
 import WhatsAppLink from '../../components/ui/WhatsAppLink'
 import ExpiryInput from '../../components/admin/ExpiryInput'
+import DateInput from '../../components/admin/DateInput'
 import ProductMultiSelect from '../../components/admin/ProductMultiSelect'
 import ProductDiscountList from '../../components/admin/ProductDiscountList'
 import { api, ApiError } from '../../lib/api'
 import type { Coupon, CouponKind, CrmCustomer, DiscountType, Product, ProductDiscount } from '../../lib/types'
+
+const MONTH_NAMES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
@@ -65,22 +71,32 @@ function applySegmentation(customers: CrmCustomer[], seg: Segmentation): CrmCust
 
 type FilterState = {
   minOrders: string
-  minSpent: string
-  maxSpent: string
-  inactiveDays: string
+  minItems: string
+  spentBelowAmount: string
+  spentBelowDays: string
+  spentAboveAmount: string
+  spentAboveDays: string
+  frequencyDropPercent: string
   newCustomerDays: string
+  maxDistanceKm: string
   neighborhoods: string[]
+  birthdayMonth: string
   productIds: string[]
   periodStart: string
   periodEnd: string
 }
 const EMPTY_FILTER: FilterState = {
   minOrders: '',
-  minSpent: '',
-  maxSpent: '',
-  inactiveDays: '',
+  minItems: '',
+  spentBelowAmount: '',
+  spentBelowDays: '',
+  spentAboveAmount: '',
+  spentAboveDays: '',
+  frequencyDropPercent: '',
   newCustomerDays: '',
+  maxDistanceKm: '',
   neighborhoods: [],
+  birthdayMonth: '',
   productIds: [],
   periodStart: '',
   periodEnd: '',
@@ -88,24 +104,58 @@ const EMPTY_FILTER: FilterState = {
 function filterIsEmpty(f: FilterState) {
   return (
     !f.minOrders &&
-    !f.minSpent &&
-    !f.maxSpent &&
-    !f.inactiveDays &&
+    !f.minItems &&
+    !(f.spentBelowAmount && f.spentBelowDays) &&
+    !(f.spentAboveAmount && f.spentAboveDays) &&
+    !f.frequencyDropPercent &&
     !f.newCustomerDays &&
+    !f.maxDistanceKm &&
+    !f.birthdayMonth &&
     f.neighborhoods.length === 0 &&
     f.productIds.length === 0
   )
 }
+
+function spentInLastDays(c: CrmCustomer, days: number): number {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+  return c.orders.filter((o) => new Date(o.created_at).getTime() >= cutoff).reduce((sum, o) => sum + o.total, 0)
+}
+
+// Compara pedidos dos últimos 30 dias com os 30 dias anteriores — sem
+// pedido nenhum no período anterior, não dá pra falar em "redução".
+function frequencyDropPercent(c: CrmCustomer): number {
+  const now = Date.now()
+  const day = 24 * 60 * 60 * 1000
+  const recent = c.orders.filter((o) => now - new Date(o.created_at).getTime() <= 30 * day).length
+  const prior = c.orders.filter((o) => {
+    const age = now - new Date(o.created_at).getTime()
+    return age > 30 * day && age <= 60 * day
+  }).length
+  if (prior === 0) return 0
+  return Math.max(0, ((prior - recent) / prior) * 100)
+}
+
 function applyFilters(customers: CrmCustomer[], f: FilterState): CrmCustomer[] {
   return customers.filter((c) => {
     if (f.minOrders && c.order_count < Number(f.minOrders)) return false
-    if (f.minSpent && c.total_spent < Number(f.minSpent)) return false
-    if (f.maxSpent && c.total_spent > Number(f.maxSpent)) return false
-    if (f.inactiveDays && daysSince(c.last_order_at) < Number(f.inactiveDays)) return false
+    if (f.minItems && c.total_items < Number(f.minItems)) return false
+    if (f.spentBelowAmount && f.spentBelowDays) {
+      if (spentInLastDays(c, Number(f.spentBelowDays)) >= Number(f.spentBelowAmount)) return false
+    }
+    if (f.spentAboveAmount && f.spentAboveDays) {
+      if (spentInLastDays(c, Number(f.spentAboveDays)) <= Number(f.spentAboveAmount)) return false
+    }
+    if (f.frequencyDropPercent && frequencyDropPercent(c) < Number(f.frequencyDropPercent)) return false
     if (f.newCustomerDays) {
       if (!c.first_order_at || daysSince(c.first_order_at) > Number(f.newCustomerDays)) return false
     }
+    if (f.maxDistanceKm) {
+      if (c.distance_km == null || c.distance_km > Number(f.maxDistanceKm)) return false
+    }
     if (f.neighborhoods.length > 0 && !c.neighborhoods.some((n) => f.neighborhoods.includes(n))) return false
+    if (f.birthdayMonth) {
+      if (!c.birthdate || new Date(c.birthdate).getMonth() !== Number(f.birthdayMonth)) return false
+    }
     if (f.productIds.length > 0) {
       const matches = c.purchases.some(
         (p) =>
@@ -395,47 +445,94 @@ export default function AdminCrm() {
         <Card className="p-5 mb-4 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="label">Mínimo de pedidos (frequência)</label>
+              <label className="label">Quantidade de pedidos realizados</label>
               <input
                 className="input-field"
                 type="number"
                 min="1"
+                placeholder="Nº de vezes"
                 value={filter.minOrders}
                 onChange={(e) => setFilter({ ...filter, minOrders: e.target.value })}
               />
             </div>
             <div>
-              <label className="label">Gastou no mínimo (R$)</label>
-              <input
-                className="input-field"
-                type="number"
-                min="0"
-                value={filter.minSpent}
-                onChange={(e) => setFilter({ ...filter, minSpent: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="label">Gastou no máximo (R$)</label>
-              <input
-                className="input-field"
-                type="number"
-                min="0"
-                value={filter.maxSpent}
-                onChange={(e) => setFilter({ ...filter, maxSpent: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="label">Sem comprar há pelo menos (dias)</label>
+              <label className="label">Maior volume de compras</label>
               <input
                 className="input-field"
                 type="number"
                 min="1"
-                value={filter.inactiveDays}
-                onChange={(e) => setFilter({ ...filter, inactiveDays: e.target.value })}
+                placeholder="Nº de itens"
+                value={filter.minItems}
+                onChange={(e) => setFilter({ ...filter, minItems: e.target.value })}
               />
             </div>
             <div>
-              <label className="label">Cliente novo — 1ª compra há até (dias)</label>
+              <label className="label">Distância de no máximo (km)</label>
+              <input
+                className="input-field"
+                type="number"
+                min="0"
+                value={filter.maxDistanceKm}
+                onChange={(e) => setFilter({ ...filter, maxDistanceKm: e.target.value })}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label">Gastou abaixo de</label>
+              <div className="flex items-center gap-2">
+                <span className="text-son-silver-dim text-sm">R$</span>
+                <input
+                  className="input-field"
+                  type="number"
+                  min="0"
+                  value={filter.spentBelowAmount}
+                  onChange={(e) => setFilter({ ...filter, spentBelowAmount: e.target.value })}
+                />
+                <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
+                <input
+                  className="input-field"
+                  type="number"
+                  min="1"
+                  value={filter.spentBelowDays}
+                  onChange={(e) => setFilter({ ...filter, spentBelowDays: e.target.value })}
+                />
+                <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
+              </div>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label">Gastou acima de</label>
+              <div className="flex items-center gap-2">
+                <span className="text-son-silver-dim text-sm">R$</span>
+                <input
+                  className="input-field"
+                  type="number"
+                  min="0"
+                  value={filter.spentAboveAmount}
+                  onChange={(e) => setFilter({ ...filter, spentAboveAmount: e.target.value })}
+                />
+                <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
+                <input
+                  className="input-field"
+                  type="number"
+                  min="1"
+                  value={filter.spentAboveDays}
+                  onChange={(e) => setFilter({ ...filter, spentAboveDays: e.target.value })}
+                />
+                <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
+              </div>
+            </div>
+            <div>
+              <label className="label">Reduziu a frequência de compra em (%)</label>
+              <input
+                className="input-field"
+                type="number"
+                min="1"
+                max="100"
+                value={filter.frequencyDropPercent}
+                onChange={(e) => setFilter({ ...filter, frequencyDropPercent: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="label">Cliente novo em (dias)</label>
               <input
                 className="input-field"
                 type="number"
@@ -443,6 +540,21 @@ export default function AdminCrm() {
                 value={filter.newCustomerDays}
                 onChange={(e) => setFilter({ ...filter, newCustomerDays: e.target.value })}
               />
+            </div>
+            <div>
+              <label className="label">Clientes que aniversariam em</label>
+              <select
+                className="input-field appearance-none cursor-pointer"
+                value={filter.birthdayMonth}
+                onChange={(e) => setFilter({ ...filter, birthdayMonth: e.target.value })}
+              >
+                <option value="">Qualquer mês</option>
+                {MONTH_NAMES.map((m, i) => (
+                  <option key={m} value={i}>
+                    {m}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="label">Bairro</label>
@@ -492,21 +604,11 @@ export default function AdminCrm() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">No período de (opcional)</label>
-                <input
-                  className="input-field"
-                  type="date"
-                  value={filter.periodStart}
-                  onChange={(e) => setFilter({ ...filter, periodStart: e.target.value })}
-                />
+                <DateInput value={filter.periodStart} onChange={(periodStart) => setFilter({ ...filter, periodStart })} />
               </div>
               <div>
                 <label className="label">Até (opcional)</label>
-                <input
-                  className="input-field"
-                  type="date"
-                  value={filter.periodEnd}
-                  onChange={(e) => setFilter({ ...filter, periodEnd: e.target.value })}
-                />
+                <DateInput value={filter.periodEnd} onChange={(periodEnd) => setFilter({ ...filter, periodEnd })} />
               </div>
             </div>
           )}
