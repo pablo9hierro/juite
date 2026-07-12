@@ -1,5 +1,4 @@
 import { useAdminAuth } from '../store/adminAuth'
-import { useMotoboyAuth } from '../store/motoboyAuth'
 import { ApiError } from './apiError'
 import { localApi } from './localApi'
 import { supabasePublicApi } from './supabasePublicApi'
@@ -76,8 +75,12 @@ async function request<T>(
 function adminToken() {
   return useAdminAuth.getState().token ?? undefined
 }
+// admin, vendedor e motoboy compartilham a mesma sessão (useAdminAuth) desde
+// que motoboy passou a logar em /admin/login também — motoboyToken() existe
+// só pra deixar claro, nos call sites abaixo, que o token está indo pra uma
+// rota de motoboy.
 function motoboyToken() {
-  return useMotoboyAuth.getState().token ?? undefined
+  return useAdminAuth.getState().token ?? undefined
 }
 
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {

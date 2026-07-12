@@ -16,7 +16,6 @@ import AdminFrete from './pages/admin/AdminFrete'
 import AdminFinanceiro from './pages/admin/AdminFinanceiro'
 import AdminSenha from './pages/admin/AdminSenha'
 import AdminRelatorios from './pages/admin/AdminRelatorios'
-import MotoboyLogin from './pages/motoboy/MotoboyLogin'
 import MotoboyFila from './pages/motoboy/MotoboyFila'
 import MotoboyCorrida from './pages/motoboy/MotoboyCorrida'
 import MotoboyFinanceiro from './pages/motoboy/MotoboyFinanceiro'
@@ -69,8 +68,13 @@ export default function App() {
           <Route path="senha" element={<AdminSenha />} />
         </Route>
 
-        <Route path="/motoboy/login" element={<MotoboyLogin />} />
-        <Route path="/motoboy" element={<MotoboyLayout />}>
+        {/* Motoboy loga na MESMA tela de admin/vendedor (/admin/login) e cai
+            no próprio dashboard em /admin/motoboy — padrão que deve se
+            repetir em qualquer site futuro criado a partir desse esqueleto.
+            Redirects abaixo cobrem quem ainda tem o link antigo salvo. */}
+        <Route path="/motoboy/login" element={<Navigate to="/admin/login" replace />} />
+        <Route path="/motoboy/*" element={<Navigate to="/admin/motoboy" replace />} />
+        <Route path="/admin/motoboy" element={<MotoboyLayout />}>
           <Route index element={<MotoboyFila />} />
           <Route path="corrida" element={<MotoboyCorrida />} />
           <Route path="financeiro" element={<MotoboyFinanceiro />} />

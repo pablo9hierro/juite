@@ -3,19 +3,19 @@ import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-d
 import { LogOut, MessageCircle, Moon, Navigation, Sun, Truck, Wallet } from 'lucide-react'
 import Logo from '../ui/Logo'
 import { api } from '../../lib/api'
-import { useMotoboyAuth } from '../../store/motoboyAuth'
+import { useAdminAuth } from '../../store/adminAuth'
 import { useMotoboyTheme } from '../../store/motoboyTheme'
 
 const NAV_ITEMS = [
-  { href: '/motoboy', label: 'Fila', icon: Truck },
-  { href: '/motoboy/conta', label: 'Conta', icon: MessageCircle },
-  { href: '/motoboy/financeiro', label: 'Financeiro', icon: Wallet },
+  { href: '/admin/motoboy', label: 'Fila', icon: Truck },
+  { href: '/admin/motoboy/conta', label: 'Conta', icon: MessageCircle },
+  { href: '/admin/motoboy/financeiro', label: 'Financeiro', icon: Wallet },
 ]
 
 const ACTIVE_RUN_POLL_MS = 20000
 
 export default function MotoboyLayout() {
-  const { token, name, logout } = useMotoboyAuth()
+  const { token, name, role, logout } = useAdminAuth()
   const { theme, toggle: toggleTheme } = useMotoboyTheme()
   const location = useLocation()
   const navigate = useNavigate()
@@ -25,7 +25,7 @@ export default function MotoboyLayout() {
   // dashboard — a corrida em si mora no banco (não aqui), isso é só um
   // atalho pra ele não esquecer de voltar pro mapa.
   useEffect(() => {
-    if (!token) return
+    if (!token || role !== 'motoboy') return
     let cancelled = false
     const check = () => api.motoboy.runs.active().then((r) => !cancelled && setHasActiveRun(!!r))
     check()
@@ -34,13 +34,17 @@ export default function MotoboyLayout() {
       cancelled = true
       clearInterval(interval)
     }
-  }, [token])
+  }, [token, role])
 
-  if (!token) return <Navigate to="/motoboy/login" state={{ from: location }} replace />
+  if (!token) return <Navigate to="/admin/login" state={{ from: location }} replace />
+  // Mesma sessão de admin/vendedor caiu numa rota que não é dele — manda de
+  // volta pro dashboard certo em vez de deslogar (espelha a guarda inversa
+  // em AdminLayout).
+  if (role !== 'motoboy') return <Navigate to={role === 'vendedor' ? '/admin/pdv' : '/admin/pedidos'} replace />
 
   const handleLogout = () => {
     logout()
-    navigate('/motoboy/login')
+    navigate('/admin/login')
   }
 
   return (
@@ -81,9 +85,9 @@ export default function MotoboyLayout() {
           )
         })}
       </nav>
-      {hasActiveRun && location.pathname !== '/motoboy/corrida' && (
+      {hasActiveRun && location.pathname !== '/admin/motoboy/corrida' && (
         <button
-          onClick={() => navigate('/motoboy/corrida')}
+          onClick={() => navigate('/admin/motoboy/corrida')}
           className="sunset-bg w-full flex items-center justify-center gap-2 text-son-silver text-sm font-semibold py-2.5"
         >
           <Navigation className="w-4 h-4" />

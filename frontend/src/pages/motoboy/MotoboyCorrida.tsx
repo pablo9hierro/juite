@@ -109,7 +109,7 @@ export default function MotoboyCorrida() {
       .then((r) => {
         if (cancelled) return
         if (!r) {
-          navigate('/motoboy')
+          navigate('/admin/motoboy')
           return
         }
         setRun(r)
@@ -283,7 +283,7 @@ export default function MotoboyCorrida() {
       const updated = await api.motoboy.runs.completeCurrent(paymentConfirmed)
       setConfirmingPayment(false)
       if (updated.status === 'concluido') {
-        navigate('/motoboy')
+        navigate('/admin/motoboy')
         return
       }
       setRun(updated)

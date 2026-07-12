@@ -38,6 +38,13 @@ export default function AdminLayout() {
 
   if (!token) return <Navigate to="/admin/login" state={{ from: location }} replace />
 
+  // Motoboy loga na mesma tela mas mora numa árvore de rotas totalmente
+  // separada (/admin/motoboy, ver App.tsx + MotoboyLayout) — se um token de
+  // motoboy cair aqui (ex: digitou /admin/produtos direto na barra), manda
+  // pro dashboard dele em vez de cair num loop (nenhum NAV_ITEMS aceita
+  // 'motoboy', então allowedPaths ficaria vazio pra sempre).
+  if (role === 'motoboy') return <Navigate to="/admin/motoboy" replace />
+
   const items = NAV_ITEMS.filter((item) => (item.roles as readonly string[]).includes(role))
   const allowedPaths: string[] = items.map((item) => item.href)
   if (!allowedPaths.includes(location.pathname)) {

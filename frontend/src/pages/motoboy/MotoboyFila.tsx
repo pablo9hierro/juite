@@ -101,7 +101,7 @@ function ActiveRunCard({ run }: { run: MotoboyRun }) {
         <MapPin className="w-3.5 h-3.5" /> {current.neighborhood}
       </p>
       {current.reference_point && <p className="text-xs text-son-silver-dim italic mb-3">{current.reference_point}</p>}
-      <button onClick={() => navigate('/motoboy/corrida')} className="btn-primary w-full text-sm py-3 mt-2">
+      <button onClick={() => navigate('/admin/motoboy/corrida')} className="btn-primary w-full text-sm py-3 mt-2">
         <Navigation className="w-4 h-4" />
         Abrir navegação
       </button>
@@ -157,7 +157,7 @@ export default function MotoboyFila() {
       for (const orderId of run.order_ids) {
         api.motoboy.whatsapp.notifyEnRoute(orderId).catch(() => {})
       }
-      navigate('/motoboy/corrida')
+      navigate('/admin/motoboy/corrida')
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Não foi possível iniciar a(s) entrega(s).')
     } finally {

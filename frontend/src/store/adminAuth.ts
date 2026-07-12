@@ -1,7 +1,11 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
-export type AdminRole = 'admin' | 'vendedor'
+// Sessão única compartilhada pelos 3 papéis que logam em /admin/login —
+// admin, vendedor e motoboy — cada um com seu próprio dashboard depois
+// (padrão que deve se repetir em qualquer site futuro criado a partir
+// desse esqueleto).
+export type AdminRole = 'admin' | 'vendedor' | 'motoboy'
 
 interface AdminAuthState {
   token: string | null

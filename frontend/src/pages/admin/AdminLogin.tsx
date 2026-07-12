@@ -13,24 +13,38 @@ export default function AdminLogin() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  if (token) return <Navigate to={role === 'vendedor' ? '/admin/pdv' : '/admin/pedidos'} replace />
+  if (token) {
+    return (
+      <Navigate
+        to={role === 'vendedor' ? '/admin/pdv' : role === 'motoboy' ? '/admin/motoboy' : '/admin/pedidos'}
+        replace
+      />
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
     try {
-      // Mesma tela pros dois papéis — tenta admin primeiro (mais comum) e
-      // só tenta vendedor se as credenciais não baterem como admin, pra
-      // não vazar qual dos dois um e-mail digitado errado pertence a.
+      // Mesma tela pros três papéis — tenta admin primeiro (mais comum),
+      // depois vendedor, depois motoboy, só avançando se as credenciais
+      // não baterem no papel anterior, pra não vazar qual deles um e-mail
+      // digitado errado pertence a.
       try {
         const res = await api.auth.adminLogin(email, password)
         login(res.token, res.name, 'admin')
         navigate('/admin/pedidos')
       } catch {
-        const res = await api.auth.vendedorLogin(email, password)
-        login(res.token, res.name, 'vendedor')
-        navigate('/admin/pdv')
+        try {
+          const res = await api.auth.vendedorLogin(email, password)
+          login(res.token, res.name, 'vendedor')
+          navigate('/admin/pdv')
+        } catch {
+          const res = await api.auth.motoboyLogin(email, password)
+          login(res.token, res.name, 'motoboy')
+          navigate('/admin/motoboy')
+        }
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erro ao entrar.')
