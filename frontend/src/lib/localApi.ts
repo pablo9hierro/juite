@@ -212,9 +212,11 @@ async function createOrder(payload: {
   if (campaign) {
     if (campaign.discount_type === 'percent') discountAmount += (subtotal * (campaign.discount_value ?? 0)) / 100
     else if (campaign.discount_type === 'fixed') discountAmount += campaign.discount_value ?? 0
-    if (campaign.free_shipping) shippingDiscount = shippingPrice
+    if (campaign.shipping_discount_type === 'percent') shippingDiscount += (shippingPrice * (campaign.shipping_discount_value ?? 0)) / 100
+    else if (campaign.shipping_discount_type === 'fixed') shippingDiscount += campaign.shipping_discount_value ?? 0
   }
 
+  const birthMonth = new Date(payload.customer_birthdate).getMonth()
   let couponCode: string | null = null
   if (payload.coupon_code && payload.coupon_code.trim()) {
     const coupon = (db.coupons ?? []).find((c) => c.code.toUpperCase() === payload.coupon_code!.trim().toUpperCase())
@@ -229,8 +231,12 @@ async function createOrder(payload: {
     if (campaign && !coupon.allow_campaign_checkout) {
       throw new ApiError(400, 'this coupon cannot be combined with a campaign checkout')
     }
+    if (coupon.kind === 'aniversario' && new Date().getMonth() !== birthMonth) {
+      throw new ApiError(400, 'this coupon is only valid during your birthday month')
+    }
     if (coupon.kind === 'frete') {
-      shippingDiscount = shippingPrice
+      if (coupon.discount_type === 'percent') shippingDiscount += (shippingPrice * (coupon.discount_value ?? 0)) / 100
+      else shippingDiscount += coupon.discount_value ?? 0
     } else if (coupon.discount_type === 'percent') {
       discountAmount += (subtotal * (coupon.discount_value ?? 0)) / 100
     } else {
@@ -327,7 +333,8 @@ async function getCampaignPublic(id: string): Promise<Campaign> {
 
 async function validateCouponPublic(
   code: string,
-  campaignId?: string
+  campaignId?: string,
+  customerBirthdate?: string
 ): Promise<Pick<Coupon, 'code' | 'kind' | 'discount_type' | 'discount_value'>> {
   const db = loadDb()
   const coupon = (db.coupons ?? []).find((c) => c.code.toUpperCase() === code.trim().toUpperCase())
@@ -341,6 +348,12 @@ async function validateCouponPublic(
   }
   if (campaignId && !coupon.allow_campaign_checkout) {
     throw new ApiError(400, 'this coupon cannot be combined with a campaign checkout')
+  }
+  if (coupon.kind === 'aniversario') {
+    const birthMonth = customerBirthdate ? new Date(customerBirthdate).getMonth() : null
+    if (birthMonth == null || birthMonth !== new Date().getMonth()) {
+      throw new ApiError(400, 'this coupon is only valid during your birthday month')
+    }
   }
   return { code: coupon.code, kind: coupon.kind, discount_type: coupon.discount_type, discount_value: coupon.discount_value }
 }
@@ -649,9 +662,9 @@ async function adminListCoupons(): Promise<Coupon[]> {
 
 async function createCoupon(payload: {
   code: string
-  kind: 'desconto' | 'frete'
-  discount_type?: 'percent' | 'fixed'
-  discount_value?: number
+  kind: 'desconto' | 'frete' | 'aniversario'
+  discount_type: 'percent' | 'fixed'
+  discount_value: number
   allow_campaign_checkout?: boolean
   expires_at?: string
   max_uses?: number
@@ -661,15 +674,15 @@ async function createCoupon(payload: {
   const code = payload.code.trim().toUpperCase()
   if (!code) throw new ApiError(400, 'code is required')
   if (db.coupons.some((c) => c.code === code)) throw new ApiError(400, 'a coupon with this code already exists')
-  if (payload.kind === 'desconto' && (!payload.discount_type || payload.discount_value == null)) {
-    throw new ApiError(400, 'discount_type and discount_value are required for kind=desconto')
+  if (!payload.discount_type || payload.discount_value == null) {
+    throw new ApiError(400, 'discount_type and discount_value are required')
   }
   const coupon: Coupon = {
     id: uid(),
     code,
     kind: payload.kind,
-    discount_type: payload.kind === 'frete' ? null : payload.discount_type ?? null,
-    discount_value: payload.kind === 'frete' ? null : payload.discount_value ?? null,
+    discount_type: payload.discount_type,
+    discount_value: payload.discount_value,
     allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
     active: true,
     expires_at: payload.expires_at || null,
@@ -718,7 +731,8 @@ async function createCampaign(payload: {
   product_ids: string[]
   discount_type?: 'percent' | 'fixed'
   discount_value?: number
-  free_shipping?: boolean
+  shipping_discount_type?: 'percent' | 'fixed'
+  shipping_discount_value?: number
   starts_at?: string
   expires_at?: string
 }): Promise<Campaign> {
@@ -727,8 +741,10 @@ async function createCampaign(payload: {
   if (!payload.title.trim()) throw new ApiError(400, 'title is required')
   if (!payload.image_url) throw new ApiError(400, 'image is required to create a campaign')
   if (!payload.product_ids || payload.product_ids.length === 0) throw new ApiError(400, 'at least one product is required')
-  if (!payload.free_shipping && (!payload.discount_type || payload.discount_value == null)) {
-    throw new ApiError(400, 'a campaign needs a product discount and/or free shipping')
+  const hasProductDiscount = payload.discount_type && payload.discount_value != null
+  const hasShippingDiscount = payload.shipping_discount_type && payload.shipping_discount_value != null
+  if (!hasProductDiscount && !hasShippingDiscount) {
+    throw new ApiError(400, 'a campaign needs a product discount and/or a shipping discount')
   }
   const campaign: Campaign = {
     id: uid(),
@@ -737,7 +753,8 @@ async function createCampaign(payload: {
     product_ids: payload.product_ids,
     discount_type: payload.discount_type ?? null,
     discount_value: payload.discount_value ?? null,
-    free_shipping: payload.free_shipping ?? false,
+    shipping_discount_type: payload.shipping_discount_type ?? null,
+    shipping_discount_value: payload.shipping_discount_value ?? null,
     active: true,
     starts_at: payload.starts_at || null,
     expires_at: payload.expires_at || null,
@@ -756,7 +773,8 @@ async function updateCampaign(
     product_ids: string[]
     discount_type?: 'percent' | 'fixed'
     discount_value?: number
-    free_shipping?: boolean
+    shipping_discount_type?: 'percent' | 'fixed'
+    shipping_discount_value?: number
     active: boolean
     starts_at?: string
     expires_at?: string
@@ -767,15 +785,18 @@ async function updateCampaign(
   if (!campaign) throw new ApiError(404, 'campaign not found')
   if (!payload.image_url) throw new ApiError(400, 'image is required')
   if (!payload.product_ids || payload.product_ids.length === 0) throw new ApiError(400, 'at least one product is required')
-  if (!payload.free_shipping && (!payload.discount_type || payload.discount_value == null)) {
-    throw new ApiError(400, 'a campaign needs a product discount and/or free shipping')
+  const hasProductDiscount = payload.discount_type && payload.discount_value != null
+  const hasShippingDiscount = payload.shipping_discount_type && payload.shipping_discount_value != null
+  if (!hasProductDiscount && !hasShippingDiscount) {
+    throw new ApiError(400, 'a campaign needs a product discount and/or a shipping discount')
   }
   campaign.title = payload.title.trim()
   campaign.image_url = payload.image_url
   campaign.product_ids = payload.product_ids
   campaign.discount_type = payload.discount_type ?? null
   campaign.discount_value = payload.discount_value ?? null
-  campaign.free_shipping = payload.free_shipping ?? false
+  campaign.shipping_discount_type = payload.shipping_discount_type ?? null
+  campaign.shipping_discount_value = payload.shipping_discount_value ?? null
   campaign.active = payload.active
   campaign.starts_at = payload.starts_at || null
   campaign.expires_at = payload.expires_at || null

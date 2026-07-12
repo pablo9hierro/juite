@@ -111,8 +111,12 @@ export const supabasePublicApi = {
     },
   },
   coupons: {
-    validate: async (code: string, campaignId?: string) => {
-      const { data, error } = await supabase.rpc('validate_coupon', { p_code: code, p_campaign_id: campaignId ?? null })
+    validate: async (code: string, campaignId?: string, customerBirthdate?: string) => {
+      const { data, error } = await supabase.rpc('validate_coupon', {
+        p_code: code,
+        p_campaign_id: campaignId ?? null,
+        p_customer_birthdate: customerBirthdate ?? null,
+      })
       if (error) throw new ApiError(400, error.message)
       return data as Pick<Coupon, 'code' | 'kind' | 'discount_type' | 'discount_value'>
     },

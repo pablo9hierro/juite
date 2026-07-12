@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { ImagePlus, Loader2, Megaphone, Plus, Tag, Trash2, X } from 'lucide-react'
+import { ImagePlus, Loader2, Megaphone, Plus, Search, Tag, Trash2, X } from 'lucide-react'
 import Card from '../../components/ui/Card'
+import ExpiryInput from '../../components/admin/ExpiryInput'
 import { api, ApiError } from '../../lib/api'
-import type { Campaign, Coupon, DiscountType, Product } from '../../lib/types'
+import type { Campaign, Coupon, CouponKind, DiscountType, Product } from '../../lib/types'
 
 type CampaignForm = {
   title: string
@@ -10,7 +11,8 @@ type CampaignForm = {
   product_ids: string[]
   discount_type: DiscountType | ''
   discount_value: string
-  free_shipping: boolean
+  shipping_discount_type: DiscountType | ''
+  shipping_discount_value: string
   starts_at: string
   expires_at: string
 }
@@ -20,15 +22,16 @@ const EMPTY_CAMPAIGN_FORM: CampaignForm = {
   product_ids: [],
   discount_type: '',
   discount_value: '',
-  free_shipping: false,
+  shipping_discount_type: '',
+  shipping_discount_value: '',
   starts_at: '',
   expires_at: '',
 }
 
 type CouponForm = {
   code: string
-  kind: 'desconto' | 'frete'
-  discount_type: DiscountType | ''
+  kind: CouponKind
+  discount_type: DiscountType
   discount_value: string
   allow_campaign_checkout: boolean
   expires_at: string
@@ -53,6 +56,7 @@ export default function AdminCampanhas() {
   const [tab, setTab] = useState<'campanhas' | 'cupons'>('campanhas')
 
   const [products, setProducts] = useState<Product[]>([])
+  const [productQuery, setProductQuery] = useState('')
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [campaignsLoading, setCampaignsLoading] = useState(true)
@@ -100,11 +104,26 @@ export default function AdminCampanhas() {
     }
   }
 
-  const toggleProduct = (id: string) => {
-    setCampaignForm((f) => ({
-      ...f,
-      product_ids: f.product_ids.includes(id) ? f.product_ids.filter((p) => p !== id) : [...f.product_ids, id],
-    }))
+  const productById = new Map(products.map((p) => [p.id, p]))
+  const selectedProducts = campaignForm.product_ids.map((id) => productById.get(id)).filter((p): p is Product => !!p)
+  const matches =
+    productQuery.trim().length > 0
+      ? products
+          .filter(
+            (p) =>
+              !campaignForm.product_ids.includes(p.id) &&
+              (p.name.toLowerCase().includes(productQuery.trim().toLowerCase()) ||
+                (p.barcode && p.barcode.includes(productQuery.trim())))
+          )
+          .slice(0, 8)
+      : []
+
+  const addProduct = (id: string) => {
+    setCampaignForm((f) => ({ ...f, product_ids: [...f.product_ids, id] }))
+    setProductQuery('')
+  }
+  const removeProduct = (id: string) => {
+    setCampaignForm((f) => ({ ...f, product_ids: f.product_ids.filter((p) => p !== id) }))
   }
 
   const saveCampaign = async () => {
@@ -117,9 +136,10 @@ export default function AdminCampanhas() {
         product_ids: campaignForm.product_ids,
         discount_type: campaignForm.discount_type || undefined,
         discount_value: campaignForm.discount_value ? Number(campaignForm.discount_value) : undefined,
-        free_shipping: campaignForm.free_shipping,
-        starts_at: campaignForm.starts_at ? new Date(campaignForm.starts_at).toISOString() : undefined,
-        expires_at: campaignForm.expires_at ? new Date(campaignForm.expires_at).toISOString() : undefined,
+        shipping_discount_type: campaignForm.shipping_discount_type || undefined,
+        shipping_discount_value: campaignForm.shipping_discount_value ? Number(campaignForm.shipping_discount_value) : undefined,
+        starts_at: campaignForm.starts_at || undefined,
+        expires_at: campaignForm.expires_at || undefined,
       })
       setShowCampaignForm(false)
       setCampaignForm(EMPTY_CAMPAIGN_FORM)
@@ -138,7 +158,8 @@ export default function AdminCampanhas() {
       product_ids: c.product_ids,
       discount_type: c.discount_type ?? undefined,
       discount_value: c.discount_value ?? undefined,
-      free_shipping: c.free_shipping,
+      shipping_discount_type: c.shipping_discount_type ?? undefined,
+      shipping_discount_value: c.shipping_discount_value ?? undefined,
       active: !c.active,
       starts_at: c.starts_at ?? undefined,
       expires_at: c.expires_at ?? undefined,
@@ -159,11 +180,10 @@ export default function AdminCampanhas() {
       await api.admin.coupons.create({
         code: couponForm.code,
         kind: couponForm.kind,
-        discount_type: couponForm.kind === 'desconto' ? (couponForm.discount_type || undefined) : undefined,
-        discount_value:
-          couponForm.kind === 'desconto' && couponForm.discount_value ? Number(couponForm.discount_value) : undefined,
+        discount_type: couponForm.discount_type,
+        discount_value: Number(couponForm.discount_value),
         allow_campaign_checkout: couponForm.allow_campaign_checkout,
-        expires_at: couponForm.expires_at ? new Date(couponForm.expires_at).toISOString() : undefined,
+        expires_at: couponForm.expires_at || undefined,
         max_uses: couponForm.max_uses ? Number(couponForm.max_uses) : undefined,
       })
       setShowCouponForm(false)
@@ -190,6 +210,12 @@ export default function AdminCampanhas() {
     if (!confirm('Remover este cupom?')) return
     await api.admin.coupons.delete(id)
     loadCoupons()
+  }
+
+  const couponKindLabel: Record<CouponKind, string> = {
+    desconto: 'Desconto',
+    frete: 'Desconto no frete',
+    aniversario: 'Aniversário',
   }
 
   return (
@@ -232,7 +258,7 @@ export default function AdminCampanhas() {
           <div className="text-center py-16 text-son-silver-dim">
             <Megaphone className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p>Nenhuma campanha cadastrada.</p>
-            <p className="text-xs mt-1">Toda campanha precisa de imagem + desconto (produto e/ou frete grátis).</p>
+            <p className="text-xs mt-1">Toda campanha precisa de imagem + desconto (produto e/ou frete).</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -249,9 +275,9 @@ export default function AdminCampanhas() {
                           {discountLabel(c.discount_type, c.discount_value)}
                         </span>
                       )}
-                      {c.free_shipping && (
+                      {discountLabel(c.shipping_discount_type, c.shipping_discount_value) && (
                         <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-semibold">
-                          Frete grátis
+                          Frete: {discountLabel(c.shipping_discount_type, c.shipping_discount_value)}
                         </span>
                       )}
                     </div>
@@ -304,16 +330,11 @@ export default function AdminCampanhas() {
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-1 mb-1">
-                  {c.kind === 'frete' ? (
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-semibold">
-                      Frete grátis
+                  <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-xs">{couponKindLabel[c.kind]}</span>
+                  {discountLabel(c.discount_type, c.discount_value) && (
+                    <span className="px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">
+                      {discountLabel(c.discount_type, c.discount_value)}
                     </span>
-                  ) : (
-                    discountLabel(c.discount_type, c.discount_value) && (
-                      <span className="px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">
-                        {discountLabel(c.discount_type, c.discount_value)}
-                      </span>
-                    )
                   )}
                   {c.allow_campaign_checkout && (
                     <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-xs">+ campanha</span>
@@ -380,23 +401,49 @@ export default function AdminCampanhas() {
               </div>
               <div>
                 <label className="label">Produtos da campanha</label>
-                <div className="max-h-32 overflow-y-auto border border-white/10 rounded-xl p-2 space-y-1">
-                  {products.map((p) => (
-                    <label key={p.id} className="flex items-center gap-2 text-sm text-son-silver py-0.5">
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 accent-son-pink"
-                        checked={campaignForm.product_ids.includes(p.id)}
-                        onChange={() => toggleProduct(p.id)}
-                      />
-                      {p.name}
-                    </label>
-                  ))}
+                {selectedProducts.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {selectedProducts.map((p) => (
+                      <span
+                        key={p.id}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-son-pink/15 text-son-pink text-xs font-medium"
+                      >
+                        {p.name}
+                        <button type="button" onClick={() => removeProduct(p.id)}>
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-son-silver-dim absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    className="input-field pl-9"
+                    placeholder="Buscar por nome ou código de barras..."
+                    value={productQuery}
+                    onChange={(e) => setProductQuery(e.target.value)}
+                  />
+                  {matches.length > 0 && (
+                    <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-son-surface border border-white/10 rounded-xl overflow-hidden shadow-lg max-h-48 overflow-y-auto">
+                      {matches.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => addProduct(p.id)}
+                          className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-son-silver hover:bg-son-surface-light text-left"
+                        >
+                          <span className="truncate">{p.name}</span>
+                          {p.barcode && <span className="text-xs text-son-silver-dim font-mono flex-shrink-0">{p.barcode}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="label">Desconto</label>
+                  <label className="label">Desconto no produto</label>
                   <select
                     className="input-field"
                     value={campaignForm.discount_type}
@@ -419,34 +466,47 @@ export default function AdminCampanhas() {
                   />
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-sm text-son-silver">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 accent-son-pink"
-                  checked={campaignForm.free_shipping}
-                  onChange={(e) => setCampaignForm({ ...campaignForm, free_shipping: e.target.checked })}
-                />
-                Frete grátis (loja absorve o custo, motoboy recebe o valor cheio)
-              </label>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="label">Início (opcional)</label>
-                  <input
+                  <label className="label">Desconto no frete</label>
+                  <select
                     className="input-field"
-                    type="datetime-local"
-                    value={campaignForm.starts_at}
-                    onChange={(e) => setCampaignForm({ ...campaignForm, starts_at: e.target.value })}
-                  />
+                    value={campaignForm.shipping_discount_type}
+                    onChange={(e) =>
+                      setCampaignForm({ ...campaignForm, shipping_discount_type: e.target.value as DiscountType | '' })
+                    }
+                  >
+                    <option value="">Sem desconto de frete</option>
+                    <option value="percent">Percentual</option>
+                    <option value="fixed">Valor fixo (R$)</option>
+                  </select>
                 </div>
                 <div>
-                  <label className="label">Termina em (opcional)</label>
+                  <label className="label">Valor</label>
                   <input
                     className="input-field"
-                    type="datetime-local"
-                    value={campaignForm.expires_at}
-                    onChange={(e) => setCampaignForm({ ...campaignForm, expires_at: e.target.value })}
+                    type="number"
+                    min="0"
+                    disabled={!campaignForm.shipping_discount_type}
+                    value={campaignForm.shipping_discount_value}
+                    onChange={(e) => setCampaignForm({ ...campaignForm, shipping_discount_value: e.target.value })}
                   />
                 </div>
+              </div>
+              <p className="text-xs text-son-silver-dim -mt-1">
+                O motoboy sempre recebe o valor cheio do frete — o desconto é absorvido pela loja.
+              </p>
+              <div>
+                <label className="label">Início (opcional)</label>
+                <ExpiryInput
+                  value={campaignForm.starts_at}
+                  onChange={(starts_at) => setCampaignForm({ ...campaignForm, starts_at })}
+                  allowDuration={false}
+                />
+              </div>
+              <div>
+                <label className="label">Termina em (opcional)</label>
+                <ExpiryInput value={campaignForm.expires_at} onChange={(expires_at) => setCampaignForm({ ...campaignForm, expires_at })} />
               </div>
               {campaignError && <p className="error-msg">{campaignError}</p>}
               <button onClick={saveCampaign} disabled={savingCampaign} className="btn-primary w-full mt-2">
@@ -459,8 +519,11 @@ export default function AdminCampanhas() {
       )}
 
       {showCouponForm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowCouponForm(false)}>
-          <div className="glass rounded-2xl p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => setShowCouponForm(false)}
+        >
+          <div className="glass rounded-2xl p-6 max-w-sm w-full my-8" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-white">Novo cupom</h3>
               <button onClick={() => setShowCouponForm(false)} className="text-son-silver-dim hover:text-white">
@@ -479,53 +542,54 @@ export default function AdminCampanhas() {
               </div>
               <div>
                 <label className="label">Tipo</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['desconto', 'frete'] as const).map((k) => (
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(['desconto', 'frete', 'aniversario'] as const).map((k) => (
                     <button
                       key={k}
                       type="button"
                       onClick={() => setCouponForm({ ...couponForm, kind: k })}
-                      className={`py-2.5 rounded-xl border text-sm font-medium transition-all capitalize ${
+                      className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
                         couponForm.kind === k
                           ? 'sunset-bg text-white border-transparent'
                           : 'bg-son-surface border-white/10 text-son-silver'
                       }`}
                     >
-                      {k === 'desconto' ? 'Desconto' : 'Cupom de frete'}
+                      {couponKindLabel[k]}
                     </button>
                   ))}
                 </div>
+                {couponForm.kind === 'frete' && (
+                  <p className="text-xs text-son-silver-dim mt-1.5">
+                    Desconta do frete que o cliente paga — o motoboy recebe o valor cheio do mesmo jeito, a loja absorve a diferença.
+                  </p>
+                )}
+                {couponForm.kind === 'aniversario' && (
+                  <p className="text-xs text-son-silver-dim mt-1.5">Só é aceito durante o mês de aniversário do cliente.</p>
+                )}
               </div>
-              {couponForm.kind === 'desconto' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="label">Tipo de desconto</label>
-                    <select
-                      className="input-field"
-                      value={couponForm.discount_type}
-                      onChange={(e) => setCouponForm({ ...couponForm, discount_type: e.target.value as DiscountType })}
-                    >
-                      <option value="percent">Percentual</option>
-                      <option value="fixed">Valor fixo (R$)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">Valor</label>
-                    <input
-                      className="input-field"
-                      type="number"
-                      min="0"
-                      value={couponForm.discount_value}
-                      onChange={(e) => setCouponForm({ ...couponForm, discount_value: e.target.value })}
-                    />
-                  </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="label">Tipo de desconto</label>
+                  <select
+                    className="input-field"
+                    value={couponForm.discount_type}
+                    onChange={(e) => setCouponForm({ ...couponForm, discount_type: e.target.value as DiscountType })}
+                  >
+                    <option value="percent">Percentual</option>
+                    <option value="fixed">Valor fixo (R$)</option>
+                  </select>
                 </div>
-              )}
-              {couponForm.kind === 'frete' && (
-                <p className="text-xs text-son-silver-dim">
-                  Cliente não paga o frete; o motoboy recebe o valor cheio do mesmo jeito, a loja absorve a diferença.
-                </p>
-              )}
+                <div>
+                  <label className="label">Valor</label>
+                  <input
+                    className="input-field"
+                    type="number"
+                    min="0"
+                    value={couponForm.discount_value}
+                    onChange={(e) => setCouponForm({ ...couponForm, discount_value: e.target.value })}
+                  />
+                </div>
+              </div>
               <label className="flex items-center gap-2 text-sm text-son-silver">
                 <input
                   type="checkbox"
@@ -535,26 +599,19 @@ export default function AdminCampanhas() {
                 />
                 Pode ser usado também num checkout de campanha
               </label>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="label">Validade (opcional)</label>
-                  <input
-                    className="input-field"
-                    type="datetime-local"
-                    value={couponForm.expires_at}
-                    onChange={(e) => setCouponForm({ ...couponForm, expires_at: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="label">Limite de usos (opcional)</label>
-                  <input
-                    className="input-field"
-                    type="number"
-                    min="1"
-                    value={couponForm.max_uses}
-                    onChange={(e) => setCouponForm({ ...couponForm, max_uses: e.target.value })}
-                  />
-                </div>
+              <div>
+                <label className="label">Validade (opcional)</label>
+                <ExpiryInput value={couponForm.expires_at} onChange={(expires_at) => setCouponForm({ ...couponForm, expires_at })} />
+              </div>
+              <div>
+                <label className="label">Limite de usos (opcional)</label>
+                <input
+                  className="input-field"
+                  type="number"
+                  min="1"
+                  value={couponForm.max_uses}
+                  onChange={(e) => setCouponForm({ ...couponForm, max_uses: e.target.value })}
+                />
               </div>
               {couponError && <p className="error-msg">{couponError}</p>}
               <button onClick={saveCoupon} disabled={savingCoupon} className="btn-primary w-full mt-2">

@@ -258,9 +258,9 @@ const remoteApi = {
       list: () => rpc<Coupon[]>('admin_list_coupons', { p_token: adminToken() }),
       create: (payload: {
         code: string
-        kind: 'desconto' | 'frete'
-        discount_type?: 'percent' | 'fixed'
-        discount_value?: number
+        kind: 'desconto' | 'frete' | 'aniversario'
+        discount_type: 'percent' | 'fixed'
+        discount_value: number
         allow_campaign_checkout?: boolean
         expires_at?: string
         max_uses?: number
@@ -269,8 +269,8 @@ const remoteApi = {
           p_token: adminToken(),
           p_code: payload.code,
           p_kind: payload.kind,
-          p_discount_type: payload.discount_type ?? null,
-          p_discount_value: payload.discount_value ?? null,
+          p_discount_type: payload.discount_type,
+          p_discount_value: payload.discount_value,
           p_allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
           p_expires_at: payload.expires_at || null,
           p_max_uses: payload.max_uses ?? null,
@@ -297,7 +297,8 @@ const remoteApi = {
         product_ids: string[]
         discount_type?: 'percent' | 'fixed'
         discount_value?: number
-        free_shipping?: boolean
+        shipping_discount_type?: 'percent' | 'fixed'
+        shipping_discount_value?: number
         starts_at?: string
         expires_at?: string
       }) =>
@@ -308,7 +309,8 @@ const remoteApi = {
           p_product_ids: payload.product_ids,
           p_discount_type: payload.discount_type ?? null,
           p_discount_value: payload.discount_value ?? null,
-          p_free_shipping: payload.free_shipping ?? false,
+          p_shipping_discount_type: payload.shipping_discount_type ?? null,
+          p_shipping_discount_value: payload.shipping_discount_value ?? null,
           p_starts_at: payload.starts_at || null,
           p_expires_at: payload.expires_at || null,
         }),
@@ -320,7 +322,8 @@ const remoteApi = {
           product_ids: string[]
           discount_type?: 'percent' | 'fixed'
           discount_value?: number
-          free_shipping?: boolean
+          shipping_discount_type?: 'percent' | 'fixed'
+          shipping_discount_value?: number
           active: boolean
           starts_at?: string
           expires_at?: string
@@ -334,7 +337,8 @@ const remoteApi = {
           p_product_ids: payload.product_ids,
           p_discount_type: payload.discount_type ?? null,
           p_discount_value: payload.discount_value ?? null,
-          p_free_shipping: payload.free_shipping ?? false,
+          p_shipping_discount_type: payload.shipping_discount_type ?? null,
+          p_shipping_discount_value: payload.shipping_discount_value ?? null,
           p_active: payload.active,
           p_starts_at: payload.starts_at || null,
           p_expires_at: payload.expires_at || null,

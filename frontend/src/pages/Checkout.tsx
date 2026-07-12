@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CreditCard, Home, Loader2, MapPin, QrCode, Tag, Wallet } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
 import LocationPicker from '../components/checkout/LocationPicker'
+import BirthdateInput from '../components/checkout/BirthdateInput'
 import { api, ApiError } from '../lib/api'
 import type { Campaign, Coupon, PaymentMethod, Product, ShippingEstimate } from '../lib/types'
 import { useCart } from '../store/cart'
@@ -87,11 +88,13 @@ export default function Checkout() {
   if (campaign) {
     if (campaign.discount_type === 'percent') discountAmount += (subtotal * (campaign.discount_value ?? 0)) / 100
     else if (campaign.discount_type === 'fixed') discountAmount += campaign.discount_value ?? 0
-    if (campaign.free_shipping) shippingDiscount = shippingPrice
+    if (campaign.shipping_discount_type === 'percent') shippingDiscount += (shippingPrice * (campaign.shipping_discount_value ?? 0)) / 100
+    else if (campaign.shipping_discount_type === 'fixed') shippingDiscount += campaign.shipping_discount_value ?? 0
   }
   if (appliedCoupon) {
     if (appliedCoupon.kind === 'frete') {
-      shippingDiscount = shippingPrice
+      if (appliedCoupon.discount_type === 'percent') shippingDiscount += (shippingPrice * (appliedCoupon.discount_value ?? 0)) / 100
+      else shippingDiscount += appliedCoupon.discount_value ?? 0
     } else if (appliedCoupon.discount_type === 'percent') {
       discountAmount += (subtotal * (appliedCoupon.discount_value ?? 0)) / 100
     } else {
@@ -107,7 +110,7 @@ export default function Checkout() {
     setCouponError(null)
     setCouponChecking(true)
     try {
-      const result = await api.coupons.validate(couponInput.trim(), campaign?.id)
+      const result = await api.coupons.validate(couponInput.trim(), campaign?.id, customer.birthdate)
       setAppliedCoupon(result)
     } catch (e) {
       setAppliedCoupon(null)
@@ -195,8 +198,10 @@ export default function Checkout() {
               <p className="text-xs text-son-pink font-medium">
                 {campaign.discount_type === 'percent' && `${campaign.discount_value}% off`}
                 {campaign.discount_type === 'fixed' && `R$ ${campaign.discount_value?.toFixed(2).replace('.', ',')} off`}
-                {campaign.discount_type && campaign.free_shipping && ' + '}
-                {campaign.free_shipping && 'frete grátis'}
+                {campaign.discount_type && campaign.shipping_discount_type && ' + '}
+                {campaign.shipping_discount_type === 'percent' && `${campaign.shipping_discount_value}% off no frete`}
+                {campaign.shipping_discount_type === 'fixed' &&
+                  `R$ ${campaign.shipping_discount_value?.toFixed(2).replace('.', ',')} off no frete`}
               </p>
             </div>
           </div>
@@ -228,14 +233,7 @@ export default function Checkout() {
 
           <div>
             <label className="label">Data de nascimento *</label>
-            <input
-              className="input-field"
-              value={customer.birthdate}
-              onChange={(e) => customer.set({ birthdate: e.target.value })}
-              type="date"
-              max={new Date().toISOString().slice(0, 10)}
-              required
-            />
+            <BirthdateInput value={customer.birthdate} onChange={(birthdate) => customer.set({ birthdate })} />
             <p className="text-xs text-son-silver-dim mt-1">Exigido por lei — venda de produtos de tabacaria só para maiores de 18 anos.</p>
           </div>
 
@@ -399,11 +397,15 @@ export default function Checkout() {
             <div className="flex justify-between text-son-silver-dim">
               <span>Frete</span>
               <span>
-                {pickupAtStore
-                  ? 'Retirada no local'
-                  : shippingDiscount > 0
-                    ? <span className="text-emerald-400">Grátis</span>
-                    : currency(shippingPrice)}
+                {pickupAtStore ? (
+                  'Retirada no local'
+                ) : shippingDiscount >= shippingPrice && shippingPrice > 0 ? (
+                  <span className="text-emerald-400">Grátis</span>
+                ) : shippingDiscount > 0 ? (
+                  <span className="text-emerald-400">{currency(shippingPrice - shippingDiscount)}</span>
+                ) : (
+                  currency(shippingPrice)
+                )}
               </span>
             </div>
             <div className="flex justify-between items-center pt-1">

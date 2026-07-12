@@ -30,13 +30,15 @@ export interface Product {
   barcode?: string | null
 }
 
-export type CouponKind = 'desconto' | 'frete'
+export type CouponKind = 'desconto' | 'frete' | 'aniversario'
 export type DiscountType = 'percent' | 'fixed'
 
 export interface Coupon {
   id: string
   code: string
   kind: CouponKind
+  // Vale pro desconto de produto (kind desconto/aniversario) OU pro
+  // desconto de frete (kind frete) — nunca ambos no mesmo cupom.
   discount_type: DiscountType | null
   discount_value: number | null
   allow_campaign_checkout: boolean
@@ -54,7 +56,8 @@ export interface Campaign {
   product_ids: string[]
   discount_type: DiscountType | null
   discount_value: number | null
-  free_shipping: boolean
+  shipping_discount_type: DiscountType | null
+  shipping_discount_value: number | null
   active?: boolean
   starts_at: string | null
   expires_at: string | null
