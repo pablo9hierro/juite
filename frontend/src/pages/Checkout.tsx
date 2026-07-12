@@ -83,26 +83,39 @@ export default function Checkout() {
 
   const shippingPrice = pickupAtStore ? 0 : shippingEstimate?.price ?? 0
 
-  let discountAmount = 0
-  let shippingDiscount = 0
+  // Promoção (campanha) e cupom são fontes de desconto separadas — cada uma
+  // some numa linha própria no resumo ("Desconto de promoção" / "Desconto de
+  // cupom"), mas o cálculo de frete/total usa os dois somados.
+  let campaignProductDiscount = 0
+  let campaignShippingDiscount = 0
   if (campaign) {
-    if (campaign.discount_type === 'percent') discountAmount += (subtotal * (campaign.discount_value ?? 0)) / 100
-    else if (campaign.discount_type === 'fixed') discountAmount += campaign.discount_value ?? 0
-    if (campaign.shipping_discount_type === 'percent') shippingDiscount += (shippingPrice * (campaign.shipping_discount_value ?? 0)) / 100
-    else if (campaign.shipping_discount_type === 'fixed') shippingDiscount += campaign.shipping_discount_value ?? 0
+    if (campaign.discount_type === 'percent') campaignProductDiscount = (subtotal * (campaign.discount_value ?? 0)) / 100
+    else if (campaign.discount_type === 'fixed') campaignProductDiscount = campaign.discount_value ?? 0
+    if (campaign.shipping_discount_type === 'percent')
+      campaignShippingDiscount = (shippingPrice * (campaign.shipping_discount_value ?? 0)) / 100
+    else if (campaign.shipping_discount_type === 'fixed') campaignShippingDiscount = campaign.shipping_discount_value ?? 0
   }
+  const campaignDiscountTotal = campaignProductDiscount + campaignShippingDiscount
+
+  let couponProductDiscount = 0
+  let couponShippingDiscount = 0
   if (appliedCoupon) {
     if (appliedCoupon.kind === 'frete') {
-      if (appliedCoupon.discount_type === 'percent') shippingDiscount += (shippingPrice * (appliedCoupon.discount_value ?? 0)) / 100
-      else shippingDiscount += appliedCoupon.discount_value ?? 0
-    } else if (appliedCoupon.discount_type === 'percent') {
-      discountAmount += (subtotal * (appliedCoupon.discount_value ?? 0)) / 100
+      couponShippingDiscount =
+        appliedCoupon.discount_type === 'percent'
+          ? (shippingPrice * (appliedCoupon.discount_value ?? 0)) / 100
+          : appliedCoupon.discount_value ?? 0
     } else {
-      discountAmount += appliedCoupon.discount_value ?? 0
+      couponProductDiscount =
+        appliedCoupon.discount_type === 'percent'
+          ? (subtotal * (appliedCoupon.discount_value ?? 0)) / 100
+          : appliedCoupon.discount_value ?? 0
     }
   }
-  discountAmount = Math.min(Math.max(discountAmount, 0), subtotal)
-  shippingDiscount = Math.min(Math.max(shippingDiscount, 0), shippingPrice)
+  const couponDiscountTotal = couponProductDiscount + couponShippingDiscount
+
+  const discountAmount = Math.min(Math.max(campaignProductDiscount + couponProductDiscount, 0), subtotal)
+  const shippingDiscount = Math.min(Math.max(campaignShippingDiscount + couponShippingDiscount, 0), shippingPrice)
   const total = subtotal - discountAmount + shippingPrice - shippingDiscount
 
   const applyCoupon = async () => {
@@ -271,11 +284,6 @@ export default function Checkout() {
                   Escolher localização no mapa
                 </button>
               )}
-              {shippingEstimate && customer.lat != null && (
-                <p className="text-xs text-son-silver-dim mt-1">
-                  {shippingEstimate.km.toFixed(1).replace('.', ',')} km da loja · Frete: {currency(shippingPrice)}
-                </p>
-              )}
             </div>
           )}
 
@@ -384,14 +392,29 @@ export default function Checkout() {
           </div>
 
           <div className="border-t border-white/10 pt-4 space-y-1 text-sm">
-            <div className="flex justify-between text-son-silver-dim">
+            <div className="flex justify-between text-son-silver-dim font-medium">
               <span>Subtotal</span>
               <span>{currency(subtotal)}</span>
             </div>
-            {discountAmount > 0 && (
+            {lines.map((l) => (
+              <div key={l.product.id} className="flex justify-between text-xs text-son-silver-dim pl-3">
+                <span className="truncate pr-2">
+                  {l.product.name}
+                  {l.item.quantity > 1 ? ` x${l.item.quantity}` : ''}
+                </span>
+                <span className="flex-shrink-0">{currency(l.product.price * l.item.quantity)}</span>
+              </div>
+            ))}
+            {campaignDiscountTotal > 0 && (
               <div className="flex justify-between text-emerald-400">
-                <span>Desconto</span>
-                <span>-{currency(discountAmount)}</span>
+                <span>Desconto de promoção{campaign ? ` - ${campaign.title}` : ''}</span>
+                <span>-{currency(campaignDiscountTotal)}</span>
+              </div>
+            )}
+            {couponDiscountTotal > 0 && (
+              <div className="flex justify-between text-emerald-400">
+                <span>Desconto de cupom{appliedCoupon ? ` - ${appliedCoupon.code}` : ''}</span>
+                <span>-{currency(couponDiscountTotal)}</span>
               </div>
             )}
             <div className="flex justify-between text-son-silver-dim">

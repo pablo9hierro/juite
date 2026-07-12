@@ -26,6 +26,7 @@ import type {
   Campaign,
   Category,
   Coupon,
+  CouponGrant,
   DeliveryPosition,
   FinanceiroSummary,
   Motoboy,
@@ -234,6 +235,14 @@ async function createOrder(payload: {
     if (coupon.kind === 'aniversario' && new Date().getMonth() !== birthMonth) {
       throw new ApiError(400, 'this coupon is only valid during your birthday month')
     }
+    // Cupom alvo (com concessões): intransferível, consome a concessão do
+    // whatsapp exato em vez do contador global.
+    const grants = (db.couponGrants ?? []).filter((g) => g.coupon_id === coupon.id)
+    if (grants.length > 0) {
+      const grant = grants.find((g) => g.customer_whatsapp === payload.customer_whatsapp && g.used_count < g.granted_uses)
+      if (!grant) throw new ApiError(400, 'this coupon is not available for your account')
+      grant.used_count += 1
+    }
     if (coupon.kind === 'frete') {
       if (coupon.discount_type === 'percent') shippingDiscount += (shippingPrice * (coupon.discount_value ?? 0)) / 100
       else shippingDiscount += coupon.discount_value ?? 0
@@ -334,8 +343,9 @@ async function getCampaignPublic(id: string): Promise<Campaign> {
 async function validateCouponPublic(
   code: string,
   campaignId?: string,
-  customerBirthdate?: string
-): Promise<Pick<Coupon, 'code' | 'kind' | 'discount_type' | 'discount_value'>> {
+  customerBirthdate?: string,
+  customerWhatsapp?: string
+): Promise<Pick<Coupon, 'code' | 'kind' | 'discount_type' | 'discount_value' | 'combinable_with_public'>> {
   const db = loadDb()
   const coupon = (db.coupons ?? []).find((c) => c.code.toUpperCase() === code.trim().toUpperCase())
   if (!coupon) throw new ApiError(400, 'coupon not found')
@@ -355,7 +365,37 @@ async function validateCouponPublic(
       throw new ApiError(400, 'this coupon is only valid during your birthday month')
     }
   }
-  return { code: coupon.code, kind: coupon.kind, discount_type: coupon.discount_type, discount_value: coupon.discount_value }
+  const grants = (db.couponGrants ?? []).filter((g) => g.coupon_id === coupon.id)
+  if (grants.length > 0) {
+    const grant = grants.find((g) => g.customer_whatsapp === customerWhatsapp && g.used_count < g.granted_uses)
+    if (!grant) throw new ApiError(400, 'this coupon is not available for your account')
+  }
+  return {
+    code: coupon.code,
+    kind: coupon.kind,
+    discount_type: coupon.discount_type,
+    discount_value: coupon.discount_value,
+    combinable_with_public: coupon.combinable_with_public,
+  }
+}
+
+async function listCustomerCouponsPublic(
+  customerWhatsapp: string
+): Promise<Pick<Coupon, 'code' | 'kind' | 'discount_type' | 'discount_value' | 'allow_campaign_checkout' | 'combinable_with_public'>[]> {
+  const db = loadDb()
+  const now = Date.now()
+  return (db.couponGrants ?? [])
+    .filter((g) => g.customer_whatsapp === customerWhatsapp && g.used_count < g.granted_uses)
+    .map((g) => (db.coupons ?? []).find((c) => c.id === g.coupon_id))
+    .filter((c): c is Coupon => !!c && c.active && (!c.expires_at || new Date(c.expires_at).getTime() > now))
+    .map((c) => ({
+      code: c.code,
+      kind: c.kind,
+      discount_type: c.discount_type,
+      discount_value: c.discount_value,
+      allow_campaign_checkout: c.allow_campaign_checkout,
+      combinable_with_public: c.combinable_with_public,
+    }))
 }
 
 // Modo demo já gera o QR na hora de criar o pedido (ver createOrder) — não
@@ -718,6 +758,73 @@ async function deleteCoupon(id: string): Promise<void> {
   saveDb(db)
 }
 
+async function createTargetedCoupon(payload: {
+  code: string
+  kind: 'desconto' | 'frete' | 'aniversario'
+  discount_type: 'percent' | 'fixed'
+  discount_value: number
+  customer_whatsapps: string[]
+  uses_per_customer?: number
+  notify_customers?: boolean
+  combinable_with_public?: boolean
+  allow_campaign_checkout?: boolean
+  expires_at?: string
+  max_uses?: number
+}): Promise<Coupon> {
+  const db = loadDb()
+  db.coupons = db.coupons ?? []
+  db.couponGrants = db.couponGrants ?? []
+  const code = payload.code.trim().toUpperCase()
+  if (!code) throw new ApiError(400, 'code is required')
+  if (db.coupons.some((c) => c.code === code)) throw new ApiError(400, 'a coupon with this code already exists')
+  if (!payload.customer_whatsapps || payload.customer_whatsapps.length === 0) {
+    throw new ApiError(400, 'at least one customer is required')
+  }
+  const coupon: Coupon = {
+    id: uid(),
+    code,
+    kind: payload.kind,
+    discount_type: payload.discount_type,
+    discount_value: payload.discount_value,
+    allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
+    combinable_with_public: payload.combinable_with_public ?? false,
+    active: true,
+    expires_at: payload.expires_at || null,
+    max_uses: payload.max_uses ?? null,
+    used_count: 0,
+    created_at: nowIso(),
+  }
+  db.coupons.push(coupon)
+  for (const whatsapp of payload.customer_whatsapps) {
+    db.couponGrants.push({
+      id: uid(),
+      coupon_id: coupon.id,
+      customer_whatsapp: whatsapp,
+      granted_uses: payload.uses_per_customer ?? 1,
+      used_count: 0,
+    })
+  }
+  saveDb(db)
+  return coupon
+}
+
+async function adminListCouponGrants(couponId: string): Promise<CouponGrant[]> {
+  const db = loadDb()
+  return (db.couponGrants ?? [])
+    .filter((g) => g.coupon_id === couponId)
+    .map((g) => {
+      const order = db.orders.find((o) => o.customer_whatsapp === g.customer_whatsapp)
+      return {
+        id: g.id,
+        customer_whatsapp: g.customer_whatsapp,
+        customer_name: order?.customer_name ?? null,
+        granted_uses: g.granted_uses,
+        used_count: g.used_count,
+      }
+    })
+    .sort((a, b) => (a.customer_name ?? '').localeCompare(b.customer_name ?? ''))
+}
+
 // ---------- campanhas (admin) ----------
 
 async function adminListCampaigns(): Promise<Campaign[]> {
@@ -1021,17 +1128,23 @@ async function adminCrmCustomers(): Promise<import('./types').CrmCustomer[]> {
       birthdate: null,
       total_spent: 0,
       order_count: 0,
+      first_order_at: null,
       last_order_at: null,
+      neighborhoods: [],
+      purchases: [],
     }
     entry.name = o.customer_name
     if (o.payment_status === 'pago') {
       entry.total_spent += o.total
       entry.order_count += 1
+      if (!entry.first_order_at || o.created_at < entry.first_order_at) entry.first_order_at = o.created_at
       if (!entry.last_order_at || o.created_at > entry.last_order_at) entry.last_order_at = o.created_at
+      if (o.neighborhood && !entry.neighborhoods.includes(o.neighborhood)) entry.neighborhoods.push(o.neighborhood)
+      for (const item of o.items) entry.purchases.push({ product_id: item.product_id, created_at: o.created_at })
     }
     byWhatsapp.set(o.customer_whatsapp, entry)
   }
-  return Array.from(byWhatsapp.values()).sort((a, b) => b.total_spent - a.total_spent)
+  return Array.from(byWhatsapp.values()).sort((a, b) => a.name.localeCompare(b.name))
 }
 
 async function motoboyFinanceiro(): Promise<import('./types').MotoboyFinanceiro> {
@@ -1246,7 +1359,7 @@ export const localApi = {
   estimateShipping,
   trackDeliveryPosition: trackDeliveryPositionLocal,
   campaigns: { listActive: listActiveCampaigns, get: getCampaignPublic },
-  coupons: { validate: validateCouponPublic },
+  coupons: { validate: validateCouponPublic, listForCustomer: listCustomerCouponsPublic },
   orders: {
     create: createOrder,
     get: getOrder,
@@ -1290,6 +1403,8 @@ export const localApi = {
       create: createCoupon,
       update: updateCoupon,
       delete: deleteCoupon,
+      createTargeted: createTargetedCoupon,
+      listGrants: adminListCouponGrants,
     },
     campaigns: {
       list: adminListCampaigns,
@@ -1307,6 +1422,7 @@ export const localApi = {
         throw new ApiError(400, 'WhatsApp não disponível no modo demonstração.')
       },
       logout: async () => {},
+      notifyCouponGrant: async () => {},
     },
   },
   motoboy: {

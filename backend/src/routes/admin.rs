@@ -529,6 +529,63 @@ pub async fn notify_order_ready(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[derive(Debug, Deserialize)]
+pub struct NotifyCouponGrantInput {
+    pub coupon_id: String,
+}
+
+/// Fired right after the admin creates a cupom alvo (targeted coupon) from
+/// a CRM filter, unless "não notificar clientes" was checked. Sends one
+/// WhatsApp message per contemplated customer from the store's own
+/// instance — same pattern as notify_order_ready, message built here so
+/// the client can't spoof the discount text.
+pub async fn notify_coupon_grant(
+    State(state): State<AppState>,
+    _admin: SunsetAdminSession,
+    Json(input): Json<NotifyCouponGrantInput>,
+) -> Result<StatusCode, AppError> {
+    let coupon: Option<(String, String, Option<String>, Option<f64>, i64)> = sqlx::query_as(
+        "SELECT code, kind, discount_type, discount_value, notify_customers FROM sunset.coupons WHERE id = $1",
+    )
+    .bind(&input.coupon_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let Some((code, kind, discount_type, discount_value, notify_customers)) = coupon else {
+        return Err(AppError::NotFound("coupon not found".to_string()));
+    };
+    if notify_customers == 0 {
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
+    let discount_text = match (discount_type.as_deref(), discount_value) {
+        (Some("percent"), Some(v)) => format!("{v}%"),
+        (Some("fixed"), Some(v)) => format!("R$ {}", format!("{v:.2}").replace('.', ",")),
+        _ => "desconto".to_string(),
+    };
+    let on_shipping = if kind == "frete" { " no frete" } else { "" };
+    let msg = format!(
+        "Você ganhou um cupom de desconto{on_shipping} na Sunset Tabas! 🎁\n\nCódigo: {code}\nDesconto: {discount_text}\n\nÉ só usar no checkout do site."
+    );
+
+    let recipients: Vec<(String,)> =
+        sqlx::query_as("SELECT DISTINCT customer_whatsapp FROM sunset.coupon_grants WHERE coupon_id = $1")
+            .bind(&input.coupon_id)
+            .fetch_all(&state.pool)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    for (phone,) in recipients {
+        let digits = whatsapp::digits_only(&phone);
+        if !digits.is_empty() {
+            whatsapp::notify(&state, &state.evolution_instance, &digits, &msg);
+        }
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 // ---------- WhatsApp (Evolution API) ----------
 //
 // Admin auth here uses SunsetAdminSession (checks sunset.sessions directly),

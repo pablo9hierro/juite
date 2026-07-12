@@ -7,6 +7,7 @@ import type {
   Campaign,
   Category,
   Coupon,
+  CouponGrant,
   CrmCustomer,
   EvolutionConnect,
   EvolutionStatus,
@@ -289,6 +290,38 @@ const remoteApi = {
           p_max_uses: payload.max_uses ?? null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_coupon', { p_token: adminToken(), p_id: id }),
+      // Cupom alvo: nasce de um filtro no CRM, amarrado a clientes
+      // específicos (por whatsapp) em vez de um código público qualquer um
+      // pode usar. Intransferível — cada concessão só vale pro whatsapp dela.
+      createTargeted: (payload: {
+        code: string
+        kind: 'desconto' | 'frete' | 'aniversario'
+        discount_type: 'percent' | 'fixed'
+        discount_value: number
+        customer_whatsapps: string[]
+        uses_per_customer?: number
+        notify_customers?: boolean
+        combinable_with_public?: boolean
+        allow_campaign_checkout?: boolean
+        expires_at?: string
+        max_uses?: number
+      }) =>
+        rpc<Coupon>('admin_create_targeted_coupon', {
+          p_token: adminToken(),
+          p_code: payload.code,
+          p_kind: payload.kind,
+          p_discount_type: payload.discount_type,
+          p_discount_value: payload.discount_value,
+          p_customer_whatsapps: payload.customer_whatsapps,
+          p_uses_per_customer: payload.uses_per_customer ?? 1,
+          p_notify_customers: payload.notify_customers ?? true,
+          p_combinable_with_public: payload.combinable_with_public ?? false,
+          p_allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
+          p_expires_at: payload.expires_at || null,
+          p_max_uses: payload.max_uses ?? null,
+        }),
+      listGrants: (couponId: string) =>
+        rpc<CouponGrant[]>('admin_list_coupon_grants', { p_token: adminToken(), p_coupon_id: couponId }),
     },
     campaigns: {
       list: () => rpc<Campaign[]>('admin_list_campaigns', { p_token: adminToken() }),
@@ -386,6 +419,15 @@ const remoteApi = {
       status: () => request<EvolutionStatus>('/api/admin/whatsapp/status', { token: adminToken() }),
       connect: () => request<EvolutionConnect>('/api/admin/whatsapp/connect', { token: adminToken() }),
       logout: () => request<void>('/api/admin/whatsapp/logout', { method: 'POST', token: adminToken() }),
+      // Dispara pelo WhatsApp da loja pra cada cliente contemplado num
+      // cupom alvo — a não ser que "não notificar clientes" tenha sido
+      // marcado na criação (checado nos dois lados, front e Rust).
+      notifyCouponGrant: (couponId: string) =>
+        request<void>('/api/admin/whatsapp/notify-coupon-grant', {
+          method: 'POST',
+          body: JSON.stringify({ coupon_id: couponId }),
+          token: adminToken(),
+        }),
     },
   },
   // PDV — acessível por admin OU vendedor, os dois autenticados no mesmo

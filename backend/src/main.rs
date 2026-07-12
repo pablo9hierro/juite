@@ -14,6 +14,7 @@ mod whatsapp;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use axum::extract::DefaultBodyLimit;
 use axum::http::HeaderValue;
 use axum::routing::{get, patch, post, put};
 use axum::Router;
@@ -250,6 +251,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/admin/whatsapp/connect", get(routes::admin::whatsapp_connect))
         .route("/api/admin/whatsapp/logout", post(routes::admin::whatsapp_logout))
         .route("/api/admin/whatsapp/notify-order-ready", post(routes::admin::notify_order_ready))
+        .route("/api/admin/whatsapp/notify-coupon-grant", post(routes::admin::notify_coupon_grant))
         // motoboy
         // Otimiza a ordem de entrega do lote via Google Routes (distância
         // real de rua) antes de chamar sunset.motoboy_start_run — quando
@@ -281,6 +283,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/webhooks/evolution", post(routes::webhooks::evolution_webhook))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
+        // Axum's próprio default é 2MB — baixo demais pra banner de campanha
+        // (foto de marketing em boa resolução passa disso fácil, mesmo que a
+        // foto de produto raramente passasse). 10MB cobre com folga.
+        .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
         .with_state(state);
 
     // Bind to 0.0.0.0 so this also works inside a container (Railway etc, which

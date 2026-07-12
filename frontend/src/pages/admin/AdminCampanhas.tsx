@@ -359,7 +359,7 @@ export default function AdminCampanhas() {
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
           onClick={() => setShowCampaignForm(false)}
         >
-          <div className="glass rounded-2xl p-6 max-w-md w-full my-8" onClick={(e) => e.stopPropagation()}>
+          <div className="glass rounded-2xl p-6 max-w-2xl w-full my-8" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-white">Nova campanha</h3>
               <button onClick={() => setShowCampaignForm(false)} className="text-son-silver-dim hover:text-white">
@@ -523,7 +523,7 @@ export default function AdminCampanhas() {
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
           onClick={() => setShowCouponForm(false)}
         >
-          <div className="glass rounded-2xl p-6 max-w-sm w-full my-8" onClick={(e) => e.stopPropagation()}>
+          <div className="glass rounded-2xl p-6 max-w-lg w-full my-8" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-white">Novo cupom</h3>
               <button onClick={() => setShowCouponForm(false)} className="text-son-silver-dim hover:text-white">

@@ -42,11 +42,22 @@ export interface Coupon {
   discount_type: DiscountType | null
   discount_value: number | null
   allow_campaign_checkout: boolean
+  // Só relevante pra cupom alvo (com concessões) — se pode ser combinado
+  // com um cupom avulso digitado manualmente no checkout.
+  combinable_with_public?: boolean
   active: boolean
   expires_at: string | null
   max_uses: number | null
   used_count: number
   created_at: string
+}
+
+export interface CouponGrant {
+  id: string
+  customer_whatsapp: string
+  customer_name: string | null
+  granted_uses: number
+  used_count: number
 }
 
 export interface Campaign {
@@ -72,6 +83,11 @@ export interface OrderItem {
   quantity: number
 }
 
+export interface CrmPurchaseEvent {
+  product_id: string
+  created_at: string
+}
+
 export interface CrmCustomer {
   id: string
   name: string
@@ -79,7 +95,10 @@ export interface CrmCustomer {
   birthdate: string | null
   total_spent: number
   order_count: number
+  first_order_at: string | null
   last_order_at: string | null
+  neighborhoods: string[]
+  purchases: CrmPurchaseEvent[]
 }
 
 export interface Order {

@@ -18,6 +18,16 @@ export interface LocalRun extends Omit<MotoboyRun, 'orders'> {
   motoboy_id: string
 }
 
+// Concessão de cupom alvo (criado a partir de filtro no CRM) — intransferível,
+// só o whatsapp exato pode usar, até granted_uses vezes.
+export interface LocalCouponGrant {
+  id: string
+  coupon_id: string
+  customer_whatsapp: string
+  granted_uses: number
+  used_count: number
+}
+
 export interface LocalDb {
   categories: Category[]
   products: Product[]
@@ -28,6 +38,7 @@ export interface LocalDb {
   runs: LocalRun[]
   campaigns: Campaign[]
   coupons: Coupon[]
+  couponGrants: LocalCouponGrant[]
   pricePerKm: number
   maxKm: number | null
 }
@@ -100,6 +111,7 @@ function seedDb(): LocalDb {
     runs: [],
     campaigns: [],
     coupons: [],
+    couponGrants: [],
     pricePerKm: 1.5,
     maxKm: null,
   }

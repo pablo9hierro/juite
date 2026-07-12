@@ -94,9 +94,9 @@ export default function ExpiryInput({
       </div>
 
       {mode === 'duration' && (
-        <div className="flex gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
           <input
-            className="input-field flex-1"
+            className="input-field min-w-0"
             type="number"
             min="1"
             placeholder="Quantidade"
@@ -104,7 +104,7 @@ export default function ExpiryInput({
             onChange={(e) => applyDuration(e.target.value, durationUnit)}
           />
           <select
-            className="input-field appearance-none cursor-pointer"
+            className="input-field appearance-none cursor-pointer w-32"
             value={durationUnit}
             onChange={(e) => applyDuration(durationValue, e.target.value as Unit)}
           >
