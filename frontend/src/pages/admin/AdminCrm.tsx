@@ -498,11 +498,11 @@ export default function AdminCrm() {
                 className={`input-field w-20 py-1 px-2 text-xs text-center inline-block ${NO_SPINNER}`}
                 type="number"
                 min="1"
-                placeholder="25"
+                placeholder="Opcional"
                 value={filter.minOrdersDays}
                 onChange={(e) => setFilter({ ...filter, minOrdersDays: e.target.value })}
               />
-              Dias <span className="text-son-silver-dim font-normal">(Opcional)</span>
+              Dias
             </label>
             <input
               className="input-field mt-2 max-w-xs"
@@ -522,11 +522,11 @@ export default function AdminCrm() {
                 className={`input-field w-20 py-1 px-2 text-xs text-center inline-block ${NO_SPINNER}`}
                 type="number"
                 min="1"
-                placeholder="25"
+                placeholder="Opcional"
                 value={filter.minItemsDays}
                 onChange={(e) => setFilter({ ...filter, minItemsDays: e.target.value })}
               />
-              Dias <span className="text-son-silver-dim font-normal">(Opcional)</span>
+              Dias
             </label>
             <input
               className="input-field mt-2 max-w-xs"
@@ -540,13 +540,12 @@ export default function AdminCrm() {
           </div>
 
           <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">
-              Distância de no máximo (km) <span className="text-son-silver-dim font-normal">(Opcional)</span>
-            </label>
+            <label className="label">Distância de no máximo (km)</label>
             <input
               className={`input-field w-28 ${NO_SPINNER}`}
               type="number"
               min="0"
+              placeholder="Opcional"
               value={filter.maxDistanceKm}
               onChange={(e) => setFilter({ ...filter, maxDistanceKm: e.target.value })}
             />
@@ -568,10 +567,11 @@ export default function AdminCrm() {
                 className={`input-field w-24 ${NO_SPINNER}`}
                 type="number"
                 min="1"
+                placeholder="Opcional"
                 value={filter.spentBelowDays}
                 onChange={(e) => setFilter({ ...filter, spentBelowDays: e.target.value })}
               />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">dias (Opcional)</span>
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
             </div>
             {pairErrors.spentBelow && <p className="error-msg mt-1">{pairErrors.spentBelow}</p>}
           </div>
@@ -592,36 +592,35 @@ export default function AdminCrm() {
                 className={`input-field w-24 ${NO_SPINNER}`}
                 type="number"
                 min="1"
+                placeholder="Opcional"
                 value={filter.spentAboveDays}
                 onChange={(e) => setFilter({ ...filter, spentAboveDays: e.target.value })}
               />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">dias (Opcional)</span>
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
             </div>
             {pairErrors.spentAbove && <p className="error-msg mt-1">{pairErrors.spentAbove}</p>}
           </div>
 
           <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">
-              Reduziu a frequência de compra em (%) <span className="text-son-silver-dim font-normal">(Opcional)</span>
-            </label>
+            <label className="label">Reduziu a frequência de compra em (%)</label>
             <input
               className={`input-field w-24 ${NO_SPINNER}`}
               type="number"
               min="1"
               max="100"
+              placeholder="Opcional"
               value={filter.frequencyDropPercent}
               onChange={(e) => setFilter({ ...filter, frequencyDropPercent: e.target.value })}
             />
           </div>
 
           <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">
-              Cliente novo em (dias) <span className="text-son-silver-dim font-normal">(Opcional)</span>
-            </label>
+            <label className="label">Cliente novo em (dias)</label>
             <input
               className={`input-field w-28 ${NO_SPINNER}`}
               type="number"
               min="1"
+              placeholder="Opcional"
               value={filter.newCustomerDays}
               onChange={(e) => setFilter({ ...filter, newCustomerDays: e.target.value })}
             />
