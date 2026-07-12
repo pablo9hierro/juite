@@ -175,6 +175,12 @@ async function createOrder(payload: {
     if (payload.items.some((item) => !campaign!.product_ids.includes(item.product_id))) {
       throw new ApiError(400, 'this campaign checkout can only contain the campaign products')
     }
+    if (campaign.campaign_type === 'kit') {
+      const submittedIds = new Set(payload.items.map((i) => i.product_id))
+      const campaignIds = new Set(campaign.product_ids)
+      const sameSet = submittedIds.size === campaignIds.size && [...campaignIds].every((id) => submittedIds.has(id))
+      if (!sameSet) throw new ApiError(400, 'this kit campaign can only be purchased as the full bundle')
+    }
   }
 
   let subtotal = 0
@@ -196,6 +202,20 @@ async function createOrder(payload: {
     })
   }
 
+  // selfie_service: desconto por produto, somado durante o loop de itens
+  // (mesma lógica de coupon kind='produto') — kit usa discount_type/value
+  // sobre o subtotal somado, tratado mais abaixo.
+  let selfieServiceDiscount = 0
+  if (campaign?.campaign_type === 'selfie_service') {
+    for (const item of payload.items) {
+      const pd = (campaign.product_discounts ?? []).find((p) => p.product_id === item.product_id)
+      if (!pd) continue
+      const product = db.products.find((p) => p.id === item.product_id)!
+      const lineTotal = product.price * item.quantity
+      selfieServiceDiscount += pd.discount_type === 'percent' ? (lineTotal * pd.discount_value) / 100 : Math.min(pd.discount_value * item.quantity, lineTotal)
+    }
+  }
+
   let shippingPrice = 0
   if (payload.delivery_type === 'entrega') {
     if (payload.customer_lat == null || payload.customer_lng == null) {
@@ -212,8 +232,12 @@ async function createOrder(payload: {
   let shippingDiscount = 0
 
   if (campaign) {
-    if (campaign.discount_type === 'percent') discountAmount += (subtotal * (campaign.discount_value ?? 0)) / 100
-    else if (campaign.discount_type === 'fixed') discountAmount += campaign.discount_value ?? 0
+    if (campaign.campaign_type === 'kit') {
+      if (campaign.discount_type === 'percent') discountAmount += (subtotal * (campaign.discount_value ?? 0)) / 100
+      else if (campaign.discount_type === 'fixed') discountAmount += campaign.discount_value ?? 0
+    } else {
+      discountAmount += selfieServiceDiscount
+    }
     if (campaign.shipping_discount_type === 'percent') shippingDiscount += (shippingPrice * (campaign.shipping_discount_value ?? 0)) / 100
     else if (campaign.shipping_discount_type === 'fixed') shippingDiscount += campaign.shipping_discount_value ?? 0
   }
@@ -925,32 +949,41 @@ async function createCampaign(payload: {
   title: string
   image_url: string
   product_ids: string[]
+  campaign_type: import('./types').CampaignType
   discount_type?: 'percent' | 'fixed'
   discount_value?: number
   shipping_discount_type?: 'percent' | 'fixed'
   shipping_discount_value?: number
   starts_at?: string
   expires_at?: string
+  product_discounts?: import('./types').ProductDiscount[]
 }): Promise<Campaign> {
   const db = loadDb()
   db.campaigns = db.campaigns ?? []
   if (!payload.title.trim()) throw new ApiError(400, 'title is required')
   if (!payload.image_url) throw new ApiError(400, 'image is required to create a campaign')
   if (!payload.product_ids || payload.product_ids.length === 0) throw new ApiError(400, 'at least one product is required')
-  const hasProductDiscount = payload.discount_type && payload.discount_value != null
-  const hasShippingDiscount = payload.shipping_discount_type && payload.shipping_discount_value != null
-  if (!hasProductDiscount && !hasShippingDiscount) {
-    throw new ApiError(400, 'a campaign needs a product discount and/or a shipping discount')
+  const hasProductDiscounts = payload.campaign_type === 'selfie_service' && payload.product_discounts && payload.product_discounts.length > 0
+  if (payload.campaign_type === 'selfie_service') {
+    if (!hasProductDiscounts) throw new ApiError(400, 'at least one product discount is required for a selfie-service campaign')
+  } else {
+    const hasProductDiscount = payload.discount_type && payload.discount_value != null
+    const hasShippingDiscount = payload.shipping_discount_type && payload.shipping_discount_value != null
+    if (!hasProductDiscount && !hasShippingDiscount) {
+      throw new ApiError(400, 'a kit campaign needs a product discount and/or a shipping discount')
+    }
   }
   const campaign: Campaign = {
     id: uid(),
     title: payload.title.trim(),
     image_url: payload.image_url,
     product_ids: payload.product_ids,
-    discount_type: payload.discount_type ?? null,
-    discount_value: payload.discount_value ?? null,
+    campaign_type: payload.campaign_type,
+    discount_type: payload.campaign_type === 'selfie_service' ? null : payload.discount_type ?? null,
+    discount_value: payload.campaign_type === 'selfie_service' ? null : payload.discount_value ?? null,
     shipping_discount_type: payload.shipping_discount_type ?? null,
     shipping_discount_value: payload.shipping_discount_value ?? null,
+    product_discounts: hasProductDiscounts ? payload.product_discounts! : [],
     active: true,
     starts_at: payload.starts_at || null,
     expires_at: payload.expires_at || null,
@@ -967,6 +1000,7 @@ async function updateCampaign(
     title: string
     image_url: string
     product_ids: string[]
+    campaign_type: import('./types').CampaignType
     discount_type?: 'percent' | 'fixed'
     discount_value?: number
     shipping_discount_type?: 'percent' | 'fixed'
@@ -974,6 +1008,7 @@ async function updateCampaign(
     active: boolean
     starts_at?: string
     expires_at?: string
+    product_discounts?: import('./types').ProductDiscount[]
   }
 ): Promise<Campaign> {
   const db = loadDb()
@@ -981,18 +1016,25 @@ async function updateCampaign(
   if (!campaign) throw new ApiError(404, 'campaign not found')
   if (!payload.image_url) throw new ApiError(400, 'image is required')
   if (!payload.product_ids || payload.product_ids.length === 0) throw new ApiError(400, 'at least one product is required')
-  const hasProductDiscount = payload.discount_type && payload.discount_value != null
-  const hasShippingDiscount = payload.shipping_discount_type && payload.shipping_discount_value != null
-  if (!hasProductDiscount && !hasShippingDiscount) {
-    throw new ApiError(400, 'a campaign needs a product discount and/or a shipping discount')
+  const hasProductDiscounts = payload.campaign_type === 'selfie_service' && payload.product_discounts && payload.product_discounts.length > 0
+  if (payload.campaign_type === 'selfie_service') {
+    if (!hasProductDiscounts) throw new ApiError(400, 'at least one product discount is required for a selfie-service campaign')
+  } else {
+    const hasProductDiscount = payload.discount_type && payload.discount_value != null
+    const hasShippingDiscount = payload.shipping_discount_type && payload.shipping_discount_value != null
+    if (!hasProductDiscount && !hasShippingDiscount) {
+      throw new ApiError(400, 'a kit campaign needs a product discount and/or a shipping discount')
+    }
   }
   campaign.title = payload.title.trim()
   campaign.image_url = payload.image_url
   campaign.product_ids = payload.product_ids
-  campaign.discount_type = payload.discount_type ?? null
-  campaign.discount_value = payload.discount_value ?? null
+  campaign.campaign_type = payload.campaign_type
+  campaign.discount_type = payload.campaign_type === 'selfie_service' ? null : payload.discount_type ?? null
+  campaign.discount_value = payload.campaign_type === 'selfie_service' ? null : payload.discount_value ?? null
   campaign.shipping_discount_type = payload.shipping_discount_type ?? null
   campaign.shipping_discount_value = payload.shipping_discount_value ?? null
+  campaign.product_discounts = hasProductDiscounts ? payload.product_discounts! : []
   campaign.active = payload.active
   campaign.starts_at = payload.starts_at || null
   campaign.expires_at = payload.expires_at || null

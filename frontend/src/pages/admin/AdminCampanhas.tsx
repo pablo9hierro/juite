@@ -3,15 +3,20 @@ import { ImagePlus, Loader2, Megaphone, Plus, Trash2, X } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import ExpiryInput from '../../components/admin/ExpiryInput'
 import ProductMultiSelect from '../../components/admin/ProductMultiSelect'
+import ProductDiscountList from '../../components/admin/ProductDiscountList'
 import { api, ApiError } from '../../lib/api'
-import type { Campaign, DiscountType, Product } from '../../lib/types'
+import type { Campaign, CampaignType, DiscountType, Product, ProductDiscount } from '../../lib/types'
+
+const MAX_BANNER_MB = 10
 
 type CampaignForm = {
   title: string
   image_url: string
   product_ids: string[]
+  campaign_type: CampaignType
   discount_type: DiscountType | ''
   discount_value: string
+  productDiscounts: ProductDiscount[]
   shipping_discount_type: DiscountType | ''
   shipping_discount_value: string
   starts_at: string
@@ -21,8 +26,10 @@ const EMPTY_CAMPAIGN_FORM: CampaignForm = {
   title: '',
   image_url: '',
   product_ids: [],
+  campaign_type: 'kit',
   discount_type: '',
   discount_value: '',
+  productDiscounts: [],
   shipping_discount_type: '',
   shipping_discount_value: '',
   starts_at: '',
@@ -32,6 +39,11 @@ const EMPTY_CAMPAIGN_FORM: CampaignForm = {
 function discountLabel(discountType: DiscountType | null, value: number | null) {
   if (!discountType || value == null) return null
   return discountType === 'percent' ? `${value}% off` : `R$ ${value.toFixed(2).replace('.', ',')} off`
+}
+
+const CAMPAIGN_TYPE_LABEL: Record<CampaignType, string> = {
+  kit: 'Kit (pacote fechado)',
+  selfie_service: 'Selfie service (cliente monta o carrinho)',
 }
 
 export default function AdminCampanhas() {
@@ -60,6 +72,10 @@ export default function AdminCampanhas() {
     e.target.value = ''
     if (!file) return
     setCampaignError(null)
+    if (file.size > MAX_BANNER_MB * 1024 * 1024) {
+      setCampaignError(`O arquivo tem ${(file.size / (1024 * 1024)).toFixed(1)}MB — o máximo é ${MAX_BANNER_MB}MB.`)
+      return
+    }
     setUploading(true)
     try {
       const { url } = await api.admin.products.uploadImage(file)
@@ -73,14 +89,21 @@ export default function AdminCampanhas() {
 
   const saveCampaign = async () => {
     setCampaignError(null)
+    if (campaignForm.campaign_type === 'selfie_service' && campaignForm.productDiscounts.length === 0) {
+      setCampaignError('Busque e adicione ao menos um produto com desconto.')
+      return
+    }
     setSavingCampaign(true)
     try {
       await api.admin.campaigns.create({
         title: campaignForm.title,
         image_url: campaignForm.image_url,
         product_ids: campaignForm.product_ids,
-        discount_type: campaignForm.discount_type || undefined,
-        discount_value: campaignForm.discount_value ? Number(campaignForm.discount_value) : undefined,
+        campaign_type: campaignForm.campaign_type,
+        discount_type: campaignForm.campaign_type === 'kit' ? campaignForm.discount_type || undefined : undefined,
+        discount_value:
+          campaignForm.campaign_type === 'kit' && campaignForm.discount_value ? Number(campaignForm.discount_value) : undefined,
+        product_discounts: campaignForm.campaign_type === 'selfie_service' ? campaignForm.productDiscounts : undefined,
         shipping_discount_type: campaignForm.shipping_discount_type || undefined,
         shipping_discount_value: campaignForm.shipping_discount_value ? Number(campaignForm.shipping_discount_value) : undefined,
         starts_at: campaignForm.starts_at || undefined,
@@ -101,8 +124,10 @@ export default function AdminCampanhas() {
       title: c.title,
       image_url: c.image_url,
       product_ids: c.product_ids,
+      campaign_type: c.campaign_type,
       discount_type: c.discount_type ?? undefined,
       discount_value: c.discount_value ?? undefined,
+      product_discounts: c.product_discounts,
       shipping_discount_type: c.shipping_discount_type ?? undefined,
       shipping_discount_value: c.shipping_discount_value ?? undefined,
       active: !c.active,
@@ -146,10 +171,19 @@ export default function AdminCampanhas() {
                   <p className="font-semibold text-white truncate">{c.title}</p>
                   <p className="text-xs text-son-silver-dim">{c.product_ids.length} produto(s)</p>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {discountLabel(c.discount_type, c.discount_value) && (
+                    <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-xs">
+                      {c.campaign_type === 'kit' ? 'Kit' : 'Selfie service'}
+                    </span>
+                    {c.campaign_type === 'selfie_service' ? (
                       <span className="px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">
-                        {discountLabel(c.discount_type, c.discount_value)}
+                        {c.product_discounts?.length ?? 0} produto(s) c/ desconto
                       </span>
+                    ) : (
+                      discountLabel(c.discount_type, c.discount_value) && (
+                        <span className="px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">
+                          {discountLabel(c.discount_type, c.discount_value)}
+                        </span>
+                      )
                     )}
                     {discountLabel(c.shipping_discount_type, c.shipping_discount_value) && (
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-semibold">
@@ -202,8 +236,14 @@ export default function AdminCampanhas() {
                 />
               </div>
               <div>
-                <label className="label">Banner (imagem obrigatória)</label>
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                <label className="label">Banner (imagem, gif ou vídeo — obrigatório)</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"
+                  className="hidden"
+                  onChange={handleImageChange}
+                />
                 <div className="flex items-center gap-3">
                   <div className="w-20 h-20 rounded-xl bg-son-surface-light flex items-center justify-center overflow-hidden flex-shrink-0">
                     {uploading ? (
@@ -224,7 +264,33 @@ export default function AdminCampanhas() {
                     {campaignForm.image_url ? 'Trocar imagem' : 'Enviar imagem'}
                   </button>
                 </div>
+                <p className="text-xs text-son-silver-dim mt-1.5">
+                  Dimensão recomendada: 1200×600px (proporção 2:1), formatos aceitos: JPG, PNG, WEBP, GIF, MP4 ou WEBM. Tamanho
+                  máximo por arquivo: {MAX_BANNER_MB}MB.
+                </p>
                 {campaignError && <p className="error-msg mt-1">{campaignError}</p>}
+              </div>
+              <div>
+                <label className="label">Tipo de campanha</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(['kit', 'selfie_service'] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setCampaignForm({ ...campaignForm, campaign_type: t })}
+                      className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
+                        campaignForm.campaign_type === t ? 'sunset-bg text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
+                      }`}
+                    >
+                      {CAMPAIGN_TYPE_LABEL[t]}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-son-silver-dim mt-1.5">
+                  {campaignForm.campaign_type === 'kit'
+                    ? 'O cliente só pode comprar o pacote inteiro (todos os produtos da campanha) ou não comprar nada — desconto único sobre o valor total.'
+                    : 'O cliente monta o próprio carrinho em /banner escolhendo entre os produtos da campanha — cada produto tem seu próprio desconto.'}
+                </p>
               </div>
               <div>
                 <label className="label">Produtos da campanha</label>
@@ -234,31 +300,42 @@ export default function AdminCampanhas() {
                   onChange={(product_ids) => setCampaignForm({ ...campaignForm, product_ids })}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              {campaignForm.campaign_type === 'selfie_service' ? (
                 <div>
-                  <label className="label">Desconto no produto</label>
-                  <select
-                    className="input-field"
-                    value={campaignForm.discount_type}
-                    onChange={(e) => setCampaignForm({ ...campaignForm, discount_type: e.target.value as DiscountType | '' })}
-                  >
-                    <option value="">Sem desconto de produto</option>
-                    <option value="percent">Percentual</option>
-                    <option value="fixed">Valor fixo (R$)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Valor</label>
-                  <input
-                    className="input-field"
-                    type="number"
-                    min="0"
-                    disabled={!campaignForm.discount_type}
-                    value={campaignForm.discount_value}
-                    onChange={(e) => setCampaignForm({ ...campaignForm, discount_value: e.target.value })}
+                  <label className="label">Desconto no produto (cada item tem o seu)</label>
+                  <ProductDiscountList
+                    products={products.filter((p) => campaignForm.product_ids.includes(p.id))}
+                    discounts={campaignForm.productDiscounts}
+                    onChange={(productDiscounts) => setCampaignForm({ ...campaignForm, productDiscounts })}
                   />
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="label">Desconto no valor total</label>
+                    <select
+                      className="input-field"
+                      value={campaignForm.discount_type}
+                      onChange={(e) => setCampaignForm({ ...campaignForm, discount_type: e.target.value as DiscountType | '' })}
+                    >
+                      <option value="">Sem desconto de produto</option>
+                      <option value="percent">Percentual</option>
+                      <option value="fixed">Valor fixo (R$)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Valor</label>
+                    <input
+                      className="input-field"
+                      type="number"
+                      min="0"
+                      disabled={!campaignForm.discount_type}
+                      value={campaignForm.discount_value}
+                      onChange={(e) => setCampaignForm({ ...campaignForm, discount_value: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="label">Desconto no frete</label>

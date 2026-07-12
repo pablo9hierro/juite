@@ -6,6 +6,8 @@ import Catalogo from './pages/Catalogo'
 import ProdutoDetalhe from './pages/ProdutoDetalhe'
 import Carrinho from './pages/Carrinho'
 import Checkout from './pages/Checkout'
+import Banner from './pages/Banner'
+import BannerCheckout from './pages/BannerCheckout'
 import Pagamento from './pages/Pagamento'
 import Consultar from './pages/Consultar'
 import AdminLogin from './pages/admin/AdminLogin'
@@ -45,6 +47,8 @@ export default function App() {
         <Route path="/produto/:id" element={<ProdutoDetalhe />} />
         <Route path="/carrinho" element={<Carrinho />} />
         <Route path="/checkout" element={<Checkout />} />
+        <Route path="/banner" element={<Banner />} />
+        <Route path="/banner/checkout" element={<BannerCheckout />} />
         <Route path="/pagamento/:orderId" element={<Pagamento />} />
         <Route path="/consultar" element={<Consultar />} />
 

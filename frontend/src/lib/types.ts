@@ -75,15 +75,22 @@ export interface CouponGrant {
   used_count: number
 }
 
+export type CampaignType = 'selfie_service' | 'kit'
+
 export interface Campaign {
   id: string
   title: string
   image_url: string
   product_ids: string[]
+  campaign_type: CampaignType
+  // kit: desconto sobre o valor total somado (discount_type/value).
+  // selfie_service: desconto por produto (product_discounts) — cliente
+  // monta o próprio carrinho em /banner com só os itens que quiser.
   discount_type: DiscountType | null
   discount_value: number | null
   shipping_discount_type: DiscountType | null
   shipping_discount_value: number | null
+  product_discounts?: ProductDiscount[]
   active?: boolean
   starts_at: string | null
   expires_at: string | null

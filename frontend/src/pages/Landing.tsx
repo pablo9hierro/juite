@@ -40,7 +40,7 @@ function BannerCarousel() {
   return (
     <button
       type="button"
-      onClick={() => navigate(`/checkout?campanha=${current.id}`)}
+      onClick={() => navigate(`/banner?campanha=${current.id}`)}
       className={`${containerClass} w-full text-left`}
       aria-label={current.title}
     >

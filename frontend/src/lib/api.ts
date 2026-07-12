@@ -5,6 +5,7 @@ import { supabasePublicApi } from './supabasePublicApi'
 import { supabase } from './supabaseClient'
 import type {
   Campaign,
+  CampaignType,
   Category,
   Coupon,
   CouponGrant,
@@ -359,24 +360,28 @@ const remoteApi = {
         title: string
         image_url: string
         product_ids: string[]
+        campaign_type: CampaignType
         discount_type?: 'percent' | 'fixed'
         discount_value?: number
         shipping_discount_type?: 'percent' | 'fixed'
         shipping_discount_value?: number
         starts_at?: string
         expires_at?: string
+        product_discounts?: ProductDiscount[]
       }) =>
         rpc<Campaign>('admin_create_campaign', {
           p_token: adminToken(),
           p_title: payload.title,
           p_image_url: payload.image_url,
           p_product_ids: payload.product_ids,
+          p_campaign_type: payload.campaign_type,
           p_discount_type: payload.discount_type ?? null,
           p_discount_value: payload.discount_value ?? null,
           p_shipping_discount_type: payload.shipping_discount_type ?? null,
           p_shipping_discount_value: payload.shipping_discount_value ?? null,
           p_starts_at: payload.starts_at || null,
           p_expires_at: payload.expires_at || null,
+          p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
         }),
       update: (
         id: string,
@@ -384,6 +389,7 @@ const remoteApi = {
           title: string
           image_url: string
           product_ids: string[]
+          campaign_type: CampaignType
           discount_type?: 'percent' | 'fixed'
           discount_value?: number
           shipping_discount_type?: 'percent' | 'fixed'
@@ -391,6 +397,7 @@ const remoteApi = {
           active: boolean
           starts_at?: string
           expires_at?: string
+          product_discounts?: ProductDiscount[]
         }
       ) =>
         rpc<Campaign>('admin_update_campaign', {
@@ -399,6 +406,7 @@ const remoteApi = {
           p_title: payload.title,
           p_image_url: payload.image_url,
           p_product_ids: payload.product_ids,
+          p_campaign_type: payload.campaign_type,
           p_discount_type: payload.discount_type ?? null,
           p_discount_value: payload.discount_value ?? null,
           p_shipping_discount_type: payload.shipping_discount_type ?? null,
@@ -406,6 +414,7 @@ const remoteApi = {
           p_active: payload.active,
           p_starts_at: payload.starts_at || null,
           p_expires_at: payload.expires_at || null,
+          p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_campaign', { p_token: adminToken(), p_id: id }),
     },
