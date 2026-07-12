@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
 
 interface MotoboyAuthState {
   token: string | null
@@ -16,6 +16,11 @@ export const useMotoboyAuth = create<MotoboyAuthState>()(
       login: (token, name) => set({ token, name }),
       logout: () => set({ token: null, name: null }),
     }),
-    { name: 'sonset_motoboy_auth' }
+    {
+      name: 'sonset_motoboy_auth',
+      // sessionStorage: mesma razão do adminAuth — sessão isolada por aba,
+      // não some/ vaza quando outra aba loga com outra conta.
+      storage: createJSONStorage(() => sessionStorage),
+    }
   )
 )

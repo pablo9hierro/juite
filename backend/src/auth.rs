@@ -136,6 +136,43 @@ impl FromRequestParts<AppState> for SunsetAdminSession {
     }
 }
 
+/// Same as SunsetAdminSession but also accepts role == vendedor — vendedor
+/// shares the admin's own store WhatsApp instance (no personal instance),
+/// used by routes both roles can trigger (e.g. "pedido pronto" notify after
+/// advancing an order they're allowed to manage from /admin/pedidos).
+pub struct SunsetAdminOrVendedorSession(#[allow(dead_code)] pub String);
+
+impl FromRequestParts<AppState> for SunsetAdminOrVendedorSession {
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let header = parts
+            .headers
+            .get(axum::http::header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| AppError::Unauthorized("missing authorization header".to_string()))?;
+        let token = header
+            .strip_prefix("Bearer ")
+            .ok_or_else(|| AppError::Unauthorized("invalid authorization header".to_string()))?;
+
+        let subject: Option<(String,)> = sqlx::query_as(
+            "SELECT subject_id FROM sunset.sessions WHERE token = $1 AND role IN ('admin', 'vendedor') AND expires_at > now()",
+        )
+        .bind(token)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+        match subject {
+            Some((id,)) => Ok(SunsetAdminOrVendedorSession(id)),
+            None => Err(AppError::Unauthorized("invalid or expired session".to_string())),
+        }
+    }
+}
+
 /// Same as SunsetAdminSession but for role == motoboy (own WhatsApp
 /// connection, per-motoboy Evolution API instance).
 pub struct SunsetMotoboySession(pub String);

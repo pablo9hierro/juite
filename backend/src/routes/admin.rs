@@ -4,7 +4,7 @@ use axum::Json;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::auth::{hash_password, AdminUser, SunsetAdminSession};
+use crate::auth::{hash_password, AdminUser, SunsetAdminOrVendedorSession, SunsetAdminSession};
 use crate::error::AppError;
 use crate::models::{
     Category, CategoryInput, FinanceiroSummary, MotoboyDto, MotoboyInput, MotoboyRow, OrderDto,
@@ -507,7 +507,7 @@ pub struct NotifyOrderInput {
 /// delivery_type.
 pub async fn notify_order_ready(
     State(state): State<AppState>,
-    _admin: SunsetAdminSession,
+    _admin: SunsetAdminOrVendedorSession,
     Json(input): Json<NotifyOrderInput>,
 ) -> Result<StatusCode, AppError> {
     let Some(order) = crate::orders_common::fetch_order_row(&state.pool, &input.order_id).await? else {

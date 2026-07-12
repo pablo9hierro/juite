@@ -14,12 +14,14 @@ import Logo from '../ui/Logo'
 import { useAdminAuth } from '../../store/adminAuth'
 
 // Vendedor usa essa MESMA tela (mesmo layout, login, sidebar) só que
-// enxergando apenas PDV + Relatórios — o resto do menu nem aparece pra
-// ele, e a guarda de rota abaixo bloqueia acesso direto por URL também
-// (defesa em profundidade: cada RPC admin-only já rejeita o token de
-// vendedor sozinha, isso aqui é só pra não mostrar tela quebrada).
+// enxergando um dashboard próprio: Pedidos + PDV + Relatórios — sem acesso
+// a Produtos/Funcionários/Frete/Financeiro/Senha, que continuam exclusivos
+// do admin. O resto do menu nem aparece pra ele, e a guarda de rota abaixo
+// bloqueia acesso direto por URL também (defesa em profundidade: cada RPC
+// admin-only já rejeita o token de vendedor sozinha, isso aqui é só pra não
+// mostrar tela quebrada).
 const NAV_ITEMS = [
-  { href: '/admin/pedidos', label: 'Pedidos', icon: ClipboardList, roles: ['admin'] },
+  { href: '/admin/pedidos', label: 'Pedidos', icon: ClipboardList, roles: ['admin', 'vendedor'] },
   { href: '/admin/produtos', label: 'Produtos', icon: Package, roles: ['admin'] },
   { href: '/admin/motoboys', label: 'Funcionários', icon: Truck, roles: ['admin'] },
   { href: '/admin/frete', label: 'Frete', icon: MapPinned, roles: ['admin'] },
