@@ -1110,6 +1110,7 @@ async function createCampanhaCoupon(payload: {
     trigger_criteria: payload.trigger_criteria ?? null,
     message_template: payload.message_template.trim(),
     uses_per_customer: payload.uses_per_customer ?? 1,
+    active: true,
     fired_at: payload.orientation === 'segmento' ? nowIso() : null,
     created_at: nowIso(),
   }
@@ -1123,6 +1124,7 @@ async function fireCampanhaEvent(id: string, customerWhatsapps: string[]): Promi
   const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
   if (!row) throw new ApiError(404, 'campanha coupon not found')
   if (row.orientation !== 'evento') throw new ApiError(400, 'only orientation=evento campanhas can be re-fired')
+  if (!row.active) throw new ApiError(400, 'this campanha is paused')
   db.couponGrants = db.couponGrants ?? []
   const newlyGranted: string[] = []
   for (const whatsapp of customerWhatsapps) {
@@ -1144,6 +1146,15 @@ async function deleteCampanhaCoupon(id: string): Promise<void> {
   if (idx === -1) throw new ApiError(404, 'campanha coupon not found')
   db.campanhaCoupons.splice(idx, 1)
   saveDb(db)
+}
+
+async function toggleCampanhaCoupon(id: string, active: boolean): Promise<import('./types').CrmCampanhaCoupon> {
+  const db = loadDb()
+  const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
+  if (!row) throw new ApiError(404, 'campanha coupon not found')
+  row.active = active
+  saveDb(db)
+  return row
 }
 
 // ---------- campanhas (admin) ----------
@@ -1837,6 +1848,7 @@ export const localApi = {
       create: createCampanhaCoupon,
       fireEvent: fireCampanhaEvent,
       delete: deleteCampanhaCoupon,
+      toggleActive: toggleCampanhaCoupon,
     },
     whatsapp: {
       status: async () => ({ instance: { state: 'close' } }),

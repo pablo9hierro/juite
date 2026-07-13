@@ -608,6 +608,8 @@ const remoteApi = {
           p_customer_whatsapps: customerWhatsapps,
         }),
       delete: (id: string) => rpc<void>('admin_delete_campanha_coupon', { p_token: adminToken(), p_id: id }),
+      toggleActive: (id: string, active: boolean) =>
+        rpc<CrmCampanhaCoupon>('admin_toggle_campanha_coupon', { p_token: adminToken(), p_id: id, p_active: active }),
     },
     // Único pedaço do admin que ainda fala com o backend Rust (Railway) em
     // vez do Supabase — a chave da Evolution API precisa ficar fora do

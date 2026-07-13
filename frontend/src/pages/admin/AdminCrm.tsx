@@ -330,8 +330,10 @@ export default function AdminCrm() {
   const [segmentError, setSegmentError] = useState<string | null>(null)
 
   // "Campanha": cupom(s) exclusivo(s) vinculado(s) a um segmento — cada
-  // segmento pode ter várias, uma por linha em campanhaCoupons.
-  const [campanhaCoupons, setCampanhaCoupons] = useState<CrmCampanhaCoupon[]>([])
+  // segmento pode ter várias. Mapa por segmento (não só o que está sendo
+  // editado) pra poder desenhar a cadeia Segmento->Campanha->Cupom na
+  // lista principal, igual ao wireframe.
+  const [campanhaCouponsBySegment, setCampanhaCouponsBySegment] = useState<Record<string, CrmCampanhaCoupon[]>>({})
   const [showCampanhaForm, setShowCampanhaForm] = useState(false)
   const [campanhaForm, setCampanhaForm] = useState<CampanhaForm>(EMPTY_CAMPANHA_FORM)
   const [savingCampanha, setSavingCampanha] = useState(false)
@@ -359,12 +361,18 @@ export default function AdminCrm() {
     setCouponsLoading(true)
     api.admin.coupons.list().then(setCoupons).finally(() => setCouponsLoading(false))
   }
+  const loadCampanhaCoupons = (segmentId: string) => {
+    api.admin.campanhaCoupons.list(segmentId).then((rows) => setCampanhaCouponsBySegment((prev) => ({ ...prev, [segmentId]: rows })))
+  }
   const loadSegments = () => {
     setSegmentsLoading(true)
-    api.admin.segments.list().then(setSegments).finally(() => setSegmentsLoading(false))
-  }
-  const loadCampanhaCoupons = (segmentId: string) => {
-    api.admin.campanhaCoupons.list(segmentId).then(setCampanhaCoupons)
+    api.admin.segments
+      .list()
+      .then((rows) => {
+        setSegments(rows)
+        rows.forEach((s) => loadCampanhaCoupons(s.id))
+      })
+      .finally(() => setSegmentsLoading(false))
   }
   useEffect(() => {
     loadCustomers()
@@ -387,15 +395,18 @@ export default function AdminCrm() {
     ;(async () => {
       for (const seg of segments) {
         const rows = await api.admin.campanhaCoupons.list(seg.id).catch(() => [])
+        let changed = false
         for (const row of rows) {
-          if (row.orientation !== 'evento' || !row.trigger_criteria) continue
+          if (row.orientation !== 'evento' || !row.trigger_criteria || !row.active) continue
           const matching = applyFilters(customers, row.trigger_criteria as unknown as FilterState, products).map((c) => c.whatsapp)
           if (matching.length === 0) continue
           const result = await api.admin.campanhaCoupons.fireEvent(row.id, matching).catch(() => null)
           if (result && result.newly_granted.length > 0) {
             api.admin.whatsapp.notifyCouponGrant(row.coupon_id, row.message_template).catch(() => {})
+            changed = true
           }
         }
+        if (changed) loadCampanhaCoupons(seg.id)
       }
     })()
   }, [segments, customers, products])
@@ -422,7 +433,6 @@ export default function AdminCrm() {
     setSegmentName('')
     setSegmentDescription('')
     setSegmentError(null)
-    setCampanhaCoupons([])
   }
 
   const applyFilterPanel = () => {
@@ -582,13 +592,18 @@ export default function AdminCrm() {
     } else {
       alert('Nenhum cliente novo atingiu o critério do evento ainda.')
     }
-    if (editingSegmentId) loadCampanhaCoupons(editingSegmentId)
+    loadCampanhaCoupons(row.segment_id)
   }
 
-  const removeCampanha = async (id: string) => {
+  const removeCampanha = async (row: CrmCampanhaCoupon) => {
     if (!confirm('Remover esta campanha?')) return
-    await api.admin.campanhaCoupons.delete(id)
-    if (editingSegmentId) loadCampanhaCoupons(editingSegmentId)
+    await api.admin.campanhaCoupons.delete(row.id)
+    loadCampanhaCoupons(row.segment_id)
+  }
+
+  const toggleCampanhaActive = async (row: CrmCampanhaCoupon) => {
+    await api.admin.campanhaCoupons.toggleActive(row.id, !row.active)
+    loadCampanhaCoupons(row.segment_id)
   }
 
   const clearFilters = () => {
@@ -1062,65 +1077,26 @@ export default function AdminCrm() {
               </button>
 
               {editingSegmentId && (
-                <div className="border-t border-white/10 pt-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="label mb-0">Campanhas deste segmento</label>
-                    <div className="flex gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => openNewCampanha('segmento')}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-son-pink/15 text-son-pink text-xs font-semibold hover:bg-son-pink/25"
-                      >
-                        <Gift className="w-3.5 h-3.5" /> + Cupom exclusivo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openNewCampanha('evento')}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 text-son-silver text-xs font-semibold hover:bg-white/15"
-                      >
-                        <Zap className="w-3.5 h-3.5" /> + Cupom orientado a evento
-                      </button>
-                    </div>
+                <div className="border-t border-white/10 pt-3">
+                  <p className="text-xs text-son-silver-dim mb-2">
+                    Campanhas já criadas pra este segmento aparecem encadeadas na lista "Segmentações salvas" abaixo.
+                  </p>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => openNewCampanha('segmento')}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-son-pink/15 text-son-pink text-xs font-semibold hover:bg-son-pink/25"
+                    >
+                      <Gift className="w-3.5 h-3.5" /> + Cupom exclusivo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openNewCampanha('evento')}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 text-son-silver text-xs font-semibold hover:bg-white/15"
+                    >
+                      <Zap className="w-3.5 h-3.5" /> + Cupom orientado a evento
+                    </button>
                   </div>
-                  {campanhaCoupons.length === 0 ? (
-                    <p className="text-xs text-son-silver-dim">Nenhuma campanha criada pra este segmento ainda.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {campanhaCoupons.map((cc) => {
-                        const cCoupon = coupons.find((c) => c.id === cc.coupon_id)
-                        return (
-                          <div key={cc.id} className="flex items-center justify-between bg-son-surface border border-white/10 rounded-xl px-3 py-2">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-mono text-xs font-bold text-white">{cCoupon?.code ?? cc.coupon_id}</span>
-                                <span
-                                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                                    cc.orientation === 'evento' ? 'bg-amber-500/15 text-amber-400' : 'bg-son-pink/15 text-son-pink'
-                                  }`}
-                                >
-                                  {cc.orientation === 'evento' ? 'Orientado a evento' : 'Orientado a segmento'}
-                                </span>
-                                {cc.orientation === 'evento' && (
-                                  <span className="text-[10px] text-son-silver-dim">{cc.fired_at ? `Disparado em ${formatDate(cc.fired_at)}` : 'Ainda não disparado'}</span>
-                                )}
-                              </div>
-                              <p className="text-[11px] text-son-silver-dim truncate">{cc.message_template}</p>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {cc.orientation === 'evento' && (
-                                <button type="button" onClick={() => fireCampanha(cc)} className="text-xs font-semibold text-son-gold hover:text-white">
-                                  Verificar
-                                </button>
-                              )}
-                              <button type="button" onClick={() => removeCampanha(cc.id)} className="text-son-silver-dim hover:text-son-pink">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -1189,29 +1165,111 @@ export default function AdminCrm() {
           <p className="text-xs mt-1">Clique em "Nova segmentação", monte o filtro e salve com um nome.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
+        <div className="space-y-4 mb-10">
           {segments.map((s) => {
             const count = applyFilters(customers, s.filter_criteria as unknown as FilterState, products).length
+            const campanhas = campanhaCouponsBySegment[s.id] ?? []
             return (
               <Card key={s.id} className="p-4">
-                <button type="button" onClick={() => openSegment(s)} className="w-full text-left">
-                  <div className="flex items-center justify-between mb-1">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <button type="button" onClick={() => openSegment(s)} className="text-left min-w-[160px]">
                     <p className="font-semibold text-white">{s.name}</p>
-                    <span className="text-xs font-bold sunset-text flex-shrink-0">{count} cliente(s)</span>
-                  </div>
-                  {s.description && <p className="text-xs text-son-silver-dim mb-2">{s.description}</p>}
-                </button>
-                <div className="flex justify-end mt-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      removeSegment(s.id)
-                    }}
-                    className="text-son-silver-dim hover:text-son-pink"
-                  >
-                    <Trash2 className="w-4 h-4" />
+                    {s.description && <p className="text-xs text-son-silver-dim mt-0.5">{s.description}</p>}
+                    <p className="text-xs font-bold sunset-text mt-1">{count} cliente(s)</p>
                   </button>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button type="button" onClick={() => openSegment(s)} className="text-xs font-semibold text-son-silver-dim hover:text-white">
+                      Editar
+                    </button>
+                    <button onClick={() => removeSegment(s.id)} className="text-son-silver-dim hover:text-son-pink">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
+
+                {campanhas.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
+                    {campanhas.map((cc) => {
+                      const cCoupon = coupons.find((c) => c.id === cc.coupon_id)
+                      return (
+                        <div key={cc.id} className="flex items-center gap-2 flex-wrap">
+                          <div className="w-4 h-px bg-white/15 flex-shrink-0 hidden sm:block" />
+                          <div
+                            className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${
+                              cc.orientation === 'evento' ? 'border-amber-500/30 bg-amber-500/5' : 'border-son-pink/30 bg-son-pink/5'
+                            }`}
+                          >
+                            {cc.orientation === 'evento' ? (
+                              <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                            ) : (
+                              <Gift className="w-3.5 h-3.5 text-son-pink flex-shrink-0" />
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-white">
+                                {cc.orientation === 'evento' ? 'Orientada a evento' : 'Orientada a segmento'}
+                              </p>
+                              <p className="text-[10px] text-son-silver-dim">
+                                {cc.orientation === 'evento'
+                                  ? cc.fired_at
+                                    ? `Disparado em ${formatDate(cc.fired_at)}`
+                                    : 'Aguardando evento'
+                                  : `Disparada em ${formatDate(cc.fired_at ?? cc.created_at)}`}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0 ml-1">
+                              {cc.orientation === 'evento' && (
+                                <button
+                                  type="button"
+                                  onClick={() => fireCampanha(cc)}
+                                  className="text-[10px] font-semibold text-son-gold hover:text-white"
+                                >
+                                  Verificar
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => toggleCampanhaActive(cc)}
+                                className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                                  cc.active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/10 text-son-silver-dim'
+                                }`}
+                              >
+                                {cc.active ? 'On' : 'Off'}
+                              </button>
+                              <button type="button" onClick={() => removeCampanha(cc)} className="text-son-silver-dim hover:text-son-pink">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {cCoupon && (
+                            <>
+                              <div className="w-4 h-px bg-white/15 flex-shrink-0 hidden sm:block" />
+                              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-son-surface px-3 py-2">
+                                <span className="font-mono text-xs font-bold text-white">{cCoupon.code}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => openEditTargetedCoupon(cCoupon)}
+                                  className="text-[10px] font-semibold text-son-silver-dim hover:text-white"
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleCouponActive(cCoupon)}
+                                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    cCoupon.active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/10 text-son-silver-dim'
+                                  }`}
+                                >
+                                  {cCoupon.active ? 'On' : 'Off'}
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </Card>
             )
           })}

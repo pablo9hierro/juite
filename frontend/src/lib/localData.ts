@@ -51,6 +51,7 @@ export interface LocalCampanhaCoupon {
   trigger_criteria: CrmFilterCriteria | null
   message_template: string
   uses_per_customer: number
+  active: boolean
   fired_at: string | null
   created_at: string
 }
