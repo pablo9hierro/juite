@@ -337,7 +337,15 @@ const remoteApi = {
         }),
       update: (
         id: string,
-        payload: { active: boolean; allow_campaign_checkout: boolean; expires_at?: string; max_uses?: number }
+        payload: {
+          active: boolean
+          allow_campaign_checkout: boolean
+          expires_at?: string
+          max_uses?: number
+          discount_type?: 'percent' | 'fixed'
+          discount_value?: number
+          product_discounts?: ProductDiscount[]
+        }
       ) =>
         rpc<Coupon>('admin_update_coupon', {
           p_token: adminToken(),
@@ -346,6 +354,9 @@ const remoteApi = {
           p_allow_campaign_checkout: payload.allow_campaign_checkout,
           p_expires_at: payload.expires_at || null,
           p_max_uses: payload.max_uses ?? null,
+          p_discount_type: payload.discount_type ?? null,
+          p_discount_value: payload.discount_value ?? null,
+          p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_coupon', { p_token: adminToken(), p_id: id }),
       // Cupom alvo: nasce de um filtro no CRM, amarrado a clientes
@@ -374,6 +385,37 @@ const remoteApi = {
           p_uses_per_customer: payload.uses_per_customer ?? 1,
           p_notify_customers: payload.notify_customers ?? true,
           p_custom_message: payload.custom_message || null,
+          p_combinable_with_public: payload.combinable_with_public ?? false,
+          p_allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
+          p_expires_at: payload.expires_at || null,
+          p_max_uses: payload.max_uses ?? null,
+          p_discount_type: payload.discount_type ?? null,
+          p_discount_value: payload.discount_value ?? null,
+          p_shipping_discount_type: payload.shipping_discount_type ?? null,
+          p_shipping_discount_value: payload.shipping_discount_value ?? null,
+          p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
+        }),
+      updateTargeted: (
+        id: string,
+        payload: {
+          active: boolean
+          uses_per_customer?: number
+          combinable_with_public?: boolean
+          allow_campaign_checkout?: boolean
+          expires_at?: string
+          max_uses?: number
+          discount_type?: 'percent' | 'fixed'
+          discount_value?: number
+          shipping_discount_type?: 'percent' | 'fixed'
+          shipping_discount_value?: number
+          product_discounts?: ProductDiscount[]
+        }
+      ) =>
+        rpc<Coupon>('admin_update_targeted_coupon', {
+          p_token: adminToken(),
+          p_id: id,
+          p_active: payload.active,
+          p_uses_per_customer: payload.uses_per_customer ?? 1,
           p_combinable_with_public: payload.combinable_with_public ?? false,
           p_allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
           p_expires_at: payload.expires_at || null,

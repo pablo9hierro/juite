@@ -836,7 +836,15 @@ async function createCoupon(payload: {
 
 async function updateCoupon(
   id: string,
-  payload: { active: boolean; allow_campaign_checkout: boolean; expires_at?: string; max_uses?: number }
+  payload: {
+    active: boolean
+    allow_campaign_checkout: boolean
+    expires_at?: string
+    max_uses?: number
+    discount_type?: 'percent' | 'fixed'
+    discount_value?: number
+    product_discounts?: import('./types').ProductDiscount[]
+  }
 ): Promise<Coupon> {
   const db = loadDb()
   const coupon = (db.coupons ?? []).find((c) => c.id === id)
@@ -845,6 +853,51 @@ async function updateCoupon(
   coupon.allow_campaign_checkout = payload.allow_campaign_checkout
   coupon.expires_at = payload.expires_at || null
   coupon.max_uses = payload.max_uses ?? null
+  if (coupon.kind === 'produto') {
+    if (payload.product_discounts) coupon.product_discounts = payload.product_discounts
+  } else {
+    if (payload.discount_type) coupon.discount_type = payload.discount_type
+    if (payload.discount_value != null) coupon.discount_value = payload.discount_value
+  }
+  saveDb(db)
+  return withGrantCount(db, coupon)
+}
+
+async function updateTargetedCoupon(
+  id: string,
+  payload: {
+    active: boolean
+    uses_per_customer?: number
+    combinable_with_public?: boolean
+    allow_campaign_checkout?: boolean
+    expires_at?: string
+    max_uses?: number
+    discount_type?: 'percent' | 'fixed'
+    discount_value?: number
+    shipping_discount_type?: 'percent' | 'fixed'
+    shipping_discount_value?: number
+    product_discounts?: import('./types').ProductDiscount[]
+  }
+): Promise<Coupon> {
+  const db = loadDb()
+  const coupon = (db.coupons ?? []).find((c) => c.id === id)
+  if (!coupon) throw new ApiError(404, 'coupon not found')
+  const hasProducts = payload.product_discounts && payload.product_discounts.length > 0
+  const kind: 'desconto' | 'frete' | 'produto' = hasProducts ? 'produto' : payload.discount_type ? 'desconto' : 'frete'
+  coupon.active = payload.active
+  coupon.kind = kind
+  coupon.discount_type = kind === 'produto' ? null : payload.discount_type ?? null
+  coupon.discount_value = kind === 'produto' ? null : payload.discount_value ?? null
+  coupon.shipping_discount_type = payload.shipping_discount_type ?? null
+  coupon.shipping_discount_value = payload.shipping_discount_value ?? null
+  coupon.product_discounts = hasProducts ? payload.product_discounts! : []
+  coupon.combinable_with_public = payload.combinable_with_public ?? false
+  coupon.allow_campaign_checkout = payload.allow_campaign_checkout ?? false
+  coupon.expires_at = payload.expires_at || null
+  coupon.max_uses = payload.max_uses ?? null
+  for (const g of db.couponGrants ?? []) {
+    if (g.coupon_id === id) g.granted_uses = payload.uses_per_customer ?? 1
+  }
   saveDb(db)
   return withGrantCount(db, coupon)
 }
@@ -1671,6 +1724,7 @@ export const localApi = {
       update: updateCoupon,
       delete: deleteCoupon,
       createTargeted: createTargetedCoupon,
+      updateTargeted: updateTargetedCoupon,
       listGrants: adminListCouponGrants,
     },
     campaigns: {

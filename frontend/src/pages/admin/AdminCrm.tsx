@@ -273,17 +273,18 @@ export default function AdminCrm() {
   const [segmentCouponId, setSegmentCouponId] = useState<string | null>(null)
   const [savingSegment, setSavingSegment] = useState(false)
   const [segmentError, setSegmentError] = useState<string | null>(null)
-  const [targetedFormSegmentId, setTargetedFormSegmentId] = useState<string | null>(null)
 
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [couponsLoading, setCouponsLoading] = useState(true)
   const [showCouponForm, setShowCouponForm] = useState(false)
   const [couponForm, setCouponForm] = useState<CouponForm>(EMPTY_COUPON_FORM)
+  const [editingCouponId, setEditingCouponId] = useState<string | null>(null)
   const [savingCoupon, setSavingCoupon] = useState(false)
   const [couponError, setCouponError] = useState<string | null>(null)
 
   const [showTargetedForm, setShowTargetedForm] = useState(false)
   const [targetedForm, setTargetedForm] = useState<TargetedForm>(EMPTY_TARGETED_FORM)
+  const [editingTargetedCouponId, setEditingTargetedCouponId] = useState<string | null>(null)
   const [savingTargeted, setSavingTargeted] = useState(false)
   const [targetedError, setTargetedError] = useState<string | null>(null)
 
@@ -416,6 +417,22 @@ export default function AdminCrm() {
     setPairErrors({})
   }
 
+  const openEditCoupon = (c: Coupon) => {
+    setEditingCouponId(c.id)
+    setCouponForm({
+      code: c.code,
+      kind: c.kind,
+      discount_type: c.discount_type ?? 'percent',
+      discount_value: c.discount_value != null ? String(c.discount_value) : '',
+      productDiscounts: c.product_discounts ?? [],
+      allow_campaign_checkout: c.allow_campaign_checkout,
+      expires_at: c.expires_at ?? '',
+      max_uses: c.max_uses != null ? String(c.max_uses) : '',
+    })
+    setCouponError(null)
+    setShowCouponForm(true)
+  }
+
   const saveCoupon = async () => {
     setCouponError(null)
     if (couponForm.kind === 'produto' && couponForm.productDiscounts.length === 0) {
@@ -424,17 +441,22 @@ export default function AdminCrm() {
     }
     setSavingCoupon(true)
     try {
-      await api.admin.coupons.create({
-        code: couponForm.code,
-        kind: couponForm.kind,
+      const payload = {
         discount_type: couponForm.kind === 'produto' ? undefined : couponForm.discount_type,
         discount_value: couponForm.kind === 'produto' ? undefined : Number(couponForm.discount_value),
         product_discounts: couponForm.kind === 'produto' ? couponForm.productDiscounts : undefined,
         allow_campaign_checkout: couponForm.allow_campaign_checkout,
         expires_at: couponForm.expires_at || undefined,
         max_uses: couponForm.max_uses ? Number(couponForm.max_uses) : undefined,
-      })
+      }
+      if (editingCouponId) {
+        const active = coupons.find((c) => c.id === editingCouponId)?.active ?? true
+        await api.admin.coupons.update(editingCouponId, { active, ...payload })
+      } else {
+        await api.admin.coupons.create({ code: couponForm.code, kind: couponForm.kind, ...payload })
+      }
       setShowCouponForm(false)
+      setEditingCouponId(null)
       setCouponForm(EMPTY_COUPON_FORM)
       loadCoupons()
     } catch (err) {
@@ -461,7 +483,37 @@ export default function AdminCrm() {
   }
 
   const targetedMessageValid =
-    targetedForm.dontNotify || (targetedForm.customMessage.includes('/nome') && targetedForm.customMessage.includes('/cupom'))
+    !!editingTargetedCouponId ||
+    targetedForm.dontNotify ||
+    (targetedForm.customMessage.includes('/nome') && targetedForm.customMessage.includes('/cupom'))
+
+  const openEditTargetedCoupon = async (c: Coupon) => {
+    setEditingTargetedCouponId(c.id)
+    setTargetedError(null)
+    const isFrete = c.kind === 'frete'
+    const grants = await api.admin.coupons.listGrants(c.id).catch(() => [])
+    setTargetedForm({
+      code: c.code,
+      productMode: c.kind === 'produto' ? 'produto' : c.kind === 'desconto' ? 'flat' : 'nenhum',
+      discount_type: (isFrete ? undefined : c.discount_type) ?? 'percent',
+      discount_value: !isFrete && c.discount_value != null ? String(c.discount_value) : '',
+      productDiscounts: c.product_discounts ?? [],
+      shippingEnabled: isFrete || !!c.shipping_discount_type,
+      shipping_discount_type: (isFrete ? c.discount_type : c.shipping_discount_type) ?? 'percent',
+      shipping_discount_value:
+        (isFrete ? c.discount_value : c.shipping_discount_value) != null
+          ? String(isFrete ? c.discount_value : c.shipping_discount_value)
+          : '',
+      uses_per_customer: grants[0] ? String(grants[0].granted_uses) : '1',
+      dontNotify: true,
+      customMessage: '',
+      combinable_with_public: c.combinable_with_public ?? false,
+      allow_campaign_checkout: c.allow_campaign_checkout,
+      expires_at: c.expires_at ?? '',
+      max_uses: c.max_uses != null ? String(c.max_uses) : '',
+    })
+    setShowTargetedForm(true)
+  }
 
   const saveTargetedCoupon = async () => {
     setTargetedError(null)
@@ -471,6 +523,27 @@ export default function AdminCrm() {
     }
     setSavingTargeted(true)
     try {
+      if (editingTargetedCouponId) {
+        const active = coupons.find((c) => c.id === editingTargetedCouponId)?.active ?? true
+        await api.admin.coupons.updateTargeted(editingTargetedCouponId, {
+          active,
+          uses_per_customer: Number(targetedForm.uses_per_customer) || 1,
+          combinable_with_public: targetedForm.combinable_with_public,
+          allow_campaign_checkout: targetedForm.allow_campaign_checkout,
+          expires_at: targetedForm.expires_at || undefined,
+          max_uses: targetedForm.max_uses ? Number(targetedForm.max_uses) : undefined,
+          discount_type: targetedForm.productMode === 'flat' ? targetedForm.discount_type : undefined,
+          discount_value: targetedForm.productMode === 'flat' ? Number(targetedForm.discount_value) : undefined,
+          shipping_discount_type: targetedForm.shippingEnabled ? targetedForm.shipping_discount_type : undefined,
+          shipping_discount_value: targetedForm.shippingEnabled ? Number(targetedForm.shipping_discount_value) : undefined,
+          product_discounts: targetedForm.productMode === 'produto' ? targetedForm.productDiscounts : undefined,
+        })
+        setShowTargetedForm(false)
+        setEditingTargetedCouponId(null)
+        setTargetedForm(EMPTY_TARGETED_FORM)
+        loadCoupons()
+        return
+      }
       const created = await api.admin.coupons.createTargeted({
         code: targetedForm.code,
         customer_whatsapps: visible.map((c) => c.whatsapp),
@@ -490,24 +563,6 @@ export default function AdminCrm() {
       if (!targetedForm.dontNotify) {
         api.admin.whatsapp.notifyCouponGrant(created.id, targetedForm.customMessage).catch(() => {})
       }
-      // Se essa lista veio de uma segmentação salva (aberta ou recém-criada),
-      // o cupom exclusivo fica vinculado a ela também.
-      if (targetedFormSegmentId) {
-        setSegmentCouponId(created.id)
-        const segment = segments.find((s) => s.id === targetedFormSegmentId)
-        if (segment) {
-          api.admin.segments
-            .update(targetedFormSegmentId, {
-              name: segment.name,
-              description: segment.description ?? undefined,
-              filter_criteria: segment.filter_criteria,
-              coupon_id: created.id,
-              campaign_id: segment.campaign_id ?? undefined,
-            })
-            .then(loadSegments)
-            .catch(() => {})
-        }
-      }
       setShowTargetedForm(false)
       setTargetedForm(EMPTY_TARGETED_FORM)
       loadCoupons()
@@ -522,7 +577,14 @@ export default function AdminCrm() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-black">CRM &amp; cupons</h1>
-        <button onClick={() => setShowCouponForm(true)} className="btn-primary text-sm py-2 px-4">
+        <button
+          onClick={() => {
+            setEditingCouponId(null)
+            setCouponForm(EMPTY_COUPON_FORM)
+            setShowCouponForm(true)
+          }}
+          className="btn-primary text-sm py-2 px-4"
+        >
           <Plus className="w-4 h-4" /> Novo cupom
         </button>
       </div>
@@ -840,10 +902,7 @@ export default function AdminCrm() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => {
-                      setTargetedFormSegmentId(editingSegmentId)
-                      setShowTargetedForm(true)
-                    }}
+                    onClick={() => setShowTargetedForm(true)}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-son-pink/15 text-son-pink text-xs font-semibold hover:bg-son-pink/25"
                   >
                     <Gift className="w-3.5 h-3.5" /> Criar cupom exclusivo pra este segmento
@@ -866,10 +925,7 @@ export default function AdminCrm() {
         </p>
         {isSegmented && visible.length > 0 && !filterOpen && (
           <button
-            onClick={() => {
-              setTargetedFormSegmentId(editingSegmentId)
-              setShowTargetedForm(true)
-            }}
+            onClick={() => setShowTargetedForm(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-son-pink/15 text-son-pink text-xs font-semibold hover:bg-son-pink/25"
           >
             <Gift className="w-3.5 h-3.5" /> Criar cupom pra esses clientes
@@ -1029,7 +1085,13 @@ export default function AdminCrm() {
                 {c.max_uses ? `${c.used_count}/${c.max_uses} usos` : `${c.used_count} usos · sem limite global`}
                 {c.expires_at ? ` · até ${new Date(c.expires_at).toLocaleDateString('pt-BR')}` : ' · sem validade'}
               </p>
-              <div className="flex justify-end mt-2">
+              <div className="flex items-center justify-end gap-3 mt-2">
+                <button
+                  onClick={() => ((c.grant_count ?? 0) > 0 ? openEditTargetedCoupon(c) : openEditCoupon(c))}
+                  className="text-xs font-semibold text-son-silver-dim hover:text-white"
+                >
+                  Editar
+                </button>
                 <button onClick={() => removeCoupon(c.id)} className="text-son-silver-dim hover:text-son-pink">
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -1042,12 +1104,21 @@ export default function AdminCrm() {
       {showCouponForm && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
-          onClick={() => setShowCouponForm(false)}
+          onClick={() => {
+            setShowCouponForm(false)
+            setEditingCouponId(null)
+          }}
         >
           <div className="glass rounded-2xl p-6 max-w-lg w-full my-8" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white">Novo cupom (público)</h3>
-              <button onClick={() => setShowCouponForm(false)} className="text-son-silver-dim hover:text-white">
+              <h3 className="font-bold text-white">{editingCouponId ? 'Editar cupom' : 'Novo cupom (público)'}</h3>
+              <button
+                onClick={() => {
+                  setShowCouponForm(false)
+                  setEditingCouponId(null)
+                }}
+                className="text-son-silver-dim hover:text-white"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1055,10 +1126,11 @@ export default function AdminCrm() {
               <div>
                 <label className="label">Código</label>
                 <input
-                  className="input-field font-mono uppercase"
+                  className="input-field font-mono uppercase disabled:opacity-50"
                   value={couponForm.code}
                   onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value })}
                   placeholder="SUNSET10"
+                  disabled={!!editingCouponId}
                 />
               </div>
               <div>
@@ -1068,8 +1140,9 @@ export default function AdminCrm() {
                     <button
                       key={k}
                       type="button"
+                      disabled={!!editingCouponId}
                       onClick={() => setCouponForm({ ...couponForm, kind: k })}
-                      className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
+                      className={`py-2.5 rounded-xl border text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                         couponForm.kind === k ? 'sunset-bg text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
                       }`}
                     >
@@ -1154,7 +1227,7 @@ export default function AdminCrm() {
               {couponError && <p className="error-msg">{couponError}</p>}
               <button onClick={saveCoupon} disabled={savingCoupon} className="btn-primary w-full mt-2">
                 {savingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Salvar cupom
+                {editingCouponId ? 'Salvar alterações' : 'Salvar cupom'}
               </button>
             </div>
           </div>
@@ -1164,27 +1237,39 @@ export default function AdminCrm() {
       {showTargetedForm && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
-          onClick={() => setShowTargetedForm(false)}
+          onClick={() => {
+            setShowTargetedForm(false)
+            setEditingTargetedCouponId(null)
+          }}
         >
           <div className="glass rounded-2xl p-6 max-w-lg w-full my-8" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white">Cupom exclusivo</h3>
-              <button onClick={() => setShowTargetedForm(false)} className="text-son-silver-dim hover:text-white">
+              <h3 className="font-bold text-white">{editingTargetedCouponId ? 'Editar cupom exclusivo' : 'Cupom exclusivo'}</h3>
+              <button
+                onClick={() => {
+                  setShowTargetedForm(false)
+                  setEditingTargetedCouponId(null)
+                }}
+                className="text-son-silver-dim hover:text-white"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-xs text-son-silver-dim mb-3">
-              Vai valer só pra <strong className="text-white">{visible.length} cliente(s)</strong> da lista filtrada — intransferível,
-              nenhum outro cliente consegue usar mesmo digitando o código.
-            </p>
+            {!editingTargetedCouponId && (
+              <p className="text-xs text-son-silver-dim mb-3">
+                Vai valer só pra <strong className="text-white">{visible.length} cliente(s)</strong> da lista filtrada —
+                intransferível, nenhum outro cliente consegue usar mesmo digitando o código.
+              </p>
+            )}
             <div className="space-y-3">
               <div>
                 <label className="label">Código</label>
                 <input
-                  className="input-field font-mono uppercase"
+                  className="input-field font-mono uppercase disabled:opacity-50"
                   value={targetedForm.code}
                   onChange={(e) => setTargetedForm({ ...targetedForm, code: e.target.value })}
                   placeholder="SUNSET15"
+                  disabled={!!editingTargetedCouponId}
                 />
               </div>
               <div>
@@ -1280,16 +1365,18 @@ export default function AdminCrm() {
                   onChange={(e) => setTargetedForm({ ...targetedForm, uses_per_customer: e.target.value })}
                 />
               </div>
-              <label className="flex items-center gap-2 text-sm text-son-silver">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 accent-son-pink"
-                  checked={targetedForm.dontNotify}
-                  onChange={(e) => setTargetedForm({ ...targetedForm, dontNotify: e.target.checked })}
-                />
-                Não notificar via WhatsApp
-              </label>
-              {!targetedForm.dontNotify && (
+              {!editingTargetedCouponId && (
+                <label className="flex items-center gap-2 text-sm text-son-silver">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-son-pink"
+                    checked={targetedForm.dontNotify}
+                    onChange={(e) => setTargetedForm({ ...targetedForm, dontNotify: e.target.checked })}
+                  />
+                  Não notificar via WhatsApp
+                </label>
+              )}
+              {!editingTargetedCouponId && !targetedForm.dontNotify && (
                 <div>
                   <label className="label">Mensagem pro cliente</label>
                   <textarea
@@ -1347,7 +1434,7 @@ export default function AdminCrm() {
               {targetedError && <p className="error-msg">{targetedError}</p>}
               <button onClick={saveTargetedCoupon} disabled={savingTargeted} className="btn-primary w-full mt-2">
                 {savingTargeted ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Criar cupom exclusivo
+                {editingTargetedCouponId ? 'Salvar alterações' : 'Criar cupom exclusivo'}
               </button>
             </div>
           </div>
