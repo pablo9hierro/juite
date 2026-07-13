@@ -568,7 +568,7 @@ export default function AdminCrm() {
       {filterOpen && (
         <Card className="p-5 mb-4 space-y-3">
           <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Ex: clientes que compraram 50 vezes em 20 dias</label>
+            <label className="label">Volume de Compras no Período</label>
             <div className="flex items-center gap-2">
               <input
                 className={`input-field w-32 ${NO_SPINNER}`}
@@ -578,7 +578,7 @@ export default function AdminCrm() {
                 value={filter.minOrders}
                 onChange={(e) => setFilter({ ...filter, minOrders: e.target.value })}
               />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">no período de</span>
               <input
                 className={`input-field w-24 ${NO_SPINNER}`}
                 type="number"
@@ -593,7 +593,7 @@ export default function AdminCrm() {
           </div>
 
           <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Ex: clientes que compraram 500 produtos em 20 dias</label>
+            <label className="label">Quantidade de Produtos no Período</label>
             <div className="flex items-center gap-2">
               <input
                 className={`input-field w-32 ${NO_SPINNER}`}
@@ -603,7 +603,7 @@ export default function AdminCrm() {
                 value={filter.minItems}
                 onChange={(e) => setFilter({ ...filter, minItems: e.target.value })}
               />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">no período de</span>
               <input
                 className={`input-field w-24 ${NO_SPINNER}`}
                 type="number"
