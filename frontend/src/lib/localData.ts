@@ -1,6 +1,6 @@
 import { distanciaKm } from './geo/rotas'
 import { FALLBACK as STORE_LOCATION } from './geo/mapa'
-import type { Campaign, Category, Coupon, Motoboy, MotoboyRun, MotoboySettlement, Order, Product, Vendedor } from './types'
+import type { Campaign, Category, Coupon, CrmSegment, Motoboy, MotoboyRun, MotoboySettlement, Order, Product, Vendedor } from './types'
 
 export interface LocalMotoboy extends Motoboy {
   password: string
@@ -39,6 +39,7 @@ export interface LocalDb {
   campaigns: Campaign[]
   coupons: Coupon[]
   couponGrants: LocalCouponGrant[]
+  segments: CrmSegment[]
   pricePerKm: number
   maxKm: number | null
   heroImageUrl: string | null
@@ -113,6 +114,7 @@ function seedDb(): LocalDb {
     campaigns: [],
     coupons: [],
     couponGrants: [],
+    segments: [],
     pricePerKm: 1.5,
     maxKm: null,
     heroImageUrl: null,

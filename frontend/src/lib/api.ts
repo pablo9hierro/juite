@@ -10,6 +10,8 @@ import type {
   Coupon,
   CouponGrant,
   CrmCustomer,
+  CrmFilterCriteria,
+  CrmSegment,
   EvolutionConnect,
   EvolutionStatus,
   FinanceiroSummary,
@@ -487,6 +489,32 @@ const remoteApi = {
     },
     crm: {
       customers: () => rpc<CrmCustomer[]>('admin_crm_customers', { p_token: adminToken() }),
+    },
+    segments: {
+      list: () => rpc<CrmSegment[]>('admin_list_segments', { p_token: adminToken() }),
+      create: (payload: { name: string; description?: string; filter_criteria: CrmFilterCriteria; coupon_id?: string; campaign_id?: string }) =>
+        rpc<CrmSegment>('admin_create_segment', {
+          p_token: adminToken(),
+          p_name: payload.name,
+          p_description: payload.description || null,
+          p_filter_criteria: payload.filter_criteria,
+          p_coupon_id: payload.coupon_id || null,
+          p_campaign_id: payload.campaign_id || null,
+        }),
+      update: (
+        id: string,
+        payload: { name: string; description?: string; filter_criteria: CrmFilterCriteria; coupon_id?: string; campaign_id?: string }
+      ) =>
+        rpc<CrmSegment>('admin_update_segment', {
+          p_token: adminToken(),
+          p_id: id,
+          p_name: payload.name,
+          p_description: payload.description || null,
+          p_filter_criteria: payload.filter_criteria,
+          p_coupon_id: payload.coupon_id || null,
+          p_campaign_id: payload.campaign_id || null,
+        }),
+      delete: (id: string) => rpc<void>('admin_delete_segment', { p_token: adminToken(), p_id: id }),
     },
     // Único pedaço do admin que ainda fala com o backend Rust (Railway) em
     // vez do Supabase — a chave da Evolution API precisa ficar fora do

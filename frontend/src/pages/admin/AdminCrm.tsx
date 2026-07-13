@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Cake, Filter, Gift, Loader2, Plus, Search, Tag, Trash2, Users, X } from 'lucide-react'
+import { Cake, Gift, Layers, Loader2, Plus, Search, Sparkles, Tag, Trash2, Users, X } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import WhatsAppLink from '../../components/ui/WhatsAppLink'
 import ExpiryInput from '../../components/admin/ExpiryInput'
 import DateInput from '../../components/admin/DateInput'
 import ProductMultiSelect from '../../components/admin/ProductMultiSelect'
+import ProductCategoryMultiSelect from '../../components/admin/ProductCategoryMultiSelect'
 import ProductDiscountList from '../../components/admin/ProductDiscountList'
 import { api, ApiError } from '../../lib/api'
-import type { Coupon, CouponKind, CrmCustomer, DiscountType, Product, ProductDiscount } from '../../lib/types'
+import type { Campaign, Category, Coupon, CouponKind, CrmCustomer, CrmSegment, DiscountType, Product, ProductDiscount } from '../../lib/types'
 
 // Some browsers only show the native number spinner on hover/focus, which
 // looks broken in these narrow filter inputs — hidden consistently here.
@@ -45,34 +46,6 @@ const COUPON_KIND_LABEL: Record<CouponKind, string> = {
   produto: 'Desconto por produto',
 }
 
-type Segmentation = 'nenhuma' | 'aniversariantes' | 'frequentes' | 'maior_volume' | 'inativos' | 'novos'
-
-const SEGMENTATION_LABEL: Record<Segmentation, string> = {
-  nenhuma: 'Sem segmentação',
-  aniversariantes: 'Aniversariantes do mês',
-  frequentes: 'Clientes mais frequentes',
-  maior_volume: 'Clientes com maior volume de compra',
-  inativos: 'Clientes mais inativos',
-  novos: 'Clientes novos (até 3 meses)',
-}
-
-function applySegmentation(customers: CrmCustomer[], seg: Segmentation): CrmCustomer[] {
-  switch (seg) {
-    case 'aniversariantes':
-      return customers.filter((c) => isBirthdayMonth(c.birthdate))
-    case 'frequentes':
-      return [...customers].filter((c) => c.order_count >= 3).sort((a, b) => b.order_count - a.order_count)
-    case 'maior_volume':
-      return [...customers].filter((c) => c.total_spent > 0).sort((a, b) => b.total_spent - a.total_spent)
-    case 'inativos':
-      return customers.filter((c) => c.order_count > 0 && daysSince(c.last_order_at) >= 60)
-    case 'novos':
-      return customers.filter((c) => c.first_order_at && daysSince(c.first_order_at) <= 90)
-    default:
-      return customers
-  }
-}
-
 type FilterState = {
   minOrders: string
   minOrdersDays: string
@@ -90,6 +63,9 @@ type FilterState = {
   productIds: string[]
   periodStart: string
   periodEnd: string
+  recurringProductIds: string[]
+  recurringCategoryIds: string[]
+  recurringDays: string
 }
 const EMPTY_FILTER: FilterState = {
   minOrders: '',
@@ -108,6 +84,9 @@ const EMPTY_FILTER: FilterState = {
   productIds: [],
   periodStart: '',
   periodEnd: '',
+  recurringProductIds: [],
+  recurringCategoryIds: [],
+  recurringDays: '',
 }
 function filterIsEmpty(f: FilterState) {
   return (
@@ -120,7 +99,9 @@ function filterIsEmpty(f: FilterState) {
     !f.maxDistanceKm &&
     !f.birthdayMonth &&
     f.neighborhoods.length === 0 &&
-    f.productIds.length === 0
+    f.productIds.length === 0 &&
+    f.recurringProductIds.length === 0 &&
+    f.recurringCategoryIds.length === 0
   )
 }
 
@@ -151,7 +132,7 @@ function itemsInWindow(c: CrmCustomer, days: number | null): number {
 
 const PAIR_ERROR_MESSAGE = 'Se você preencher o campo "Dias" precisa preencher este campo também ou deixe ambos em branco.'
 
-type PairErrors = Partial<Record<'minOrders' | 'minItems' | 'spentBelow' | 'spentAbove', string>>
+type PairErrors = Partial<Record<'minOrders' | 'minItems' | 'spentBelow' | 'spentAbove' | 'recurring', string>>
 
 function validatePairErrors(f: FilterState): PairErrors {
   const errors: PairErrors = {}
@@ -159,7 +140,28 @@ function validatePairErrors(f: FilterState): PairErrors {
   if (f.minItemsDays && !f.minItems) errors.minItems = PAIR_ERROR_MESSAGE
   if (f.spentBelowDays && !f.spentBelowAmount) errors.spentBelow = PAIR_ERROR_MESSAGE
   if (f.spentAboveDays && !f.spentAboveAmount) errors.spentAbove = PAIR_ERROR_MESSAGE
+  const hasRecurringSelection = f.recurringProductIds.length > 0 || f.recurringCategoryIds.length > 0
+  if (hasRecurringSelection !== !!f.recurringDays) errors.recurring = PAIR_ERROR_MESSAGE
   return errors
+}
+
+// Reincidência: pega os timestamps de compra dos produtos selecionados
+// (direto ou via categoria) e vê se o intervalo médio entre compras bate
+// com o "a cada N dias" pedido — precisa de pelo menos 2 compras
+// qualificadas pra falar em intervalo.
+function matchesRecurring(c: CrmCustomer, productIds: string[], categoryIds: string[], days: number, products: Product[]): boolean {
+  const categoryProductIds = new Set(products.filter((p) => p.category_id && categoryIds.includes(p.category_id)).map((p) => p.id))
+  const targetIds = new Set([...productIds, ...categoryProductIds])
+  if (targetIds.size === 0) return false
+  const timestamps = c.purchases
+    .filter((p) => targetIds.has(p.product_id))
+    .map((p) => new Date(p.created_at).getTime())
+    .sort((a, b) => a - b)
+  if (timestamps.length < 2) return false
+  let totalGap = 0
+  for (let i = 1; i < timestamps.length; i++) totalGap += timestamps[i] - timestamps[i - 1]
+  const avgGapDays = totalGap / (timestamps.length - 1) / (24 * 60 * 60 * 1000)
+  return avgGapDays <= days
 }
 
 // Compara pedidos dos últimos 30 dias com os 30 dias anteriores — sem
@@ -176,7 +178,7 @@ function frequencyDropPercent(c: CrmCustomer): number {
   return Math.max(0, ((prior - recent) / prior) * 100)
 }
 
-function applyFilters(customers: CrmCustomer[], f: FilterState): CrmCustomer[] {
+function applyFilters(customers: CrmCustomer[], f: FilterState, products: Product[]): CrmCustomer[] {
   return customers.filter((c) => {
     if (f.minOrders && ordersInWindow(c, f.minOrdersDays ? Number(f.minOrdersDays) : null) < Number(f.minOrders)) return false
     if (f.minItems && itemsInWindow(c, f.minItemsDays ? Number(f.minItemsDays) : null) < Number(f.minItems)) return false
@@ -201,6 +203,9 @@ function applyFilters(customers: CrmCustomer[], f: FilterState): CrmCustomer[] {
           (!f.periodEnd || p.created_at <= f.periodEnd + 'T23:59:59')
       )
       if (!matches) return false
+    }
+    if ((f.recurringProductIds.length > 0 || f.recurringCategoryIds.length > 0) && f.recurringDays) {
+      if (!matchesRecurring(c, f.recurringProductIds, f.recurringCategoryIds, Number(f.recurringDays), products)) return false
     }
     return true
   })
@@ -268,13 +273,25 @@ export default function AdminCrm() {
   const [customers, setCustomers] = useState<CrmCustomer[]>([])
   const [loading, setLoading] = useState(true)
   const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [query, setQuery] = useState('')
-  const [segmentation, setSegmentation] = useState<Segmentation>('nenhuma')
   const [filterOpen, setFilterOpen] = useState(false)
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
   const [appliedFilter, setAppliedFilter] = useState<FilterState | null>(null)
   const [filterFormError, setFilterFormError] = useState<string | null>(null)
   const [pairErrors, setPairErrors] = useState<PairErrors>({})
+
+  const [segments, setSegments] = useState<CrmSegment[]>([])
+  const [segmentsLoading, setSegmentsLoading] = useState(true)
+  const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null)
+  const [segmentName, setSegmentName] = useState('')
+  const [segmentDescription, setSegmentDescription] = useState('')
+  const [segmentCampaignId, setSegmentCampaignId] = useState('')
+  const [segmentCouponId, setSegmentCouponId] = useState<string | null>(null)
+  const [savingSegment, setSavingSegment] = useState(false)
+  const [segmentError, setSegmentError] = useState<string | null>(null)
+  const [targetedFormSegmentId, setTargetedFormSegmentId] = useState<string | null>(null)
 
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [couponsLoading, setCouponsLoading] = useState(true)
@@ -296,10 +313,17 @@ export default function AdminCrm() {
     setCouponsLoading(true)
     api.admin.coupons.list().then(setCoupons).finally(() => setCouponsLoading(false))
   }
+  const loadSegments = () => {
+    setSegmentsLoading(true)
+    api.admin.segments.list().then(setSegments).finally(() => setSegmentsLoading(false))
+  }
   useEffect(() => {
     loadCustomers()
     loadCoupons()
+    loadSegments()
     api.admin.products.list().then(setProducts)
+    api.admin.categories.list().then(setCategories)
+    api.admin.campaigns.list().then(setCampaigns)
   }, [])
 
   const neighborhoods = useMemo(
@@ -307,21 +331,26 @@ export default function AdminCrm() {
     [customers]
   )
 
-  // Segmentação (dropdown, um clique) e filtro avançado (painel, precisa de
-  // "Filtrar") são exclusivos entre si — trocar um zera o outro, pra não ter
-  // ambiguidade de qual critério tá valendo.
-  const segmented = segmentation !== 'nenhuma' ? applySegmentation(customers, segmentation) : customers
-  const filteredBase = appliedFilter ? applyFilters(customers, appliedFilter) : segmented
+  const filteredBase = appliedFilter ? applyFilters(customers, appliedFilter, products) : customers
   const searched = query.trim()
     ? filteredBase.filter((c) => c.name.toLowerCase().includes(query.trim().toLowerCase()) || c.whatsapp.includes(query.trim()))
     : filteredBase
   const visible = [...searched].sort((a, b) => a.name.localeCompare(b.name))
 
-  const isSegmented = segmentation !== 'nenhuma' || !!appliedFilter
+  const isSegmented = !!appliedFilter
 
   const totalCustomers = customers.length
   const totalRevenue = customers.reduce((sum, c) => sum + c.total_spent, 0)
   const birthdayCount = customers.filter((c) => isBirthdayMonth(c.birthdate)).length
+
+  const resetSegmentForm = () => {
+    setEditingSegmentId(null)
+    setSegmentName('')
+    setSegmentDescription('')
+    setSegmentCampaignId('')
+    setSegmentCouponId(null)
+    setSegmentError(null)
+  }
 
   const applyFilterPanel = () => {
     const errors = validatePairErrors(filter)
@@ -336,11 +365,66 @@ export default function AdminCrm() {
       return
     }
     setFilterFormError(null)
-    setSegmentation('nenhuma')
     setAppliedFilter(filter)
-    setFilterOpen(false)
+  }
+  const openSegment = (segment: CrmSegment) => {
+    const criteria = segment.filter_criteria as unknown as FilterState
+    setFilter(criteria)
+    setAppliedFilter(criteria)
+    setFilterOpen(true)
+    setEditingSegmentId(segment.id)
+    setSegmentName(segment.name)
+    setSegmentDescription(segment.description ?? '')
+    setSegmentCampaignId(segment.campaign_id ?? '')
+    setSegmentCouponId(segment.coupon_id ?? null)
+    setSegmentError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+  const saveSegment = async () => {
+    setSegmentError(null)
+    if (!segmentName.trim()) {
+      setSegmentError('Dê um nome pra essa segmentação.')
+      return
+    }
+    if (!appliedFilter) {
+      setSegmentError('Rode o filtro antes de salvar a segmentação.')
+      return
+    }
+    setSavingSegment(true)
+    try {
+      const payload = {
+        name: segmentName,
+        description: segmentDescription || undefined,
+        filter_criteria: appliedFilter,
+        coupon_id: segmentCouponId || undefined,
+        campaign_id: segmentCampaignId || undefined,
+      }
+      if (editingSegmentId) {
+        await api.admin.segments.update(editingSegmentId, payload)
+      } else {
+        const created = await api.admin.segments.create(payload)
+        setEditingSegmentId(created.id)
+      }
+      loadSegments()
+    } catch (err) {
+      setSegmentError(err instanceof ApiError ? err.message : 'Não foi possível salvar a segmentação.')
+    } finally {
+      setSavingSegment(false)
+    }
+  }
+  const removeSegment = async (id: string) => {
+    if (!confirm('Remover esta segmentação?')) return
+    await api.admin.segments.delete(id)
+    if (editingSegmentId === id) {
+      resetSegmentForm()
+      setAppliedFilter(null)
+      setFilter(EMPTY_FILTER)
+      setFilterOpen(false)
+    }
+    loadSegments()
   }
   const clearFilters = () => {
+    resetSegmentForm()
     setFilter(EMPTY_FILTER)
     setAppliedFilter(null)
     setFilterFormError(null)
@@ -421,6 +505,24 @@ export default function AdminCrm() {
       if (!targetedForm.dontNotify) {
         api.admin.whatsapp.notifyCouponGrant(created.id, targetedForm.customMessage).catch(() => {})
       }
+      // Se essa lista veio de uma segmentação salva (aberta ou recém-criada),
+      // o cupom exclusivo fica vinculado a ela também.
+      if (targetedFormSegmentId) {
+        setSegmentCouponId(created.id)
+        const segment = segments.find((s) => s.id === targetedFormSegmentId)
+        if (segment) {
+          api.admin.segments
+            .update(targetedFormSegmentId, {
+              name: segment.name,
+              description: segment.description ?? undefined,
+              filter_criteria: segment.filter_criteria,
+              coupon_id: created.id,
+              campaign_id: segment.campaign_id ?? undefined,
+            })
+            .then(loadSegments)
+            .catch(() => {})
+        }
+      }
       setShowTargetedForm(false)
       setTargetedForm(EMPTY_TARGETED_FORM)
       loadCoupons()
@@ -464,78 +566,69 @@ export default function AdminCrm() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <select
-          className="input-field sm:w-64 appearance-none cursor-pointer flex-shrink-0"
-          value={segmentation}
-          onChange={(e) => {
-            setSegmentation(e.target.value as Segmentation)
-            setAppliedFilter(null)
-          }}
-        >
-          {(Object.entries(SEGMENTATION_LABEL) as [Segmentation, string][]).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
         <button
-          onClick={() => setFilterOpen((v) => !v)}
-          className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors flex-shrink-0 ${
-            appliedFilter || filterOpen ? 'sunset-bg text-white' : 'bg-son-surface border border-white/5 text-son-silver-dim'
+          onClick={() => {
+            if (!filterOpen) resetSegmentForm()
+            setFilterOpen((v) => !v)
+          }}
+          className={`flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all flex-shrink-0 ${
+            appliedFilter || filterOpen ? 'sunset-bg text-white shadow-lg shadow-son-pink/20' : 'sunset-bg text-white hover:brightness-110 hover:scale-[1.02]'
           }`}
-          title="Filtro avançado"
+          title="Nova segmentação"
         >
-          <Filter className="w-3.5 h-3.5" /> Filtro
+          <Sparkles className="w-4 h-4" /> Nova segmentação
         </button>
       </div>
 
       {filterOpen && (
         <Card className="p-5 mb-4 space-y-3">
           <div className="border border-white/10 rounded-xl p-3">
-            <label className="label flex items-center gap-1.5 flex-wrap">
-              Frequência de compra em
+            <label className="label">Ex: clientes que compraram 50 vezes em 20 dias</label>
+            <div className="flex items-center gap-2">
               <input
-                className={`input-field w-20 py-1 px-2 text-xs text-center inline-block ${NO_SPINNER}`}
+                className={`input-field w-32 ${NO_SPINNER}`}
+                type="number"
+                min="1"
+                placeholder="N° Vezes"
+                value={filter.minOrders}
+                onChange={(e) => setFilter({ ...filter, minOrders: e.target.value })}
+              />
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
+              <input
+                className={`input-field w-24 ${NO_SPINNER}`}
                 type="number"
                 min="1"
                 placeholder="Opcional"
                 value={filter.minOrdersDays}
                 onChange={(e) => setFilter({ ...filter, minOrdersDays: e.target.value })}
               />
-              Dias
-            </label>
-            <input
-              className="input-field mt-2 max-w-xs"
-              type="number"
-              min="1"
-              placeholder="Ex: clientes que compraram 50 vezes"
-              value={filter.minOrders}
-              onChange={(e) => setFilter({ ...filter, minOrders: e.target.value })}
-            />
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">Dias</span>
+            </div>
             {pairErrors.minOrders && <p className="error-msg mt-1">{pairErrors.minOrders}</p>}
           </div>
 
           <div className="border border-white/10 rounded-xl p-3">
-            <label className="label flex items-center gap-1.5 flex-wrap">
-              Volume de produtos em
+            <label className="label">Ex: clientes que compraram 500 produtos em 20 dias</label>
+            <div className="flex items-center gap-2">
               <input
-                className={`input-field w-20 py-1 px-2 text-xs text-center inline-block ${NO_SPINNER}`}
+                className={`input-field w-32 ${NO_SPINNER}`}
+                type="number"
+                min="1"
+                placeholder="N° Produtos"
+                value={filter.minItems}
+                onChange={(e) => setFilter({ ...filter, minItems: e.target.value })}
+              />
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
+              <input
+                className={`input-field w-24 ${NO_SPINNER}`}
                 type="number"
                 min="1"
                 placeholder="Opcional"
                 value={filter.minItemsDays}
                 onChange={(e) => setFilter({ ...filter, minItemsDays: e.target.value })}
               />
-              Dias
-            </label>
-            <input
-              className="input-field mt-2 max-w-xs"
-              type="number"
-              min="1"
-              placeholder="Ex: clientes que compraram 500 produtos"
-              value={filter.minItems}
-              onChange={(e) => setFilter({ ...filter, minItems: e.target.value })}
-            />
+              <span className="text-son-silver-dim text-sm whitespace-nowrap">Dias</span>
+            </div>
             {pairErrors.minItems && <p className="error-msg mt-1">{pairErrors.minItems}</p>}
           </div>
 
@@ -699,6 +792,27 @@ export default function AdminCrm() {
             )}
           </div>
 
+          <div className="border border-white/10 rounded-xl p-3">
+            <label className="label">Lista de clientes que na média costuma reincidir o consumo a cada 15 dias, por exemplo</label>
+            <ProductCategoryMultiSelect
+              products={products}
+              categories={categories}
+              selectedProductIds={filter.recurringProductIds}
+              selectedCategoryIds={filter.recurringCategoryIds}
+              onChangeProducts={(recurringProductIds) => setFilter({ ...filter, recurringProductIds })}
+              onChangeCategories={(recurringCategoryIds) => setFilter({ ...filter, recurringCategoryIds })}
+            />
+            <input
+              className={`input-field mt-2 w-32 ${NO_SPINNER}`}
+              type="number"
+              min="1"
+              placeholder="N° Dias"
+              value={filter.recurringDays}
+              onChange={(e) => setFilter({ ...filter, recurringDays: e.target.value })}
+            />
+            {pairErrors.recurring && <p className="error-msg mt-1">{pairErrors.recurring}</p>}
+          </div>
+
           {filterFormError && <p className="error-msg">{filterFormError}</p>}
           <div className="flex gap-2">
             <button onClick={applyFilterPanel} className="btn-primary flex-1">
@@ -708,6 +822,77 @@ export default function AdminCrm() {
               Limpar filtros
             </button>
           </div>
+
+          {appliedFilter && (
+            <div className="border border-son-pink/30 rounded-xl p-3 space-y-3 bg-son-pink/5">
+              <p className="text-xs text-son-silver-dim">
+                {visible.length} cliente(s) nessa segmentação — dê um nome e salve pra reabrir/reutilizar depois.
+              </p>
+              <div>
+                <label className="label">Nome da segmentação</label>
+                <input
+                  className="input-field"
+                  placeholder="Ex: Clientes VIP João Pessoa"
+                  value={segmentName}
+                  onChange={(e) => setSegmentName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">Descrição</label>
+                <textarea
+                  className="input-field"
+                  rows={2}
+                  placeholder="O que caracteriza esse grupo de clientes..."
+                  value={segmentDescription}
+                  onChange={(e) => setSegmentDescription(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">Campanha vinculada (opcional)</label>
+                <select
+                  className="input-field appearance-none cursor-pointer"
+                  value={segmentCampaignId}
+                  onChange={(e) => setSegmentCampaignId(e.target.value)}
+                >
+                  <option value="">Nenhuma</option>
+                  {campaigns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Cupom exclusivo vinculado (opcional)</label>
+                {segmentCouponId ? (
+                  <div className="flex items-center justify-between bg-son-surface border border-white/10 rounded-2xl px-4 py-3">
+                    <span className="flex items-center gap-2 text-sm font-medium text-white">
+                      <Gift className="w-4 h-4 text-son-pink" /> {coupons.find((c) => c.id === segmentCouponId)?.code ?? segmentCouponId}
+                    </span>
+                    <button type="button" onClick={() => setSegmentCouponId(null)} className="text-xs text-son-silver-dim hover:text-son-pink">
+                      Desvincular
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTargetedFormSegmentId(editingSegmentId)
+                      setShowTargetedForm(true)
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-son-pink/15 text-son-pink text-xs font-semibold hover:bg-son-pink/25"
+                  >
+                    <Gift className="w-3.5 h-3.5" /> Criar cupom exclusivo pra este segmento
+                  </button>
+                )}
+              </div>
+              {segmentError && <p className="error-msg">{segmentError}</p>}
+              <button onClick={saveSegment} disabled={savingSegment} className="btn-primary w-full">
+                {savingSegment ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {editingSegmentId ? 'Atualizar segmentação' : 'Salvar segmentação'}
+              </button>
+            </div>
+          )}
         </Card>
       )}
 
@@ -715,9 +900,12 @@ export default function AdminCrm() {
         <p className="text-xs text-son-silver-dim">
           {visible.length} cliente(s){isSegmented ? ' nessa segmentação/filtro' : ''}
         </p>
-        {isSegmented && visible.length > 0 && (
+        {isSegmented && visible.length > 0 && !filterOpen && (
           <button
-            onClick={() => setShowTargetedForm(true)}
+            onClick={() => {
+              setTargetedFormSegmentId(editingSegmentId)
+              setShowTargetedForm(true)
+            }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-son-pink/15 text-son-pink text-xs font-semibold hover:bg-son-pink/25"
           >
             <Gift className="w-3.5 h-3.5" /> Criar cupom pra esses clientes
@@ -761,6 +949,60 @@ export default function AdminCrm() {
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 mb-4">
+        <Layers className="w-5 h-5 text-son-gold" />
+        <h2 className="text-xl font-black">Segmentações salvas</h2>
+      </div>
+      {segmentsLoading ? (
+        <div className="flex justify-center py-10">
+          <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
+        </div>
+      ) : segments.length === 0 ? (
+        <div className="text-center py-10 text-son-silver-dim mb-10">
+          <Layers className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p>Nenhuma segmentação salva ainda.</p>
+          <p className="text-xs mt-1">Clique em "Nova segmentação", monte o filtro e salve com um nome.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
+          {segments.map((s) => {
+            const count = applyFilters(customers, s.filter_criteria as unknown as FilterState, products).length
+            const campaign = campaigns.find((c) => c.id === s.campaign_id)
+            const coupon = coupons.find((c) => c.id === s.coupon_id)
+            return (
+              <Card key={s.id} className="p-4">
+                <button type="button" onClick={() => openSegment(s)} className="w-full text-left">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="font-semibold text-white">{s.name}</p>
+                    <span className="text-xs font-bold sunset-text flex-shrink-0">{count} cliente(s)</span>
+                  </div>
+                  {s.description && <p className="text-xs text-son-silver-dim mb-2">{s.description}</p>}
+                  <div className="flex flex-wrap gap-1">
+                    {coupon && (
+                      <span className="px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">Cupom: {coupon.code}</span>
+                    )}
+                    {campaign && (
+                      <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-xs">Campanha: {campaign.title}</span>
+                    )}
+                  </div>
+                </button>
+                <div className="flex justify-end mt-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeSegment(s.id)
+                    }}
+                    className="text-son-silver-dim hover:text-son-pink"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </Card>
+            )
+          })}
         </div>
       )}
 

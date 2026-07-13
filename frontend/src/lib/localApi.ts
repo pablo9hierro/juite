@@ -938,6 +938,68 @@ async function adminListCouponGrants(couponId: string): Promise<CouponGrant[]> {
     .sort((a, b) => (a.customer_name ?? '').localeCompare(b.customer_name ?? ''))
 }
 
+// ---------- segmentações do CRM (admin) ----------
+
+async function adminListSegments(): Promise<import('./types').CrmSegment[]> {
+  const db = loadDb()
+  return [...(db.segments ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at))
+}
+
+async function createSegment(payload: {
+  name: string
+  description?: string
+  filter_criteria: import('./types').CrmFilterCriteria
+  coupon_id?: string
+  campaign_id?: string
+}): Promise<import('./types').CrmSegment> {
+  const db = loadDb()
+  db.segments = db.segments ?? []
+  if (!payload.name.trim()) throw new ApiError(400, 'name is required')
+  const segment: import('./types').CrmSegment = {
+    id: uid(),
+    name: payload.name.trim(),
+    description: payload.description?.trim() || null,
+    filter_criteria: payload.filter_criteria,
+    coupon_id: payload.coupon_id || null,
+    campaign_id: payload.campaign_id || null,
+    created_at: nowIso(),
+  }
+  db.segments.push(segment)
+  saveDb(db)
+  return segment
+}
+
+async function updateSegment(
+  id: string,
+  payload: {
+    name: string
+    description?: string
+    filter_criteria: import('./types').CrmFilterCriteria
+    coupon_id?: string
+    campaign_id?: string
+  }
+): Promise<import('./types').CrmSegment> {
+  const db = loadDb()
+  const segment = (db.segments ?? []).find((s) => s.id === id)
+  if (!segment) throw new ApiError(404, 'segment not found')
+  if (!payload.name.trim()) throw new ApiError(400, 'name is required')
+  segment.name = payload.name.trim()
+  segment.description = payload.description?.trim() || null
+  segment.filter_criteria = payload.filter_criteria
+  segment.coupon_id = payload.coupon_id || null
+  segment.campaign_id = payload.campaign_id || null
+  saveDb(db)
+  return segment
+}
+
+async function deleteSegment(id: string): Promise<void> {
+  const db = loadDb()
+  const idx = (db.segments ?? []).findIndex((s) => s.id === id)
+  if (idx === -1) throw new ApiError(404, 'segment not found')
+  db.segments.splice(idx, 1)
+  saveDb(db)
+}
+
 // ---------- campanhas (admin) ----------
 
 async function adminListCampaigns(): Promise<Campaign[]> {
@@ -1622,6 +1684,7 @@ export const localApi = {
     siteSettings: { updateHeroImage },
     financeiro: { get: financeiro, timeseries: financeiroTimeseries },
     crm: { customers: adminCrmCustomers },
+    segments: { list: adminListSegments, create: createSegment, update: updateSegment, delete: deleteSegment },
     whatsapp: {
       status: async () => ({ instance: { state: 'close' } }),
       connect: async () => {

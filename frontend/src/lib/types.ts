@@ -67,6 +67,21 @@ export interface Coupon {
   grant_count?: number
 }
 
+// Critério salvo do filtro avançado do CRM — mesmo shape do FilterState
+// do front (AdminCrm.tsx), guardado como jsonb opaco (o servidor nunca
+// interpreta o conteúdo, só persiste).
+export type CrmFilterCriteria = Record<string, unknown>
+
+export interface CrmSegment {
+  id: string
+  name: string
+  description: string | null
+  filter_criteria: CrmFilterCriteria
+  coupon_id: string | null
+  campaign_id: string | null
+  created_at: string
+}
+
 export interface CouponGrant {
   id: string
   customer_whatsapp: string
