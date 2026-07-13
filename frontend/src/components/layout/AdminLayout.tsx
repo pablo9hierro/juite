@@ -15,7 +15,7 @@ import { useAdminAuth } from '../../store/adminAuth'
 
 // Vendedor usa essa MESMA tela (mesmo layout, login, sidebar) só que
 // enxergando um dashboard próprio: Pedidos + PDV + Financeiro (só a parte
-// de vendas de balcão dele) — sem acesso a Produtos/Funcionários/Campanhas/
+// de vendas de balcão dele) — sem acesso a Produtos/Funcionários/Promoções/
 // CRM/Configurações, que continuam exclusivos do admin. O resto do menu
 // nem aparece pra ele, e a guarda de rota abaixo bloqueia acesso direto
 // por URL também (defesa em profundidade: cada RPC admin-only já rejeita
@@ -26,7 +26,7 @@ const NAV_ITEMS = [
   { href: '/admin/produtos', label: 'Produtos', icon: Package, roles: ['admin'] },
   { href: '/admin/motoboys', label: 'Funcionários', icon: Truck, roles: ['admin'] },
   { href: '/admin/crm', label: 'CRM', icon: Users, roles: ['admin'] },
-  { href: '/admin/campanhas', label: 'Campanhas', icon: Megaphone, roles: ['admin'] },
+  { href: '/admin/promocoes', label: 'Promoções', icon: Megaphone, roles: ['admin'] },
   { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet, roles: ['admin', 'vendedor'] },
   { href: '/admin/conta', label: 'Configurações', icon: Settings, roles: ['admin'] },
 ] as const

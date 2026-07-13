@@ -5,33 +5,35 @@ import ExpiryInput from '../../components/admin/ExpiryInput'
 import ProductMultiSelect from '../../components/admin/ProductMultiSelect'
 import ProductDiscountList from '../../components/admin/ProductDiscountList'
 import { api, ApiError } from '../../lib/api'
-import type { Campaign, CampaignType, DiscountType, Product, ProductDiscount } from '../../lib/types'
+import type { DiscountType, Product, ProductDiscount, Promotion, PromotionType } from '../../lib/types'
 
 const MAX_BANNER_MB = 10
 
-type CampaignForm = {
+type PromotionForm = {
   title: string
   image_url: string
   product_ids: string[]
-  campaign_type: CampaignType
+  promotion_type: PromotionType
   discount_type: DiscountType | ''
   discount_value: string
   productDiscounts: ProductDiscount[]
   shipping_discount_type: DiscountType | ''
   shipping_discount_value: string
+  active: boolean
   starts_at: string
   expires_at: string
 }
-const EMPTY_CAMPAIGN_FORM: CampaignForm = {
+const EMPTY_PROMOTION_FORM: PromotionForm = {
   title: '',
   image_url: '',
   product_ids: [],
-  campaign_type: 'kit',
+  promotion_type: 'kit',
   discount_type: '',
   discount_value: '',
   productDiscounts: [],
   shipping_discount_type: '',
   shipping_discount_value: '',
+  active: true,
   starts_at: '',
   expires_at: '',
 }
@@ -41,13 +43,13 @@ function discountLabel(discountType: DiscountType | null, value: number | null) 
   return discountType === 'percent' ? `${value}% off` : `R$ ${value.toFixed(2).replace('.', ',')} off`
 }
 
-const CAMPAIGN_TYPE_LABEL: Record<CampaignType, string> = {
+const PROMOTION_TYPE_LABEL: Record<PromotionType, string> = {
   kit: 'Kit (pacote fechado)',
   selfie_service: 'Selfie service (cliente monta o carrinho)',
 }
 
 // Imagem inicial do carrossel da landing: sempre obrigatória, sempre a
-// primeira a aparecer (mesmo com campanhas cadastradas) — o admin pode
+// primeira a aparecer (mesmo com promoções cadastradas) — o admin pode
 // trocá-la aqui a qualquer momento.
 function HeroImageCard() {
   const [heroUrl, setHeroUrl] = useState<string | null>(null)
@@ -84,8 +86,8 @@ function HeroImageCard() {
     <Card className="p-5 mb-6">
       <p className="font-bold text-white mb-1">Imagem inicial do carrossel</p>
       <p className="text-xs text-son-silver-dim mb-3">
-        Sempre obrigatória — é a primeira coisa que aparece na landing, mesmo quando há campanhas cadastradas. Depois de 2s o
-        carrossel desliza pras campanhas ativas, se houver.
+        Sempre obrigatória — é a primeira coisa que aparece na landing, mesmo quando há promoções cadastradas. Depois de 2s o
+        carrossel desliza pras promoções ativas, se houver.
       </p>
       <input
         ref={fileInputRef}
@@ -119,101 +121,135 @@ function HeroImageCard() {
   )
 }
 
-export default function AdminCampanhas() {
+export default function AdminPromocoes() {
   const [products, setProducts] = useState<Product[]>([])
 
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [campaignsLoading, setCampaignsLoading] = useState(true)
-  const [showCampaignForm, setShowCampaignForm] = useState(false)
-  const [campaignForm, setCampaignForm] = useState<CampaignForm>(EMPTY_CAMPAIGN_FORM)
-  const [savingCampaign, setSavingCampaign] = useState(false)
-  const [campaignError, setCampaignError] = useState<string | null>(null)
+  const [promotions, setPromotions] = useState<Promotion[]>([])
+  const [promotionsLoading, setPromotionsLoading] = useState(true)
+  const [showPromotionForm, setShowPromotionForm] = useState(false)
+  const [promotionForm, setPromotionForm] = useState<PromotionForm>(EMPTY_PROMOTION_FORM)
+  const [editingPromotionId, setEditingPromotionId] = useState<string | null>(null)
+  const [savingPromotion, setSavingPromotion] = useState(false)
+  const [promotionError, setPromotionError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const loadCampaigns = () => {
-    setCampaignsLoading(true)
-    api.admin.campaigns.list().then(setCampaigns).finally(() => setCampaignsLoading(false))
+  const loadPromotions = () => {
+    setPromotionsLoading(true)
+    api.admin.promotions.list().then(setPromotions).finally(() => setPromotionsLoading(false))
   }
   useEffect(() => {
     api.admin.products.list().then(setProducts)
-    loadCampaigns()
+    loadPromotions()
   }, [])
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    setCampaignError(null)
+    setPromotionError(null)
     if (file.size > MAX_BANNER_MB * 1024 * 1024) {
-      setCampaignError(`O arquivo tem ${(file.size / (1024 * 1024)).toFixed(1)}MB — o máximo é ${MAX_BANNER_MB}MB.`)
+      setPromotionError(`O arquivo tem ${(file.size / (1024 * 1024)).toFixed(1)}MB — o máximo é ${MAX_BANNER_MB}MB.`)
       return
     }
     setUploading(true)
     try {
       const { url } = await api.admin.products.uploadImage(file)
-      setCampaignForm((f) => ({ ...f, image_url: url }))
+      setPromotionForm((f) => ({ ...f, image_url: url }))
     } catch (err) {
-      setCampaignError(err instanceof ApiError ? err.message : 'Erro ao enviar a imagem.')
+      setPromotionError(err instanceof ApiError ? err.message : 'Erro ao enviar a imagem.')
     } finally {
       setUploading(false)
     }
   }
 
-  const saveCampaign = async () => {
-    setCampaignError(null)
-    if (campaignForm.campaign_type === 'selfie_service' && campaignForm.productDiscounts.length === 0) {
-      setCampaignError('Busque e adicione ao menos um produto com desconto.')
+  const openNewPromotion = () => {
+    setEditingPromotionId(null)
+    setPromotionForm(EMPTY_PROMOTION_FORM)
+    setPromotionError(null)
+    setShowPromotionForm(true)
+  }
+
+  const openEditPromotion = (p: Promotion) => {
+    setEditingPromotionId(p.id)
+    setPromotionForm({
+      title: p.title,
+      image_url: p.image_url,
+      product_ids: p.product_ids,
+      promotion_type: p.promotion_type,
+      discount_type: p.discount_type ?? '',
+      discount_value: p.discount_value != null ? String(p.discount_value) : '',
+      productDiscounts: p.product_discounts ?? [],
+      shipping_discount_type: p.shipping_discount_type ?? '',
+      shipping_discount_value: p.shipping_discount_value != null ? String(p.shipping_discount_value) : '',
+      active: p.active ?? true,
+      starts_at: p.starts_at ?? '',
+      expires_at: p.expires_at ?? '',
+    })
+    setPromotionError(null)
+    setShowPromotionForm(true)
+  }
+
+  const savePromotion = async () => {
+    setPromotionError(null)
+    if (promotionForm.promotion_type === 'selfie_service' && promotionForm.productDiscounts.length === 0) {
+      setPromotionError('Busque e adicione ao menos um produto com desconto.')
       return
     }
-    setSavingCampaign(true)
+    setSavingPromotion(true)
     try {
-      await api.admin.campaigns.create({
-        title: campaignForm.title,
-        image_url: campaignForm.image_url,
-        product_ids: campaignForm.product_ids,
-        campaign_type: campaignForm.campaign_type,
-        discount_type: campaignForm.campaign_type === 'kit' ? campaignForm.discount_type || undefined : undefined,
+      const payload = {
+        title: promotionForm.title,
+        image_url: promotionForm.image_url,
+        product_ids: promotionForm.product_ids,
+        promotion_type: promotionForm.promotion_type,
+        discount_type: promotionForm.promotion_type === 'kit' ? promotionForm.discount_type || undefined : undefined,
         discount_value:
-          campaignForm.campaign_type === 'kit' && campaignForm.discount_value ? Number(campaignForm.discount_value) : undefined,
-        product_discounts: campaignForm.campaign_type === 'selfie_service' ? campaignForm.productDiscounts : undefined,
-        shipping_discount_type: campaignForm.shipping_discount_type || undefined,
-        shipping_discount_value: campaignForm.shipping_discount_value ? Number(campaignForm.shipping_discount_value) : undefined,
-        starts_at: campaignForm.starts_at || undefined,
-        expires_at: campaignForm.expires_at || undefined,
-      })
-      setShowCampaignForm(false)
-      setCampaignForm(EMPTY_CAMPAIGN_FORM)
-      loadCampaigns()
+          promotionForm.promotion_type === 'kit' && promotionForm.discount_value ? Number(promotionForm.discount_value) : undefined,
+        product_discounts: promotionForm.promotion_type === 'selfie_service' ? promotionForm.productDiscounts : undefined,
+        shipping_discount_type: promotionForm.shipping_discount_type || undefined,
+        shipping_discount_value: promotionForm.shipping_discount_value ? Number(promotionForm.shipping_discount_value) : undefined,
+        starts_at: promotionForm.starts_at || undefined,
+        expires_at: promotionForm.expires_at || undefined,
+      }
+      if (editingPromotionId) {
+        await api.admin.promotions.update(editingPromotionId, { ...payload, active: promotionForm.active })
+      } else {
+        await api.admin.promotions.create(payload)
+      }
+      setShowPromotionForm(false)
+      setEditingPromotionId(null)
+      setPromotionForm(EMPTY_PROMOTION_FORM)
+      loadPromotions()
     } catch (err) {
-      setCampaignError(err instanceof ApiError ? err.message : 'Não foi possível salvar a campanha.')
+      setPromotionError(err instanceof ApiError ? err.message : 'Não foi possível salvar a promoção.')
     } finally {
-      setSavingCampaign(false)
+      setSavingPromotion(false)
     }
   }
 
-  const toggleCampaignActive = async (c: Campaign) => {
-    await api.admin.campaigns.update(c.id, {
-      title: c.title,
-      image_url: c.image_url,
-      product_ids: c.product_ids,
-      campaign_type: c.campaign_type,
-      discount_type: c.discount_type ?? undefined,
-      discount_value: c.discount_value ?? undefined,
-      product_discounts: c.product_discounts,
-      shipping_discount_type: c.shipping_discount_type ?? undefined,
-      shipping_discount_value: c.shipping_discount_value ?? undefined,
-      active: !c.active,
-      starts_at: c.starts_at ?? undefined,
-      expires_at: c.expires_at ?? undefined,
+  const togglePromotionActive = async (p: Promotion) => {
+    await api.admin.promotions.update(p.id, {
+      title: p.title,
+      image_url: p.image_url,
+      product_ids: p.product_ids,
+      promotion_type: p.promotion_type,
+      discount_type: p.discount_type ?? undefined,
+      discount_value: p.discount_value ?? undefined,
+      product_discounts: p.product_discounts,
+      shipping_discount_type: p.shipping_discount_type ?? undefined,
+      shipping_discount_value: p.shipping_discount_value ?? undefined,
+      active: !p.active,
+      starts_at: p.starts_at ?? undefined,
+      expires_at: p.expires_at ?? undefined,
     })
-    loadCampaigns()
+    loadPromotions()
   }
 
-  const removeCampaign = async (id: string) => {
-    if (!confirm('Remover esta campanha?')) return
-    await api.admin.campaigns.delete(id)
-    loadCampaigns()
+  const removePromotion = async (id: string) => {
+    if (!confirm('Remover esta promoção?')) return
+    await api.admin.promotions.delete(id)
+    loadPromotions()
   }
 
   return (
@@ -221,83 +257,97 @@ export default function AdminCampanhas() {
       <HeroImageCard />
 
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-black">Campanhas</h1>
-        <button onClick={() => setShowCampaignForm(true)} className="btn-primary text-sm py-2 px-4">
-          <Plus className="w-4 h-4" /> Nova campanha
+        <h1 className="text-2xl font-black">Promoções</h1>
+        <button onClick={openNewPromotion} className="btn-primary text-sm py-2 px-4">
+          <Plus className="w-4 h-4" /> Nova promoção
         </button>
       </div>
-      {campaignsLoading ? (
+      {promotionsLoading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
         </div>
-      ) : campaigns.length === 0 ? (
+      ) : promotions.length === 0 ? (
         <div className="text-center py-16 text-son-silver-dim">
           <Megaphone className="w-10 h-10 mx-auto mb-3 opacity-30" />
-          <p>Nenhuma campanha cadastrada.</p>
-          <p className="text-xs mt-1">Toda campanha precisa de imagem + desconto (produto e/ou frete).</p>
+          <p>Nenhuma promoção cadastrada.</p>
+          <p className="text-xs mt-1">Toda promoção precisa de imagem + desconto (produto e/ou frete).</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {campaigns.map((c) => (
-            <Card key={c.id} className="p-4">
-              <div className="flex gap-3">
-                <img src={c.image_url} alt={c.title} className="w-20 h-20 rounded-xl object-cover flex-shrink-0" />
+          {promotions.map((p) => (
+            <Card key={p.id} className="p-4">
+              <button type="button" onClick={() => openEditPromotion(p)} className="flex gap-3 w-full text-left">
+                <img src={p.image_url} alt={p.title} className="w-20 h-20 rounded-xl object-cover flex-shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-white truncate">{c.title}</p>
-                  <p className="text-xs text-son-silver-dim">{c.product_ids.length} produto(s)</p>
+                  <p className="font-semibold text-white truncate">{p.title}</p>
+                  <p className="text-xs text-son-silver-dim">{p.product_ids.length} produto(s)</p>
                   <div className="flex flex-wrap gap-1 mt-1">
                     <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-xs">
-                      {c.campaign_type === 'kit' ? 'Kit' : 'Selfie service'}
+                      {p.promotion_type === 'kit' ? 'Kit' : 'Selfie service'}
                     </span>
-                    {c.campaign_type === 'selfie_service' ? (
+                    {p.promotion_type === 'selfie_service' ? (
                       <span className="px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">
-                        {c.product_discounts?.length ?? 0} produto(s) c/ desconto
+                        {p.product_discounts?.length ?? 0} produto(s) c/ desconto
                       </span>
                     ) : (
-                      discountLabel(c.discount_type, c.discount_value) && (
+                      discountLabel(p.discount_type, p.discount_value) && (
                         <span className="px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">
-                          {discountLabel(c.discount_type, c.discount_value)}
+                          {discountLabel(p.discount_type, p.discount_value)}
                         </span>
                       )
                     )}
-                    {discountLabel(c.shipping_discount_type, c.shipping_discount_value) && (
+                    {discountLabel(p.shipping_discount_type, p.shipping_discount_value) && (
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-semibold">
-                        Frete: {discountLabel(c.shipping_discount_type, c.shipping_discount_value)}
+                        Frete: {discountLabel(p.shipping_discount_type, p.shipping_discount_value)}
                       </span>
                     )}
                   </div>
-                  {c.expires_at && (
-                    <p className="text-xs text-son-silver-dim mt-1">Até {new Date(c.expires_at).toLocaleString('pt-BR')}</p>
+                  {p.expires_at && (
+                    <p className="text-xs text-son-silver-dim mt-1">Até {new Date(p.expires_at).toLocaleString('pt-BR')}</p>
                   )}
                 </div>
-              </div>
+              </button>
               <div className="flex items-center justify-between mt-3">
                 <button
-                  onClick={() => toggleCampaignActive(c)}
+                  onClick={() => togglePromotionActive(p)}
                   className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                    c.active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/10 text-son-silver-dim'
+                    p.active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/10 text-son-silver-dim'
                   }`}
                 >
-                  {c.active ? 'Ativa' : 'Inativa'}
+                  {p.active ? 'Ativa' : 'Inativa'}
                 </button>
-                <button onClick={() => removeCampaign(c.id)} className="text-son-silver-dim hover:text-son-pink">
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => openEditPromotion(p)} className="text-xs font-semibold text-son-silver-dim hover:text-white">
+                    Editar
+                  </button>
+                  <button onClick={() => removePromotion(p.id)} className="text-son-silver-dim hover:text-son-pink">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </Card>
           ))}
         </div>
       )}
 
-      {showCampaignForm && (
+      {showPromotionForm && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
-          onClick={() => setShowCampaignForm(false)}
+          onClick={() => {
+            setShowPromotionForm(false)
+            setEditingPromotionId(null)
+          }}
         >
           <div className="glass rounded-2xl p-6 max-w-2xl w-full my-8" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white">Nova campanha</h3>
-              <button onClick={() => setShowCampaignForm(false)} className="text-son-silver-dim hover:text-white">
+              <h3 className="font-bold text-white">{editingPromotionId ? 'Editar promoção' : 'Nova promoção'}</h3>
+              <button
+                onClick={() => {
+                  setShowPromotionForm(false)
+                  setEditingPromotionId(null)
+                }}
+                className="text-son-silver-dim hover:text-white"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -306,8 +356,8 @@ export default function AdminCampanhas() {
                 <label className="label">Título</label>
                 <input
                   className="input-field"
-                  value={campaignForm.title}
-                  onChange={(e) => setCampaignForm({ ...campaignForm, title: e.target.value })}
+                  value={promotionForm.title}
+                  onChange={(e) => setPromotionForm({ ...promotionForm, title: e.target.value })}
                 />
               </div>
               <div>
@@ -323,8 +373,8 @@ export default function AdminCampanhas() {
                   <div className="w-20 h-20 rounded-xl bg-son-surface-light flex items-center justify-center overflow-hidden flex-shrink-0">
                     {uploading ? (
                       <Loader2 className="w-5 h-5 animate-spin text-son-silver-dim" />
-                    ) : campaignForm.image_url ? (
-                      <img src={campaignForm.image_url} alt="" className="w-full h-full object-cover" />
+                    ) : promotionForm.image_url ? (
+                      <img src={promotionForm.image_url} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <Megaphone className="w-6 h-6 text-son-silver-dim/40" />
                     )}
@@ -336,52 +386,52 @@ export default function AdminCampanhas() {
                     className="btn-secondary text-sm py-2 px-3"
                   >
                     <ImagePlus className="w-3.5 h-3.5" />
-                    {campaignForm.image_url ? 'Trocar imagem' : 'Enviar imagem'}
+                    {promotionForm.image_url ? 'Trocar imagem' : 'Enviar imagem'}
                   </button>
                 </div>
                 <p className="text-xs text-son-silver-dim mt-1.5">
                   Dimensão recomendada: 1200×600px (proporção 2:1), formatos aceitos: JPG, PNG, WEBP, GIF, MP4 ou WEBM. Tamanho
                   máximo por arquivo: {MAX_BANNER_MB}MB.
                 </p>
-                {campaignError && <p className="error-msg mt-1">{campaignError}</p>}
+                {promotionError && <p className="error-msg mt-1">{promotionError}</p>}
               </div>
               <div>
-                <label className="label">Tipo de campanha</label>
+                <label className="label">Tipo de promoção</label>
                 <div className="grid grid-cols-2 gap-1.5">
                   {(['kit', 'selfie_service'] as const).map((t) => (
                     <button
                       key={t}
                       type="button"
-                      onClick={() => setCampaignForm({ ...campaignForm, campaign_type: t })}
+                      onClick={() => setPromotionForm({ ...promotionForm, promotion_type: t })}
                       className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
-                        campaignForm.campaign_type === t ? 'sunset-bg text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
+                        promotionForm.promotion_type === t ? 'sunset-bg text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
                       }`}
                     >
-                      {CAMPAIGN_TYPE_LABEL[t]}
+                      {PROMOTION_TYPE_LABEL[t]}
                     </button>
                   ))}
                 </div>
                 <p className="text-xs text-son-silver-dim mt-1.5">
-                  {campaignForm.campaign_type === 'kit'
-                    ? 'O cliente só pode comprar o pacote inteiro (todos os produtos da campanha) ou não comprar nada — desconto único sobre o valor total.'
-                    : 'O cliente monta o próprio carrinho em /banner escolhendo entre os produtos da campanha — cada produto tem seu próprio desconto.'}
+                  {promotionForm.promotion_type === 'kit'
+                    ? 'O cliente só pode comprar o pacote inteiro (todos os produtos da promoção) ou não comprar nada — desconto único sobre o valor total.'
+                    : 'O cliente monta o próprio carrinho em /banner escolhendo entre os produtos da promoção — cada produto tem seu próprio desconto.'}
                 </p>
               </div>
               <div>
-                <label className="label">Produtos da campanha</label>
+                <label className="label">Produtos da promoção</label>
                 <ProductMultiSelect
                   products={products}
-                  selectedIds={campaignForm.product_ids}
-                  onChange={(product_ids) => setCampaignForm({ ...campaignForm, product_ids })}
+                  selectedIds={promotionForm.product_ids}
+                  onChange={(product_ids) => setPromotionForm({ ...promotionForm, product_ids })}
                 />
               </div>
-              {campaignForm.campaign_type === 'selfie_service' ? (
+              {promotionForm.promotion_type === 'selfie_service' ? (
                 <div>
                   <label className="label">Desconto no produto (cada item tem o seu)</label>
                   <ProductDiscountList
-                    products={products.filter((p) => campaignForm.product_ids.includes(p.id))}
-                    discounts={campaignForm.productDiscounts}
-                    onChange={(productDiscounts) => setCampaignForm({ ...campaignForm, productDiscounts })}
+                    products={products.filter((p) => promotionForm.product_ids.includes(p.id))}
+                    discounts={promotionForm.productDiscounts}
+                    onChange={(productDiscounts) => setPromotionForm({ ...promotionForm, productDiscounts })}
                   />
                 </div>
               ) : (
@@ -390,8 +440,8 @@ export default function AdminCampanhas() {
                     <label className="label">Desconto no valor total</label>
                     <select
                       className="input-field"
-                      value={campaignForm.discount_type}
-                      onChange={(e) => setCampaignForm({ ...campaignForm, discount_type: e.target.value as DiscountType | '' })}
+                      value={promotionForm.discount_type}
+                      onChange={(e) => setPromotionForm({ ...promotionForm, discount_type: e.target.value as DiscountType | '' })}
                     >
                       <option value="">Sem desconto de produto</option>
                       <option value="percent">Percentual</option>
@@ -404,9 +454,9 @@ export default function AdminCampanhas() {
                       className="input-field"
                       type="number"
                       min="0"
-                      disabled={!campaignForm.discount_type}
-                      value={campaignForm.discount_value}
-                      onChange={(e) => setCampaignForm({ ...campaignForm, discount_value: e.target.value })}
+                      disabled={!promotionForm.discount_type}
+                      value={promotionForm.discount_value}
+                      onChange={(e) => setPromotionForm({ ...promotionForm, discount_value: e.target.value })}
                     />
                   </div>
                 </div>
@@ -416,9 +466,9 @@ export default function AdminCampanhas() {
                   <label className="label">Desconto no frete</label>
                   <select
                     className="input-field"
-                    value={campaignForm.shipping_discount_type}
+                    value={promotionForm.shipping_discount_type}
                     onChange={(e) =>
-                      setCampaignForm({ ...campaignForm, shipping_discount_type: e.target.value as DiscountType | '' })
+                      setPromotionForm({ ...promotionForm, shipping_discount_type: e.target.value as DiscountType | '' })
                     }
                   >
                     <option value="">Sem desconto de frete</option>
@@ -432,9 +482,9 @@ export default function AdminCampanhas() {
                     className="input-field"
                     type="number"
                     min="0"
-                    disabled={!campaignForm.shipping_discount_type}
-                    value={campaignForm.shipping_discount_value}
-                    onChange={(e) => setCampaignForm({ ...campaignForm, shipping_discount_value: e.target.value })}
+                    disabled={!promotionForm.shipping_discount_type}
+                    value={promotionForm.shipping_discount_value}
+                    onChange={(e) => setPromotionForm({ ...promotionForm, shipping_discount_value: e.target.value })}
                   />
                 </div>
               </div>
@@ -442,22 +492,22 @@ export default function AdminCampanhas() {
                 <div>
                   <label className="label">Início (opcional)</label>
                   <ExpiryInput
-                    value={campaignForm.starts_at}
-                    onChange={(starts_at) => setCampaignForm({ ...campaignForm, starts_at })}
+                    value={promotionForm.starts_at}
+                    onChange={(starts_at) => setPromotionForm({ ...promotionForm, starts_at })}
                     allowDuration={false}
                   />
                 </div>
                 <div>
                   <label className="label">Termina em (opcional)</label>
                   <ExpiryInput
-                    value={campaignForm.expires_at}
-                    onChange={(expires_at) => setCampaignForm({ ...campaignForm, expires_at })}
+                    value={promotionForm.expires_at}
+                    onChange={(expires_at) => setPromotionForm({ ...promotionForm, expires_at })}
                   />
                 </div>
               </div>
-              <button onClick={saveCampaign} disabled={savingCampaign} className="btn-primary w-full mt-2">
-                {savingCampaign ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Salvar campanha
+              <button onClick={savePromotion} disabled={savingPromotion} className="btn-primary w-full mt-2">
+                {savingPromotion ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {editingPromotionId ? 'Salvar alterações' : 'Salvar promoção'}
               </button>
             </div>
           </div>

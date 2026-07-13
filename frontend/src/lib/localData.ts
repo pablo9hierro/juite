@@ -1,6 +1,19 @@
 import { distanciaKm } from './geo/rotas'
 import { FALLBACK as STORE_LOCATION } from './geo/mapa'
-import type { Campaign, Category, Coupon, CrmSegment, Motoboy, MotoboyRun, MotoboySettlement, Order, Product, Vendedor } from './types'
+import type {
+  CampanhaOrientation,
+  Category,
+  Coupon,
+  CrmFilterCriteria,
+  CrmSegment,
+  Motoboy,
+  MotoboyRun,
+  MotoboySettlement,
+  Order,
+  Product,
+  Promotion,
+  Vendedor,
+} from './types'
 
 export interface LocalMotoboy extends Motoboy {
   password: string
@@ -28,6 +41,20 @@ export interface LocalCouponGrant {
   used_count: number
 }
 
+// "Campanha": notificação de WhatsApp + cupom exclusivo, atrelada a um
+// segmento — ver CrmCampanhaCoupon em types.ts.
+export interface LocalCampanhaCoupon {
+  id: string
+  segment_id: string
+  coupon_id: string
+  orientation: CampanhaOrientation
+  trigger_criteria: CrmFilterCriteria | null
+  message_template: string
+  uses_per_customer: number
+  fired_at: string | null
+  created_at: string
+}
+
 export interface LocalDb {
   categories: Category[]
   products: Product[]
@@ -36,10 +63,11 @@ export interface LocalDb {
   orders: Order[]
   settlements: LocalSettlement[]
   runs: LocalRun[]
-  campaigns: Campaign[]
+  promotions: Promotion[]
   coupons: Coupon[]
   couponGrants: LocalCouponGrant[]
   segments: CrmSegment[]
+  campanhaCoupons: LocalCampanhaCoupon[]
   pricePerKm: number
   maxKm: number | null
   heroImageUrl: string | null
@@ -111,10 +139,11 @@ function seedDb(): LocalDb {
     orders: [],
     settlements: [],
     runs: [],
-    campaigns: [],
+    promotions: [],
     coupons: [],
     couponGrants: [],
     segments: [],
+    campanhaCoupons: [],
     pricePerKm: 1.5,
     maxKm: null,
     heroImageUrl: null,

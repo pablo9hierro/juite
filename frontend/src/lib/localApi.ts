@@ -14,6 +14,7 @@ import {
   nowIso,
   uid,
   estimateShippingLocal,
+  type LocalCampanhaCoupon,
   type LocalDb,
   type LocalMotoboy,
   type LocalRun,
@@ -24,7 +25,7 @@ import { distanciaKm } from './geo/rotas'
 import { FALLBACK as STORE_LOCATION } from './geo/mapa'
 import { useAdminAuth } from '../store/adminAuth'
 import type {
-  Campaign,
+  Promotion,
   Category,
   Coupon,
   CouponGrant,
@@ -143,7 +144,7 @@ async function createOrder(payload: {
   payment_method: 'pix' | 'cartao' | 'dinheiro'
   items: { product_id: string; quantity: number }[]
   coupon_code?: string
-  campaign_id?: string
+  promotion_id?: string
 }): Promise<Order> {
   const db = loadDb()
 
@@ -168,18 +169,18 @@ async function createOrder(payload: {
     throw new ApiError(400, 'you must be 18 or older to purchase tobacco products')
   }
 
-  let campaign: Campaign | undefined
-  if (payload.campaign_id) {
-    campaign = (db.campaigns ?? []).find((c) => c.id === payload.campaign_id && c.active !== false)
-    if (!campaign) throw new ApiError(400, 'campaign is not available')
-    if (payload.items.some((item) => !campaign!.product_ids.includes(item.product_id))) {
-      throw new ApiError(400, 'this campaign checkout can only contain the campaign products')
+  let promotion: Promotion | undefined
+  if (payload.promotion_id) {
+    promotion = (db.promotions ?? []).find((c) => c.id === payload.promotion_id && c.active !== false)
+    if (!promotion) throw new ApiError(400, 'promotion is not available')
+    if (payload.items.some((item) => !promotion!.product_ids.includes(item.product_id))) {
+      throw new ApiError(400, 'this promotion checkout can only contain the promotion products')
     }
-    if (campaign.campaign_type === 'kit') {
+    if (promotion.promotion_type === 'kit') {
       const submittedIds = new Set(payload.items.map((i) => i.product_id))
-      const campaignIds = new Set(campaign.product_ids)
-      const sameSet = submittedIds.size === campaignIds.size && [...campaignIds].every((id) => submittedIds.has(id))
-      if (!sameSet) throw new ApiError(400, 'this kit campaign can only be purchased as the full bundle')
+      const promotionIds = new Set(promotion.product_ids)
+      const sameSet = submittedIds.size === promotionIds.size && [...promotionIds].every((id) => submittedIds.has(id))
+      if (!sameSet) throw new ApiError(400, 'this kit promotion can only be purchased as the full bundle')
     }
   }
 
@@ -206,9 +207,9 @@ async function createOrder(payload: {
   // (mesma lógica de coupon kind='produto') — kit usa discount_type/value
   // sobre o subtotal somado, tratado mais abaixo.
   let selfieServiceDiscount = 0
-  if (campaign?.campaign_type === 'selfie_service') {
+  if (promotion?.promotion_type === 'selfie_service') {
     for (const item of payload.items) {
-      const pd = (campaign.product_discounts ?? []).find((p) => p.product_id === item.product_id)
+      const pd = (promotion.product_discounts ?? []).find((p) => p.product_id === item.product_id)
       if (!pd) continue
       const product = db.products.find((p) => p.id === item.product_id)!
       const lineTotal = product.price * item.quantity
@@ -231,15 +232,15 @@ async function createOrder(payload: {
   let discountAmount = 0
   let shippingDiscount = 0
 
-  if (campaign) {
-    if (campaign.campaign_type === 'kit') {
-      if (campaign.discount_type === 'percent') discountAmount += (subtotal * (campaign.discount_value ?? 0)) / 100
-      else if (campaign.discount_type === 'fixed') discountAmount += campaign.discount_value ?? 0
+  if (promotion) {
+    if (promotion.promotion_type === 'kit') {
+      if (promotion.discount_type === 'percent') discountAmount += (subtotal * (promotion.discount_value ?? 0)) / 100
+      else if (promotion.discount_type === 'fixed') discountAmount += promotion.discount_value ?? 0
     } else {
       discountAmount += selfieServiceDiscount
     }
-    if (campaign.shipping_discount_type === 'percent') shippingDiscount += (shippingPrice * (campaign.shipping_discount_value ?? 0)) / 100
-    else if (campaign.shipping_discount_type === 'fixed') shippingDiscount += campaign.shipping_discount_value ?? 0
+    if (promotion.shipping_discount_type === 'percent') shippingDiscount += (shippingPrice * (promotion.shipping_discount_value ?? 0)) / 100
+    else if (promotion.shipping_discount_type === 'fixed') shippingDiscount += promotion.shipping_discount_value ?? 0
   }
 
   const birthMonth = new Date(payload.customer_birthdate).getMonth()
@@ -254,16 +255,18 @@ async function createOrder(payload: {
     if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) {
       throw new ApiError(400, 'coupon usage limit reached')
     }
-    if (campaign && !coupon.allow_campaign_checkout) {
-      throw new ApiError(400, 'this coupon cannot be combined with a campaign checkout')
+    if (promotion && !coupon.allow_promotion_checkout) {
+      throw new ApiError(400, 'this coupon cannot be combined with a promotion checkout')
     }
     if (coupon.kind === 'aniversario' && new Date().getMonth() !== birthMonth) {
       throw new ApiError(400, 'this coupon is only valid during your birthday month')
     }
-    // Cupom alvo (com concessões): intransferível, consome a concessão do
-    // whatsapp exato em vez do contador global.
+    // Cupom alvo (com concessões, ou nascido de uma campanha orientation=
+    // evento que ainda não disparou pra ninguém): intransferível, consome a
+    // concessão do whatsapp exato em vez do contador global.
     const grants = (db.couponGrants ?? []).filter((g) => g.coupon_id === coupon.id)
-    if (grants.length > 0) {
+    const isCampanhaCoupon = (db.campanhaCoupons ?? []).some((c) => c.coupon_id === coupon.id)
+    if (grants.length > 0 || isCampanhaCoupon) {
       const grant = grants.find((g) => g.customer_whatsapp === payload.customer_whatsapp && g.used_count < g.granted_uses)
       if (!grant) throw new ApiError(400, 'this coupon is not available for your account')
       grant.used_count += 1
@@ -324,7 +327,7 @@ async function createOrder(payload: {
     discount_amount: discountAmount,
     shipping_discount: shippingDiscount,
     coupon_code: couponCode,
-    campaign_id: campaign?.id ?? null,
+    promotion_id: promotion?.id ?? null,
     motoboy_id: null,
     pix_payment_id: null,
     pix_qr_base64: null,
@@ -362,7 +365,7 @@ async function trackOrders(whatsapp: string): Promise<Order[]> {
 
 // ---------- campanhas / cupons (público) ----------
 
-function campaignIsActive(c: Campaign): boolean {
+function promotionIsActive(c: Promotion): boolean {
   const now = Date.now()
   if (c.active === false) return false
   if (c.starts_at && new Date(c.starts_at).getTime() > now) return false
@@ -370,15 +373,15 @@ function campaignIsActive(c: Campaign): boolean {
   return true
 }
 
-async function listActiveCampaigns(): Promise<Campaign[]> {
+async function listActivePromotions(): Promise<Promotion[]> {
   const db = loadDb()
-  return (db.campaigns ?? []).filter(campaignIsActive).sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+  return (db.promotions ?? []).filter(promotionIsActive).sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
 }
 
-async function getCampaignPublic(id: string): Promise<Campaign> {
+async function getPromotionPublic(id: string): Promise<Promotion> {
   const db = loadDb()
-  const c = (db.campaigns ?? []).find((x) => x.id === id && campaignIsActive(x))
-  if (!c) throw new ApiError(404, 'campaign not found')
+  const c = (db.promotions ?? []).find((x) => x.id === id && promotionIsActive(x))
+  if (!c) throw new ApiError(404, 'promotion not found')
   return c
 }
 
@@ -391,7 +394,7 @@ type CouponPreviewLocal = Pick<
   | 'shipping_discount_type'
   | 'shipping_discount_value'
   | 'product_discounts'
-  | 'allow_campaign_checkout'
+  | 'allow_promotion_checkout'
   | 'combinable_with_public'
 >
 
@@ -404,14 +407,14 @@ function couponPreview(c: Coupon): CouponPreviewLocal {
     shipping_discount_type: c.shipping_discount_type,
     shipping_discount_value: c.shipping_discount_value,
     product_discounts: c.product_discounts ?? [],
-    allow_campaign_checkout: c.allow_campaign_checkout,
+    allow_promotion_checkout: c.allow_promotion_checkout,
     combinable_with_public: c.combinable_with_public,
   }
 }
 
 async function validateCouponPublic(
   code: string,
-  campaignId?: string,
+  promotionId?: string,
   customerBirthdate?: string,
   customerWhatsapp?: string
 ): Promise<CouponPreviewLocal> {
@@ -425,8 +428,8 @@ async function validateCouponPublic(
   if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) {
     throw new ApiError(400, 'coupon usage limit reached')
   }
-  if (campaignId && !coupon.allow_campaign_checkout) {
-    throw new ApiError(400, 'this coupon cannot be combined with a campaign checkout')
+  if (promotionId && !coupon.allow_promotion_checkout) {
+    throw new ApiError(400, 'this coupon cannot be combined with a promotion checkout')
   }
   if (coupon.kind === 'aniversario') {
     const birthMonth = customerBirthdate ? new Date(customerBirthdate).getMonth() : null
@@ -435,7 +438,8 @@ async function validateCouponPublic(
     }
   }
   const grants = (db.couponGrants ?? []).filter((g) => g.coupon_id === coupon.id)
-  if (grants.length > 0) {
+  const isCampanhaCoupon = (db.campanhaCoupons ?? []).some((c) => c.coupon_id === coupon.id)
+  if (grants.length > 0 || isCampanhaCoupon) {
     const grant = grants.find((g) => g.customer_whatsapp === customerWhatsapp && g.used_count < g.granted_uses)
     if (!grant) throw new ApiError(400, 'this coupon is not available for your account')
   }
@@ -456,12 +460,13 @@ async function listPromotionalProducts(): Promise<PromotionalProduct[]> {
   const db = loadDb()
   const now = Date.now()
   const grantedCouponIds = new Set((db.couponGrants ?? []).map((g) => g.coupon_id))
+  const campanhaCouponIds = new Set((db.campanhaCoupons ?? []).map((c) => c.coupon_id))
   const out: PromotionalProduct[] = []
   for (const c of db.coupons ?? []) {
     if (c.kind !== 'produto' || !c.active) continue
     if (c.expires_at && new Date(c.expires_at).getTime() <= now) continue
     if (c.max_uses != null && c.used_count >= c.max_uses) continue
-    if (grantedCouponIds.has(c.id)) continue
+    if (grantedCouponIds.has(c.id) || campanhaCouponIds.has(c.id)) continue
     for (const pd of c.product_discounts ?? []) {
       out.push({ product_id: pd.product_id, coupon_code: c.code, discount_type: pd.discount_type, discount_value: pd.discount_value })
     }
@@ -797,7 +802,7 @@ async function createCoupon(payload: {
   kind: 'desconto' | 'frete' | 'aniversario' | 'produto'
   discount_type?: 'percent' | 'fixed'
   discount_value?: number
-  allow_campaign_checkout?: boolean
+  allow_promotion_checkout?: boolean
   expires_at?: string
   max_uses?: number
   product_discounts?: import('./types').ProductDiscount[]
@@ -822,7 +827,7 @@ async function createCoupon(payload: {
     shipping_discount_type: null,
     shipping_discount_value: null,
     product_discounts: hasProducts ? payload.product_discounts! : [],
-    allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
+    allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
     active: true,
     expires_at: payload.expires_at || null,
     max_uses: payload.max_uses ?? null,
@@ -838,7 +843,7 @@ async function updateCoupon(
   id: string,
   payload: {
     active: boolean
-    allow_campaign_checkout: boolean
+    allow_promotion_checkout: boolean
     expires_at?: string
     max_uses?: number
     discount_type?: 'percent' | 'fixed'
@@ -850,7 +855,7 @@ async function updateCoupon(
   const coupon = (db.coupons ?? []).find((c) => c.id === id)
   if (!coupon) throw new ApiError(404, 'coupon not found')
   coupon.active = payload.active
-  coupon.allow_campaign_checkout = payload.allow_campaign_checkout
+  coupon.allow_promotion_checkout = payload.allow_promotion_checkout
   coupon.expires_at = payload.expires_at || null
   coupon.max_uses = payload.max_uses ?? null
   if (coupon.kind === 'produto') {
@@ -869,7 +874,7 @@ async function updateTargetedCoupon(
     active: boolean
     uses_per_customer?: number
     combinable_with_public?: boolean
-    allow_campaign_checkout?: boolean
+    allow_promotion_checkout?: boolean
     expires_at?: string
     max_uses?: number
     discount_type?: 'percent' | 'fixed'
@@ -892,7 +897,7 @@ async function updateTargetedCoupon(
   coupon.shipping_discount_value = payload.shipping_discount_value ?? null
   coupon.product_discounts = hasProducts ? payload.product_discounts! : []
   coupon.combinable_with_public = payload.combinable_with_public ?? false
-  coupon.allow_campaign_checkout = payload.allow_campaign_checkout ?? false
+  coupon.allow_promotion_checkout = payload.allow_promotion_checkout ?? false
   coupon.expires_at = payload.expires_at || null
   coupon.max_uses = payload.max_uses ?? null
   for (const g of db.couponGrants ?? []) {
@@ -917,7 +922,7 @@ async function createTargetedCoupon(payload: {
   notify_customers?: boolean
   custom_message?: string
   combinable_with_public?: boolean
-  allow_campaign_checkout?: boolean
+  allow_promotion_checkout?: boolean
   expires_at?: string
   max_uses?: number
   discount_type?: 'percent' | 'fixed'
@@ -932,9 +937,6 @@ async function createTargetedCoupon(payload: {
   const code = payload.code.trim().toUpperCase()
   if (!code) throw new ApiError(400, 'code is required')
   if (db.coupons.some((c) => c.code === code)) throw new ApiError(400, 'a coupon with this code already exists')
-  if (!payload.customer_whatsapps || payload.customer_whatsapps.length === 0) {
-    throw new ApiError(400, 'at least one customer is required')
-  }
   const hasProducts = payload.product_discounts && payload.product_discounts.length > 0
   if (hasProducts && payload.discount_type) {
     throw new ApiError(400, 'use either a flat product discount or per-product discounts, not both')
@@ -952,7 +954,7 @@ async function createTargetedCoupon(payload: {
     shipping_discount_type: kind === 'frete' ? null : payload.shipping_discount_type ?? null,
     shipping_discount_value: kind === 'frete' ? null : payload.shipping_discount_value ?? null,
     product_discounts: payload.product_discounts ?? [],
-    allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
+    allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
     combinable_with_public: payload.combinable_with_public ?? false,
     active: true,
     expires_at: payload.expires_at || null,
@@ -1002,8 +1004,6 @@ async function createSegment(payload: {
   name: string
   description?: string
   filter_criteria: import('./types').CrmFilterCriteria
-  coupon_id?: string
-  campaign_id?: string
 }): Promise<import('./types').CrmSegment> {
   const db = loadDb()
   db.segments = db.segments ?? []
@@ -1013,8 +1013,6 @@ async function createSegment(payload: {
     name: payload.name.trim(),
     description: payload.description?.trim() || null,
     filter_criteria: payload.filter_criteria,
-    coupon_id: payload.coupon_id || null,
-    campaign_id: payload.campaign_id || null,
     created_at: nowIso(),
   }
   db.segments.push(segment)
@@ -1024,13 +1022,7 @@ async function createSegment(payload: {
 
 async function updateSegment(
   id: string,
-  payload: {
-    name: string
-    description?: string
-    filter_criteria: import('./types').CrmFilterCriteria
-    coupon_id?: string
-    campaign_id?: string
-  }
+  payload: { name: string; description?: string; filter_criteria: import('./types').CrmFilterCriteria }
 ): Promise<import('./types').CrmSegment> {
   const db = loadDb()
   const segment = (db.segments ?? []).find((s) => s.id === id)
@@ -1039,8 +1031,6 @@ async function updateSegment(
   segment.name = payload.name.trim()
   segment.description = payload.description?.trim() || null
   segment.filter_criteria = payload.filter_criteria
-  segment.coupon_id = payload.coupon_id || null
-  segment.campaign_id = payload.campaign_id || null
   saveDb(db)
   return segment
 }
@@ -1050,21 +1040,124 @@ async function deleteSegment(id: string): Promise<void> {
   const idx = (db.segments ?? []).findIndex((s) => s.id === id)
   if (idx === -1) throw new ApiError(404, 'segment not found')
   db.segments.splice(idx, 1)
+  db.campanhaCoupons = (db.campanhaCoupons ?? []).filter((c) => c.segment_id !== id)
+  saveDb(db)
+}
+
+// ---------- campanhas (segmento + cupom exclusivo) ----------
+
+async function adminListCampanhaCoupons(segmentId: string): Promise<import('./types').CrmCampanhaCoupon[]> {
+  const db = loadDb()
+  return (db.campanhaCoupons ?? [])
+    .filter((c) => c.segment_id === segmentId)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+}
+
+async function createCampanhaCoupon(payload: {
+  segment_id: string
+  orientation: import('./types').CampanhaOrientation
+  trigger_criteria?: import('./types').CrmFilterCriteria
+  message_template: string
+  code: string
+  uses_per_customer?: number
+  combinable_with_public?: boolean
+  allow_promotion_checkout?: boolean
+  expires_at?: string
+  max_uses?: number
+  discount_type?: 'percent' | 'fixed'
+  discount_value?: number
+  shipping_discount_type?: 'percent' | 'fixed'
+  shipping_discount_value?: number
+  product_discounts?: import('./types').ProductDiscount[]
+  customer_whatsapps: string[]
+}): Promise<import('./types').CrmCampanhaCoupon> {
+  const db = loadDb()
+  db.segments = db.segments ?? []
+  db.campanhaCoupons = db.campanhaCoupons ?? []
+  const segment = db.segments.find((s) => s.id === payload.segment_id)
+  if (!segment) throw new ApiError(404, 'segment not found')
+  if (!payload.message_template.trim() || !payload.message_template.includes('/nome') || !payload.message_template.includes('/cupom')) {
+    throw new ApiError(400, 'message_template must mention /nome and /cupom')
+  }
+  if (payload.orientation === 'evento') {
+    if (!payload.trigger_criteria) throw new ApiError(400, 'trigger_criteria is required for orientation=evento')
+    if (JSON.stringify(payload.trigger_criteria) === JSON.stringify(segment.filter_criteria)) {
+      throw new ApiError(400, "trigger_criteria must differ from the segment's current filter in at least one field")
+    }
+  }
+
+  const coupon = await createTargetedCoupon({
+    code: payload.code,
+    customer_whatsapps: payload.orientation === 'segmento' ? payload.customer_whatsapps : [],
+    uses_per_customer: payload.uses_per_customer,
+    notify_customers: false,
+    combinable_with_public: payload.combinable_with_public,
+    allow_promotion_checkout: payload.allow_promotion_checkout,
+    expires_at: payload.expires_at,
+    max_uses: payload.max_uses,
+    discount_type: payload.discount_type,
+    discount_value: payload.discount_value,
+    shipping_discount_type: payload.shipping_discount_type,
+    shipping_discount_value: payload.shipping_discount_value,
+    product_discounts: payload.product_discounts,
+  })
+
+  const row: LocalCampanhaCoupon = {
+    id: uid(),
+    segment_id: payload.segment_id,
+    coupon_id: coupon.id,
+    orientation: payload.orientation,
+    trigger_criteria: payload.trigger_criteria ?? null,
+    message_template: payload.message_template.trim(),
+    uses_per_customer: payload.uses_per_customer ?? 1,
+    fired_at: payload.orientation === 'segmento' ? nowIso() : null,
+    created_at: nowIso(),
+  }
+  db.campanhaCoupons.push(row)
+  saveDb(db)
+  return row
+}
+
+async function fireCampanhaEvent(id: string, customerWhatsapps: string[]): Promise<{ newly_granted: string[] }> {
+  const db = loadDb()
+  const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
+  if (!row) throw new ApiError(404, 'campanha coupon not found')
+  if (row.orientation !== 'evento') throw new ApiError(400, 'only orientation=evento campanhas can be re-fired')
+  db.couponGrants = db.couponGrants ?? []
+  const newlyGranted: string[] = []
+  for (const whatsapp of customerWhatsapps) {
+    if (!whatsapp?.trim()) continue
+    const exists = db.couponGrants.some((g) => g.coupon_id === row.coupon_id && g.customer_whatsapp === whatsapp)
+    if (!exists) {
+      db.couponGrants.push({ id: uid(), coupon_id: row.coupon_id, customer_whatsapp: whatsapp, granted_uses: 1, used_count: 0 })
+      newlyGranted.push(whatsapp)
+    }
+  }
+  if (newlyGranted.length > 0) row.fired_at = nowIso()
+  saveDb(db)
+  return { newly_granted: newlyGranted }
+}
+
+async function deleteCampanhaCoupon(id: string): Promise<void> {
+  const db = loadDb()
+  const idx = (db.campanhaCoupons ?? []).findIndex((c) => c.id === id)
+  if (idx === -1) throw new ApiError(404, 'campanha coupon not found')
+  db.campanhaCoupons.splice(idx, 1)
   saveDb(db)
 }
 
 // ---------- campanhas (admin) ----------
 
-async function adminListCampaigns(): Promise<Campaign[]> {
+async function adminListPromotions(): Promise<Promotion[]> {
   const db = loadDb()
-  return [...(db.campaigns ?? [])].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+  return [...(db.promotions ?? [])].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
 }
 
-async function createCampaign(payload: {
+async function createPromotion(payload: {
   title: string
   image_url: string
   product_ids: string[]
-  campaign_type: import('./types').CampaignType
+  promotion_type: import('./types').PromotionType
   discount_type?: 'percent' | 'fixed'
   discount_value?: number
   shipping_discount_type?: 'percent' | 'fixed'
@@ -1072,30 +1165,30 @@ async function createCampaign(payload: {
   starts_at?: string
   expires_at?: string
   product_discounts?: import('./types').ProductDiscount[]
-}): Promise<Campaign> {
+}): Promise<Promotion> {
   const db = loadDb()
-  db.campaigns = db.campaigns ?? []
+  db.promotions = db.promotions ?? []
   if (!payload.title.trim()) throw new ApiError(400, 'title is required')
-  if (!payload.image_url) throw new ApiError(400, 'image is required to create a campaign')
+  if (!payload.image_url) throw new ApiError(400, 'image is required to create a promotion')
   if (!payload.product_ids || payload.product_ids.length === 0) throw new ApiError(400, 'at least one product is required')
-  const hasProductDiscounts = payload.campaign_type === 'selfie_service' && payload.product_discounts && payload.product_discounts.length > 0
-  if (payload.campaign_type === 'selfie_service') {
-    if (!hasProductDiscounts) throw new ApiError(400, 'at least one product discount is required for a selfie-service campaign')
+  const hasProductDiscounts = payload.promotion_type === 'selfie_service' && payload.product_discounts && payload.product_discounts.length > 0
+  if (payload.promotion_type === 'selfie_service') {
+    if (!hasProductDiscounts) throw new ApiError(400, 'at least one product discount is required for a selfie-service promotion')
   } else {
     const hasProductDiscount = payload.discount_type && payload.discount_value != null
     const hasShippingDiscount = payload.shipping_discount_type && payload.shipping_discount_value != null
     if (!hasProductDiscount && !hasShippingDiscount) {
-      throw new ApiError(400, 'a kit campaign needs a product discount and/or a shipping discount')
+      throw new ApiError(400, 'a kit promotion needs a product discount and/or a shipping discount')
     }
   }
-  const campaign: Campaign = {
+  const promotion: Promotion = {
     id: uid(),
     title: payload.title.trim(),
     image_url: payload.image_url,
     product_ids: payload.product_ids,
-    campaign_type: payload.campaign_type,
-    discount_type: payload.campaign_type === 'selfie_service' ? null : payload.discount_type ?? null,
-    discount_value: payload.campaign_type === 'selfie_service' ? null : payload.discount_value ?? null,
+    promotion_type: payload.promotion_type,
+    discount_type: payload.promotion_type === 'selfie_service' ? null : payload.discount_type ?? null,
+    discount_value: payload.promotion_type === 'selfie_service' ? null : payload.discount_value ?? null,
     shipping_discount_type: payload.shipping_discount_type ?? null,
     shipping_discount_value: payload.shipping_discount_value ?? null,
     product_discounts: hasProductDiscounts ? payload.product_discounts! : [],
@@ -1104,18 +1197,18 @@ async function createCampaign(payload: {
     expires_at: payload.expires_at || null,
     created_at: nowIso(),
   }
-  db.campaigns.push(campaign)
+  db.promotions.push(promotion)
   saveDb(db)
-  return campaign
+  return promotion
 }
 
-async function updateCampaign(
+async function updatePromotion(
   id: string,
   payload: {
     title: string
     image_url: string
     product_ids: string[]
-    campaign_type: import('./types').CampaignType
+    promotion_type: import('./types').PromotionType
     discount_type?: 'percent' | 'fixed'
     discount_value?: number
     shipping_discount_type?: 'percent' | 'fixed'
@@ -1125,43 +1218,43 @@ async function updateCampaign(
     expires_at?: string
     product_discounts?: import('./types').ProductDiscount[]
   }
-): Promise<Campaign> {
+): Promise<Promotion> {
   const db = loadDb()
-  const campaign = (db.campaigns ?? []).find((c) => c.id === id)
-  if (!campaign) throw new ApiError(404, 'campaign not found')
+  const promotion = (db.promotions ?? []).find((c) => c.id === id)
+  if (!promotion) throw new ApiError(404, 'promotion not found')
   if (!payload.image_url) throw new ApiError(400, 'image is required')
   if (!payload.product_ids || payload.product_ids.length === 0) throw new ApiError(400, 'at least one product is required')
-  const hasProductDiscounts = payload.campaign_type === 'selfie_service' && payload.product_discounts && payload.product_discounts.length > 0
-  if (payload.campaign_type === 'selfie_service') {
-    if (!hasProductDiscounts) throw new ApiError(400, 'at least one product discount is required for a selfie-service campaign')
+  const hasProductDiscounts = payload.promotion_type === 'selfie_service' && payload.product_discounts && payload.product_discounts.length > 0
+  if (payload.promotion_type === 'selfie_service') {
+    if (!hasProductDiscounts) throw new ApiError(400, 'at least one product discount is required for a selfie-service promotion')
   } else {
     const hasProductDiscount = payload.discount_type && payload.discount_value != null
     const hasShippingDiscount = payload.shipping_discount_type && payload.shipping_discount_value != null
     if (!hasProductDiscount && !hasShippingDiscount) {
-      throw new ApiError(400, 'a kit campaign needs a product discount and/or a shipping discount')
+      throw new ApiError(400, 'a kit promotion needs a product discount and/or a shipping discount')
     }
   }
-  campaign.title = payload.title.trim()
-  campaign.image_url = payload.image_url
-  campaign.product_ids = payload.product_ids
-  campaign.campaign_type = payload.campaign_type
-  campaign.discount_type = payload.campaign_type === 'selfie_service' ? null : payload.discount_type ?? null
-  campaign.discount_value = payload.campaign_type === 'selfie_service' ? null : payload.discount_value ?? null
-  campaign.shipping_discount_type = payload.shipping_discount_type ?? null
-  campaign.shipping_discount_value = payload.shipping_discount_value ?? null
-  campaign.product_discounts = hasProductDiscounts ? payload.product_discounts! : []
-  campaign.active = payload.active
-  campaign.starts_at = payload.starts_at || null
-  campaign.expires_at = payload.expires_at || null
+  promotion.title = payload.title.trim()
+  promotion.image_url = payload.image_url
+  promotion.product_ids = payload.product_ids
+  promotion.promotion_type = payload.promotion_type
+  promotion.discount_type = payload.promotion_type === 'selfie_service' ? null : payload.discount_type ?? null
+  promotion.discount_value = payload.promotion_type === 'selfie_service' ? null : payload.discount_value ?? null
+  promotion.shipping_discount_type = payload.shipping_discount_type ?? null
+  promotion.shipping_discount_value = payload.shipping_discount_value ?? null
+  promotion.product_discounts = hasProductDiscounts ? payload.product_discounts! : []
+  promotion.active = payload.active
+  promotion.starts_at = payload.starts_at || null
+  promotion.expires_at = payload.expires_at || null
   saveDb(db)
-  return campaign
+  return promotion
 }
 
-async function deleteCampaign(id: string): Promise<void> {
+async function deletePromotion(id: string): Promise<void> {
   const db = loadDb()
-  const idx = (db.campaigns ?? []).findIndex((c) => c.id === id)
-  if (idx === -1) throw new ApiError(404, 'campaign not found')
-  db.campaigns.splice(idx, 1)
+  const idx = (db.promotions ?? []).findIndex((c) => c.id === id)
+  if (idx === -1) throw new ApiError(404, 'promotion not found')
+  db.promotions.splice(idx, 1)
   saveDb(db)
 }
 
@@ -1404,7 +1497,7 @@ async function financeiroTimeseries(days = 30): Promise<import('./types').Financ
     const dateStr = day.toISOString().slice(0, 10)
     const dayOrders = paid.filter((o) => o.created_at.slice(0, 10) === dateStr)
     const couponOrders = dayOrders.filter((o) => o.coupon_code)
-    const campaignOrders = dayOrders.filter((o) => o.campaign_id)
+    const promotionOrders = dayOrders.filter((o) => o.promotion_id)
     points.push({
       date: dateStr,
       quantity_sold: dayOrders.reduce((sum, o) => sum + o.items.reduce((s, it) => s + it.quantity, 0), 0),
@@ -1412,8 +1505,8 @@ async function financeiroTimeseries(days = 30): Promise<import('./types').Financ
       orders_count: dayOrders.length,
       coupon_orders: couponOrders.length,
       coupon_discount: couponOrders.reduce((sum, o) => sum + (o.discount_amount ?? 0) + (o.shipping_discount ?? 0), 0),
-      campaign_orders: campaignOrders.length,
-      campaign_discount: campaignOrders.reduce((sum, o) => sum + (o.discount_amount ?? 0) + (o.shipping_discount ?? 0), 0),
+      promotion_orders: promotionOrders.length,
+      promotion_discount: promotionOrders.reduce((sum, o) => sum + (o.discount_amount ?? 0) + (o.shipping_discount ?? 0), 0),
     })
   }
   return points
@@ -1678,7 +1771,7 @@ export const localApi = {
   siteSettings: { get: getSiteSettings },
   estimateShipping,
   trackDeliveryPosition: trackDeliveryPositionLocal,
-  campaigns: { listActive: listActiveCampaigns, get: getCampaignPublic },
+  promotions: { listActive: listActivePromotions, get: getPromotionPublic },
   coupons: { validate: validateCouponPublic, listForCustomer: listCustomerCouponsPublic, listPromotionalProducts },
   orders: {
     create: createOrder,
@@ -1727,11 +1820,11 @@ export const localApi = {
       updateTargeted: updateTargetedCoupon,
       listGrants: adminListCouponGrants,
     },
-    campaigns: {
-      list: adminListCampaigns,
-      create: createCampaign,
-      update: updateCampaign,
-      delete: deleteCampaign,
+    promotions: {
+      list: adminListPromotions,
+      create: createPromotion,
+      update: updatePromotion,
+      delete: deletePromotion,
     },
     orders: { list: adminListOrders, updateStatus: adminUpdateStatus, notifyReady: async () => {} },
     shippingSettings: { get: getShippingSettings, update: updateShippingSettings },
@@ -1739,6 +1832,12 @@ export const localApi = {
     financeiro: { get: financeiro, timeseries: financeiroTimeseries },
     crm: { customers: adminCrmCustomers },
     segments: { list: adminListSegments, create: createSegment, update: updateSegment, delete: deleteSegment },
+    campanhaCoupons: {
+      list: adminListCampanhaCoupons,
+      create: createCampanhaCoupon,
+      fireEvent: fireCampanhaEvent,
+      delete: deleteCampanhaCoupon,
+    },
     whatsapp: {
       status: async () => ({ instance: { state: 'close' } }),
       connect: async () => {

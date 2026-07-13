@@ -1,12 +1,24 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Cake, Gift, Layers, Loader2, Plus, Search, Sparkles, Tag, Trash2, Users, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Cake, Gift, Layers, Loader2, Plus, Search, Sparkles, Tag, Trash2, Users, X, Zap } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import WhatsAppLink from '../../components/ui/WhatsAppLink'
 import ExpiryInput from '../../components/admin/ExpiryInput'
 import ProductCategoryMultiSelect from '../../components/admin/ProductCategoryMultiSelect'
 import ProductDiscountList from '../../components/admin/ProductDiscountList'
 import { api, ApiError } from '../../lib/api'
-import type { Campaign, Category, Coupon, CouponKind, CrmCustomer, CrmSegment, DiscountType, Product, ProductDiscount } from '../../lib/types'
+import type {
+  CampanhaOrientation,
+  Category,
+  Coupon,
+  CouponKind,
+  CrmCampanhaCoupon,
+  CrmCustomer,
+  CrmFilterCriteria,
+  CrmSegment,
+  DiscountType,
+  Product,
+  ProductDiscount,
+} from '../../lib/types'
 
 // Some browsers only show the native number spinner on hover/focus, which
 // looks broken in these narrow filter inputs — hidden consistently here.
@@ -199,7 +211,7 @@ type CouponForm = {
   discount_type: DiscountType
   discount_value: string
   productDiscounts: ProductDiscount[]
-  allow_campaign_checkout: boolean
+  allow_promotion_checkout: boolean
   expires_at: string
   max_uses: string
 }
@@ -209,7 +221,7 @@ const EMPTY_COUPON_FORM: CouponForm = {
   discount_type: 'percent',
   discount_value: '',
   productDiscounts: [],
-  allow_campaign_checkout: false,
+  allow_promotion_checkout: false,
   expires_at: '',
   max_uses: '',
 }
@@ -229,7 +241,7 @@ type TargetedForm = {
   dontNotify: boolean
   customMessage: string
   combinable_with_public: boolean
-  allow_campaign_checkout: boolean
+  allow_promotion_checkout: boolean
   expires_at: string
   max_uses: string
 }
@@ -246,7 +258,53 @@ const EMPTY_TARGETED_FORM: TargetedForm = {
   dontNotify: false,
   customMessage: '',
   combinable_with_public: false,
-  allow_campaign_checkout: false,
+  allow_promotion_checkout: false,
+  expires_at: '',
+  max_uses: '',
+}
+
+// "Campanha": um cupom exclusivo vinculado a um segmento. 'segmento'
+// dispara uma vez, na hora, pros clientes que casam com o critério do
+// segmento agora. 'evento' fica de olho num critério DIFERENTE
+// (triggerCriteria, capturado do painel de filtro no momento em que o
+// admin monta o evento) e dispara (por cliente, uma vez) quando esse
+// critério passar a valer — nunca dispara nada sozinho, sempre precisa
+// que o front recheque (ver checkEventCampanhas).
+type CampanhaForm = {
+  segmentId: string
+  orientation: CampanhaOrientation
+  triggerCriteria: FilterState | null
+  messageTemplate: string
+  code: string
+  productMode: ProductDiscountMode
+  discount_type: DiscountType
+  discount_value: string
+  productDiscounts: ProductDiscount[]
+  shippingEnabled: boolean
+  shipping_discount_type: DiscountType
+  shipping_discount_value: string
+  uses_per_customer: string
+  combinable_with_public: boolean
+  allow_promotion_checkout: boolean
+  expires_at: string
+  max_uses: string
+}
+const EMPTY_CAMPANHA_FORM: CampanhaForm = {
+  segmentId: '',
+  orientation: 'segmento',
+  triggerCriteria: null,
+  messageTemplate: '',
+  code: '',
+  productMode: 'flat',
+  discount_type: 'percent',
+  discount_value: '',
+  productDiscounts: [],
+  shippingEnabled: false,
+  shipping_discount_type: 'percent',
+  shipping_discount_value: '',
+  uses_per_customer: '1',
+  combinable_with_public: false,
+  allow_promotion_checkout: false,
   expires_at: '',
   max_uses: '',
 }
@@ -256,7 +314,6 @@ export default function AdminCrm() {
   const [loading, setLoading] = useState(true)
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [query, setQuery] = useState('')
   const [filterOpen, setFilterOpen] = useState(false)
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
@@ -269,10 +326,16 @@ export default function AdminCrm() {
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null)
   const [segmentName, setSegmentName] = useState('')
   const [segmentDescription, setSegmentDescription] = useState('')
-  const [segmentCampaignId, setSegmentCampaignId] = useState('')
-  const [segmentCouponId, setSegmentCouponId] = useState<string | null>(null)
   const [savingSegment, setSavingSegment] = useState(false)
   const [segmentError, setSegmentError] = useState<string | null>(null)
+
+  // "Campanha": cupom(s) exclusivo(s) vinculado(s) a um segmento — cada
+  // segmento pode ter várias, uma por linha em campanhaCoupons.
+  const [campanhaCoupons, setCampanhaCoupons] = useState<CrmCampanhaCoupon[]>([])
+  const [showCampanhaForm, setShowCampanhaForm] = useState(false)
+  const [campanhaForm, setCampanhaForm] = useState<CampanhaForm>(EMPTY_CAMPANHA_FORM)
+  const [savingCampanha, setSavingCampanha] = useState(false)
+  const [campanhaError, setCampanhaError] = useState<string | null>(null)
 
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [couponsLoading, setCouponsLoading] = useState(true)
@@ -300,14 +363,42 @@ export default function AdminCrm() {
     setSegmentsLoading(true)
     api.admin.segments.list().then(setSegments).finally(() => setSegmentsLoading(false))
   }
+  const loadCampanhaCoupons = (segmentId: string) => {
+    api.admin.campanhaCoupons.list(segmentId).then(setCampanhaCoupons)
+  }
   useEffect(() => {
     loadCustomers()
     loadCoupons()
     loadSegments()
     api.admin.products.list().then(setProducts)
     api.admin.categories.list().then(setCategories)
-    api.admin.campaigns.list().then(setCampaigns)
   }, [])
+
+  // Não existe job em background pra campanhas 'evento' — a única forma de
+  // reavaliar o critério é rodando applyFilters de novo, e isso só acontece
+  // quando alguém abre o CRM (aqui) ou clica em "Verificar" manualmente
+  // (fireCampanha). fireEvent é idempotente, então rodar de novo a cada
+  // load não duplica concessão nem reenvia WhatsApp pra quem já recebeu.
+  const autoCheckedEventos = useRef(false)
+  useEffect(() => {
+    if (autoCheckedEventos.current) return
+    if (segments.length === 0 || customers.length === 0 || products.length === 0) return
+    autoCheckedEventos.current = true
+    ;(async () => {
+      for (const seg of segments) {
+        const rows = await api.admin.campanhaCoupons.list(seg.id).catch(() => [])
+        for (const row of rows) {
+          if (row.orientation !== 'evento' || !row.trigger_criteria) continue
+          const matching = applyFilters(customers, row.trigger_criteria as unknown as FilterState, products).map((c) => c.whatsapp)
+          if (matching.length === 0) continue
+          const result = await api.admin.campanhaCoupons.fireEvent(row.id, matching).catch(() => null)
+          if (result && result.newly_granted.length > 0) {
+            api.admin.whatsapp.notifyCouponGrant(row.coupon_id, row.message_template).catch(() => {})
+          }
+        }
+      }
+    })()
+  }, [segments, customers, products])
 
   const neighborhoods = useMemo(
     () => Array.from(new Set(customers.flatMap((c) => c.neighborhoods))).sort(),
@@ -330,9 +421,8 @@ export default function AdminCrm() {
     setEditingSegmentId(null)
     setSegmentName('')
     setSegmentDescription('')
-    setSegmentCampaignId('')
-    setSegmentCouponId(null)
     setSegmentError(null)
+    setCampanhaCoupons([])
   }
 
   const applyFilterPanel = () => {
@@ -358,9 +448,8 @@ export default function AdminCrm() {
     setEditingSegmentId(segment.id)
     setSegmentName(segment.name)
     setSegmentDescription(segment.description ?? '')
-    setSegmentCampaignId(segment.campaign_id ?? '')
-    setSegmentCouponId(segment.coupon_id ?? null)
     setSegmentError(null)
+    loadCampanhaCoupons(segment.id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
   const saveSegment = async () => {
@@ -379,8 +468,6 @@ export default function AdminCrm() {
         name: segmentName,
         description: segmentDescription || undefined,
         filter_criteria: appliedFilter,
-        coupon_id: segmentCouponId || undefined,
-        campaign_id: segmentCampaignId || undefined,
       }
       if (editingSegmentId) {
         await api.admin.segments.update(editingSegmentId, payload)
@@ -409,6 +496,101 @@ export default function AdminCrm() {
     }
     loadSegments()
   }
+
+  // 'segmento': usa o critério do próprio segmento (appliedFilter/filter).
+  // 'evento': captura o critério ATUAL do painel de filtro como o "critério
+  // futuro" (triggerCriteria) — por isso precisa ser diferente do
+  // filter_criteria já salvo no segmento, senão não faz sentido nenhum
+  // (o evento já seria o presente).
+  const openNewCampanha = (orientation: CampanhaOrientation) => {
+    if (!editingSegmentId || !appliedFilter) return
+    setCampanhaError(null)
+    if (orientation === 'evento') {
+      const original = segments.find((s) => s.id === editingSegmentId)?.filter_criteria
+      if (original && JSON.stringify(original) === JSON.stringify(filter)) {
+        setCampanhaError(
+          'O critério do evento precisa ser diferente do critério atual do segmento — altere pelo menos 1 campo do filtro acima antes de criar a campanha orientada a evento.'
+        )
+        return
+      }
+    }
+    setCampanhaForm({
+      ...EMPTY_CAMPANHA_FORM,
+      segmentId: editingSegmentId,
+      orientation,
+      triggerCriteria: orientation === 'evento' ? filter : null,
+    })
+    setShowCampanhaForm(true)
+  }
+
+  const campanhaMessageValid = campanhaForm.messageTemplate.includes('/nome') && campanhaForm.messageTemplate.includes('/cupom')
+
+  const saveCampanha = async () => {
+    setCampanhaError(null)
+    if (!campanhaMessageValid) {
+      setCampanhaError('A mensagem precisa citar /nome e /cupom.')
+      return
+    }
+    setSavingCampanha(true)
+    try {
+      const segment = segments.find((s) => s.id === campanhaForm.segmentId)
+      const criteria = campanhaForm.orientation === 'segmento' ? segment?.filter_criteria ?? filter : campanhaForm.triggerCriteria!
+      const matchingWhatsapps =
+        campanhaForm.orientation === 'segmento'
+          ? applyFilters(customers, criteria as unknown as FilterState, products).map((c) => c.whatsapp)
+          : []
+      const created = await api.admin.campanhaCoupons.create({
+        segment_id: campanhaForm.segmentId,
+        orientation: campanhaForm.orientation,
+        trigger_criteria: campanhaForm.orientation === 'evento' ? (campanhaForm.triggerCriteria as unknown as CrmFilterCriteria) : undefined,
+        message_template: campanhaForm.messageTemplate,
+        code: campanhaForm.code,
+        uses_per_customer: Number(campanhaForm.uses_per_customer) || 1,
+        combinable_with_public: campanhaForm.combinable_with_public,
+        allow_promotion_checkout: campanhaForm.allow_promotion_checkout,
+        expires_at: campanhaForm.expires_at || undefined,
+        max_uses: campanhaForm.max_uses ? Number(campanhaForm.max_uses) : undefined,
+        discount_type: campanhaForm.productMode === 'flat' ? campanhaForm.discount_type : undefined,
+        discount_value: campanhaForm.productMode === 'flat' ? Number(campanhaForm.discount_value) : undefined,
+        shipping_discount_type: campanhaForm.shippingEnabled ? campanhaForm.shipping_discount_type : undefined,
+        shipping_discount_value: campanhaForm.shippingEnabled ? Number(campanhaForm.shipping_discount_value) : undefined,
+        product_discounts: campanhaForm.productMode === 'produto' ? campanhaForm.productDiscounts : undefined,
+        customer_whatsapps: matchingWhatsapps,
+      })
+      if (campanhaForm.orientation === 'segmento' && matchingWhatsapps.length > 0) {
+        api.admin.whatsapp.notifyCouponGrant(created.coupon_id, campanhaForm.messageTemplate).catch(() => {})
+      }
+      setShowCampanhaForm(false)
+      setCampanhaForm(EMPTY_CAMPANHA_FORM)
+      loadCampanhaCoupons(campanhaForm.segmentId)
+      loadCoupons()
+    } catch (err) {
+      setCampanhaError(err instanceof ApiError ? err.message : 'Não foi possível criar a campanha.')
+    } finally {
+      setSavingCampanha(false)
+    }
+  }
+
+  // Reavalia uma campanha 'evento': recalcula quem casa com o critério
+  // agora e concede+notifica só quem ainda não tinha o cupom.
+  const fireCampanha = async (row: CrmCampanhaCoupon) => {
+    const matching = applyFilters(customers, row.trigger_criteria as unknown as FilterState, products).map((c) => c.whatsapp)
+    const result = await api.admin.campanhaCoupons.fireEvent(row.id, matching)
+    if (result.newly_granted.length > 0) {
+      api.admin.whatsapp.notifyCouponGrant(row.coupon_id, row.message_template).catch(() => {})
+      alert(`${result.newly_granted.length} cliente(s) novo(s) atingiram o evento e ganharam o cupom.`)
+    } else {
+      alert('Nenhum cliente novo atingiu o critério do evento ainda.')
+    }
+    if (editingSegmentId) loadCampanhaCoupons(editingSegmentId)
+  }
+
+  const removeCampanha = async (id: string) => {
+    if (!confirm('Remover esta campanha?')) return
+    await api.admin.campanhaCoupons.delete(id)
+    if (editingSegmentId) loadCampanhaCoupons(editingSegmentId)
+  }
+
   const clearFilters = () => {
     resetSegmentForm()
     setFilter(EMPTY_FILTER)
@@ -425,7 +607,7 @@ export default function AdminCrm() {
       discount_type: c.discount_type ?? 'percent',
       discount_value: c.discount_value != null ? String(c.discount_value) : '',
       productDiscounts: c.product_discounts ?? [],
-      allow_campaign_checkout: c.allow_campaign_checkout,
+      allow_promotion_checkout: c.allow_promotion_checkout,
       expires_at: c.expires_at ?? '',
       max_uses: c.max_uses != null ? String(c.max_uses) : '',
     })
@@ -445,7 +627,7 @@ export default function AdminCrm() {
         discount_type: couponForm.kind === 'produto' ? undefined : couponForm.discount_type,
         discount_value: couponForm.kind === 'produto' ? undefined : Number(couponForm.discount_value),
         product_discounts: couponForm.kind === 'produto' ? couponForm.productDiscounts : undefined,
-        allow_campaign_checkout: couponForm.allow_campaign_checkout,
+        allow_promotion_checkout: couponForm.allow_promotion_checkout,
         expires_at: couponForm.expires_at || undefined,
         max_uses: couponForm.max_uses ? Number(couponForm.max_uses) : undefined,
       }
@@ -469,7 +651,7 @@ export default function AdminCrm() {
   const toggleCouponActive = async (c: Coupon) => {
     await api.admin.coupons.update(c.id, {
       active: !c.active,
-      allow_campaign_checkout: c.allow_campaign_checkout,
+      allow_promotion_checkout: c.allow_promotion_checkout,
       expires_at: c.expires_at ?? undefined,
       max_uses: c.max_uses ?? undefined,
     })
@@ -508,7 +690,7 @@ export default function AdminCrm() {
       dontNotify: true,
       customMessage: '',
       combinable_with_public: c.combinable_with_public ?? false,
-      allow_campaign_checkout: c.allow_campaign_checkout,
+      allow_promotion_checkout: c.allow_promotion_checkout,
       expires_at: c.expires_at ?? '',
       max_uses: c.max_uses != null ? String(c.max_uses) : '',
     })
@@ -529,7 +711,7 @@ export default function AdminCrm() {
           active,
           uses_per_customer: Number(targetedForm.uses_per_customer) || 1,
           combinable_with_public: targetedForm.combinable_with_public,
-          allow_campaign_checkout: targetedForm.allow_campaign_checkout,
+          allow_promotion_checkout: targetedForm.allow_promotion_checkout,
           expires_at: targetedForm.expires_at || undefined,
           max_uses: targetedForm.max_uses ? Number(targetedForm.max_uses) : undefined,
           discount_type: targetedForm.productMode === 'flat' ? targetedForm.discount_type : undefined,
@@ -551,7 +733,7 @@ export default function AdminCrm() {
         notify_customers: !targetedForm.dontNotify,
         custom_message: targetedForm.dontNotify ? undefined : targetedForm.customMessage,
         combinable_with_public: targetedForm.combinable_with_public,
-        allow_campaign_checkout: targetedForm.allow_campaign_checkout,
+        allow_promotion_checkout: targetedForm.allow_promotion_checkout,
         expires_at: targetedForm.expires_at || undefined,
         max_uses: targetedForm.max_uses ? Number(targetedForm.max_uses) : undefined,
         discount_type: targetedForm.productMode === 'flat' ? targetedForm.discount_type : undefined,
@@ -873,47 +1055,74 @@ export default function AdminCrm() {
                   onChange={(e) => setSegmentDescription(e.target.value)}
                 />
               </div>
-              <div>
-                <label className="label">Campanha vinculada (opcional)</label>
-                <select
-                  className="input-field appearance-none cursor-pointer"
-                  value={segmentCampaignId}
-                  onChange={(e) => setSegmentCampaignId(e.target.value)}
-                >
-                  <option value="">Nenhuma</option>
-                  {campaigns.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label">Cupom exclusivo vinculado (opcional)</label>
-                {segmentCouponId ? (
-                  <div className="flex items-center justify-between bg-son-surface border border-white/10 rounded-2xl px-4 py-3">
-                    <span className="flex items-center gap-2 text-sm font-medium text-white">
-                      <Gift className="w-4 h-4 text-son-pink" /> {coupons.find((c) => c.id === segmentCouponId)?.code ?? segmentCouponId}
-                    </span>
-                    <button type="button" onClick={() => setSegmentCouponId(null)} className="text-xs text-son-silver-dim hover:text-son-pink">
-                      Desvincular
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowTargetedForm(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-son-pink/15 text-son-pink text-xs font-semibold hover:bg-son-pink/25"
-                  >
-                    <Gift className="w-3.5 h-3.5" /> Criar cupom exclusivo pra este segmento
-                  </button>
-                )}
-              </div>
               {segmentError && <p className="error-msg">{segmentError}</p>}
               <button onClick={saveSegment} disabled={savingSegment} className="btn-primary w-full">
                 {savingSegment ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 {editingSegmentId ? 'Atualizar segmentação' : 'Salvar segmentação'}
               </button>
+
+              {editingSegmentId && (
+                <div className="border-t border-white/10 pt-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="label mb-0">Campanhas deste segmento</label>
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openNewCampanha('segmento')}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-son-pink/15 text-son-pink text-xs font-semibold hover:bg-son-pink/25"
+                      >
+                        <Gift className="w-3.5 h-3.5" /> + Cupom exclusivo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openNewCampanha('evento')}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 text-son-silver text-xs font-semibold hover:bg-white/15"
+                      >
+                        <Zap className="w-3.5 h-3.5" /> + Cupom orientado a evento
+                      </button>
+                    </div>
+                  </div>
+                  {campanhaCoupons.length === 0 ? (
+                    <p className="text-xs text-son-silver-dim">Nenhuma campanha criada pra este segmento ainda.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {campanhaCoupons.map((cc) => {
+                        const cCoupon = coupons.find((c) => c.id === cc.coupon_id)
+                        return (
+                          <div key={cc.id} className="flex items-center justify-between bg-son-surface border border-white/10 rounded-xl px-3 py-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono text-xs font-bold text-white">{cCoupon?.code ?? cc.coupon_id}</span>
+                                <span
+                                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    cc.orientation === 'evento' ? 'bg-amber-500/15 text-amber-400' : 'bg-son-pink/15 text-son-pink'
+                                  }`}
+                                >
+                                  {cc.orientation === 'evento' ? 'Orientado a evento' : 'Orientado a segmento'}
+                                </span>
+                                {cc.orientation === 'evento' && (
+                                  <span className="text-[10px] text-son-silver-dim">{cc.fired_at ? `Disparado em ${formatDate(cc.fired_at)}` : 'Ainda não disparado'}</span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-son-silver-dim truncate">{cc.message_template}</p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {cc.orientation === 'evento' && (
+                                <button type="button" onClick={() => fireCampanha(cc)} className="text-xs font-semibold text-son-gold hover:text-white">
+                                  Verificar
+                                </button>
+                              )}
+                              <button type="button" onClick={() => removeCampanha(cc.id)} className="text-son-silver-dim hover:text-son-pink">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </Card>
@@ -923,14 +1132,6 @@ export default function AdminCrm() {
         <p className="text-xs text-son-silver-dim">
           {visible.length} cliente(s){isSegmented ? ' nessa segmentação/filtro' : ''}
         </p>
-        {isSegmented && visible.length > 0 && !filterOpen && (
-          <button
-            onClick={() => setShowTargetedForm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-son-pink/15 text-son-pink text-xs font-semibold hover:bg-son-pink/25"
-          >
-            <Gift className="w-3.5 h-3.5" /> Criar cupom pra esses clientes
-          </button>
-        )}
       </div>
 
       {query.trim() &&
@@ -991,8 +1192,6 @@ export default function AdminCrm() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
           {segments.map((s) => {
             const count = applyFilters(customers, s.filter_criteria as unknown as FilterState, products).length
-            const campaign = campaigns.find((c) => c.id === s.campaign_id)
-            const coupon = coupons.find((c) => c.id === s.coupon_id)
             return (
               <Card key={s.id} className="p-4">
                 <button type="button" onClick={() => openSegment(s)} className="w-full text-left">
@@ -1001,14 +1200,6 @@ export default function AdminCrm() {
                     <span className="text-xs font-bold sunset-text flex-shrink-0">{count} cliente(s)</span>
                   </div>
                   {s.description && <p className="text-xs text-son-silver-dim mb-2">{s.description}</p>}
-                  <div className="flex flex-wrap gap-1">
-                    {coupon && (
-                      <span className="px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">Cupom: {coupon.code}</span>
-                    )}
-                    {campaign && (
-                      <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-xs">Campanha: {campaign.title}</span>
-                    )}
-                  </div>
                 </button>
                 <div className="flex justify-end mt-2">
                   <button
@@ -1077,7 +1268,7 @@ export default function AdminCrm() {
                 ) : (
                   <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-xs">Público</span>
                 )}
-                {c.allow_campaign_checkout && (
+                {c.allow_promotion_checkout && (
                   <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-xs">+ campanha</span>
                 )}
               </div>
@@ -1203,10 +1394,10 @@ export default function AdminCrm() {
                 <input
                   type="checkbox"
                   className="w-4 h-4 accent-son-pink"
-                  checked={couponForm.allow_campaign_checkout}
-                  onChange={(e) => setCouponForm({ ...couponForm, allow_campaign_checkout: e.target.checked })}
+                  checked={couponForm.allow_promotion_checkout}
+                  onChange={(e) => setCouponForm({ ...couponForm, allow_promotion_checkout: e.target.checked })}
                 />
-                Pode ser usado também num checkout de campanha
+                Pode ser usado também num checkout de promoção
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1407,10 +1598,10 @@ export default function AdminCrm() {
                 <input
                   type="checkbox"
                   className="w-4 h-4 accent-son-pink"
-                  checked={targetedForm.allow_campaign_checkout}
-                  onChange={(e) => setTargetedForm({ ...targetedForm, allow_campaign_checkout: e.target.checked })}
+                  checked={targetedForm.allow_promotion_checkout}
+                  onChange={(e) => setTargetedForm({ ...targetedForm, allow_promotion_checkout: e.target.checked })}
                 />
-                Pode ser usado também num checkout de campanha
+                Pode ser usado também num checkout de promoção
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1435,6 +1626,193 @@ export default function AdminCrm() {
               <button onClick={saveTargetedCoupon} disabled={savingTargeted} className="btn-primary w-full mt-2">
                 {savingTargeted ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 {editingTargetedCouponId ? 'Salvar alterações' : 'Criar cupom exclusivo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCampanhaForm && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => setShowCampanhaForm(false)}
+        >
+          <div className="glass rounded-2xl p-6 max-w-lg w-full my-8" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                {campanhaForm.orientation === 'evento' ? <Zap className="w-4 h-4 text-amber-400" /> : <Gift className="w-4 h-4 text-son-pink" />}
+                {campanhaForm.orientation === 'evento' ? 'Cupom orientado a evento' : 'Cupom exclusivo do segmento'}
+              </h3>
+              <button onClick={() => setShowCampanhaForm(false)} className="text-son-silver-dim hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {campanhaForm.orientation === 'segmento' ? (
+              <p className="text-xs text-son-silver-dim mb-3">
+                Dispara agora pra <strong className="text-white">{visible.length} cliente(s)</strong> que casam com o critério salvo do
+                segmento — cupom exclusivo, intransferível.
+              </p>
+            ) : (
+              <p className="text-xs text-son-silver-dim mb-3">
+                Não dispara agora. Fica "armado" com o critério mais apertado do filtro acima — quando você clicar em{' '}
+                <strong className="text-white">Verificar</strong> (ou reabrir o CRM), os clientes que já baterem esse critério recebem o
+                cupom via WhatsApp automaticamente. Só concede pra quem ainda não recebeu.
+              </p>
+            )}
+            <div className="space-y-3">
+              <div>
+                <label className="label">Código</label>
+                <input
+                  className="input-field font-mono uppercase"
+                  value={campanhaForm.code}
+                  onChange={(e) => setCampanhaForm({ ...campanhaForm, code: e.target.value })}
+                  placeholder="SUNSET15"
+                />
+              </div>
+              <div>
+                <label className="label">Desconto no produto</label>
+                <div className="grid grid-cols-3 gap-1.5 mb-2">
+                  {(
+                    [
+                      { value: 'nenhum', label: 'Nenhum' },
+                      { value: 'flat', label: 'Valor total' },
+                      { value: 'produto', label: 'Por produto' },
+                    ] as const
+                  ).map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setCampanhaForm({ ...campanhaForm, productMode: value })}
+                      className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
+                        campanhaForm.productMode === value
+                          ? 'sunset-bg text-white border-transparent'
+                          : 'bg-son-surface border-white/10 text-son-silver'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {campanhaForm.productMode === 'flat' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      className="input-field"
+                      value={campanhaForm.discount_type}
+                      onChange={(e) => setCampanhaForm({ ...campanhaForm, discount_type: e.target.value as DiscountType })}
+                    >
+                      <option value="percent">Percentual</option>
+                      <option value="fixed">Valor fixo (R$)</option>
+                    </select>
+                    <input
+                      className="input-field"
+                      type="number"
+                      min="0"
+                      placeholder="Valor"
+                      value={campanhaForm.discount_value}
+                      onChange={(e) => setCampanhaForm({ ...campanhaForm, discount_value: e.target.value })}
+                    />
+                  </div>
+                )}
+                {campanhaForm.productMode === 'produto' && (
+                  <ProductDiscountList
+                    products={products}
+                    discounts={campanhaForm.productDiscounts}
+                    onChange={(productDiscounts) => setCampanhaForm({ ...campanhaForm, productDiscounts })}
+                  />
+                )}
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-son-silver">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 accent-son-pink"
+                  checked={campanhaForm.shippingEnabled}
+                  onChange={(e) => setCampanhaForm({ ...campanhaForm, shippingEnabled: e.target.checked })}
+                />
+                Também dar desconto no frete
+              </label>
+              {campanhaForm.shippingEnabled && (
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    className="input-field"
+                    value={campanhaForm.shipping_discount_type}
+                    onChange={(e) => setCampanhaForm({ ...campanhaForm, shipping_discount_type: e.target.value as DiscountType })}
+                  >
+                    <option value="percent">Percentual</option>
+                    <option value="fixed">Valor fixo (R$)</option>
+                  </select>
+                  <input
+                    className="input-field"
+                    type="number"
+                    min="0"
+                    placeholder="Valor"
+                    value={campanhaForm.shipping_discount_value}
+                    onChange={(e) => setCampanhaForm({ ...campanhaForm, shipping_discount_value: e.target.value })}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="label">Quantas vezes cada cliente pode usar</label>
+                <input
+                  className="input-field"
+                  type="number"
+                  min="1"
+                  value={campanhaForm.uses_per_customer}
+                  onChange={(e) => setCampanhaForm({ ...campanhaForm, uses_per_customer: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Mensagem pro cliente (WhatsApp)</label>
+                <textarea
+                  className="input-field"
+                  rows={5}
+                  placeholder={'Olá, /nome! Você ganhou o cupom /cupom, exclusivo pra você 🎁\n\nBenefícios:\n- ...'}
+                  value={campanhaForm.messageTemplate}
+                  onChange={(e) => setCampanhaForm({ ...campanhaForm, messageTemplate: e.target.value })}
+                />
+                <p className="text-xs text-son-silver-dim mt-1">
+                  Precisa citar <code>/nome</code> e <code>/cupom</code>. O link do site é adicionado automaticamente no fim.
+                </p>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-son-silver">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 accent-son-pink"
+                  checked={campanhaForm.combinable_with_public}
+                  onChange={(e) => setCampanhaForm({ ...campanhaForm, combinable_with_public: e.target.checked })}
+                />
+                Pode ser combinado com um cupom avulso no checkout de catálogo
+              </label>
+              <label className="flex items-center gap-2 text-sm text-son-silver">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 accent-son-pink"
+                  checked={campanhaForm.allow_promotion_checkout}
+                  onChange={(e) => setCampanhaForm({ ...campanhaForm, allow_promotion_checkout: e.target.checked })}
+                />
+                Pode ser usado também num checkout de promoção
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Validade (opcional)</label>
+                  <ExpiryInput value={campanhaForm.expires_at} onChange={(expires_at) => setCampanhaForm({ ...campanhaForm, expires_at })} />
+                </div>
+                <div>
+                  <label className="label">Limite global de usos (opcional)</label>
+                  <input
+                    className="input-field"
+                    type="number"
+                    min="1"
+                    value={campanhaForm.max_uses}
+                    onChange={(e) => setCampanhaForm({ ...campanhaForm, max_uses: e.target.value })}
+                  />
+                </div>
+              </div>
+              {campanhaError && <p className="error-msg">{campanhaError}</p>}
+              <button onClick={saveCampanha} disabled={savingCampanha || !campanhaMessageValid} className="btn-primary w-full mt-2">
+                {savingCampanha ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Criar campanha
               </button>
             </div>
           </div>

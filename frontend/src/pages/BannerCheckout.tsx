@@ -6,7 +6,7 @@ import LocationPicker from '../components/checkout/LocationPicker'
 import BirthdateInput from '../components/checkout/BirthdateInput'
 import { api, ApiError } from '../lib/api'
 import type { CouponPreview } from '../lib/supabasePublicApi'
-import type { Campaign, DiscountType, PaymentMethod, Product, ShippingEstimate } from '../lib/types'
+import type { DiscountType, PaymentMethod, Product, Promotion, ShippingEstimate } from '../lib/types'
 import { useBannerCart } from '../store/bannerCart'
 import { useCustomer } from '../store/customer'
 
@@ -27,7 +27,7 @@ export default function BannerCheckout() {
   const bannerCart = useBannerCart()
   const customer = useCustomer()
 
-  const [campaign, setCampaign] = useState<Campaign | null>(null)
+  const [promotion, setPromotion] = useState<Promotion | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -45,17 +45,17 @@ export default function BannerCheckout() {
   const [couponChecking, setCouponChecking] = useState(false)
 
   useEffect(() => {
-    if (!bannerCart.campaignId || bannerCart.items.length === 0) {
-      setLoadError('Seu carrinho de campanha está vazio. Volte no banner e monte o pedido primeiro.')
+    if (!bannerCart.promotionId || bannerCart.items.length === 0) {
+      setLoadError('Seu carrinho de promoção está vazio. Volte no banner e monte o pedido primeiro.')
       setLoading(false)
       return
     }
-    Promise.all([api.campaigns.get(bannerCart.campaignId), api.products.list()])
-      .then(([c, p]) => {
-        setCampaign(c)
-        setProducts(p)
+    Promise.all([api.promotions.get(bannerCart.promotionId), api.products.list()])
+      .then(([p, prods]) => {
+        setPromotion(p)
+        setProducts(prods)
       })
-      .catch(() => setLoadError('Essa campanha não está mais disponível.'))
+      .catch(() => setLoadError('Essa promoção não está mais disponível.'))
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -67,36 +67,36 @@ export default function BannerCheckout() {
   )
   const productDiscountById = useMemo(() => {
     const map = new Map<string, { discount_type: DiscountType; discount_value: number }>()
-    for (const pd of campaign?.product_discounts ?? []) map.set(pd.product_id, pd)
+    for (const pd of promotion?.product_discounts ?? []) map.set(pd.product_id, pd)
     return map
-  }, [campaign])
+  }, [promotion])
 
   const subtotal = lines.reduce((sum, l) => sum + l.product.price * l.item.quantity, 0)
 
-  let campaignProductDiscount = 0
-  if (campaign?.campaign_type === 'kit' && campaign.discount_type && campaign.discount_value != null) {
-    campaignProductDiscount =
-      campaign.discount_type === 'percent' ? (subtotal * campaign.discount_value) / 100 : campaign.discount_value
-  } else if (campaign?.campaign_type === 'selfie_service') {
+  let promotionProductDiscount = 0
+  if (promotion?.promotion_type === 'kit' && promotion.discount_type && promotion.discount_value != null) {
+    promotionProductDiscount =
+      promotion.discount_type === 'percent' ? (subtotal * promotion.discount_value) / 100 : promotion.discount_value
+  } else if (promotion?.promotion_type === 'selfie_service') {
     for (const l of lines) {
       const pd = productDiscountById.get(l.product.id)
       if (!pd) continue
       const lineTotal = l.product.price * l.item.quantity
-      campaignProductDiscount += pd.discount_type === 'percent' ? (lineTotal * pd.discount_value) / 100 : Math.min(pd.discount_value * l.item.quantity, lineTotal)
+      promotionProductDiscount += pd.discount_type === 'percent' ? (lineTotal * pd.discount_value) / 100 : Math.min(pd.discount_value * l.item.quantity, lineTotal)
     }
   }
 
   const applyCoupon = async () => {
-    if (!couponInput.trim() || !campaign) return
+    if (!couponInput.trim() || !promotion) return
     setCouponError(null)
     setCouponChecking(true)
     try {
       const digits = customer.whatsapp.replace(/\D/g, '')
-      const result = await api.coupons.validate(couponInput.trim(), campaign.id, customer.birthdate, digits ? `55${digits}` : undefined)
+      const result = await api.coupons.validate(couponInput.trim(), promotion.id, customer.birthdate, digits ? `55${digits}` : undefined)
       setAppliedCoupon(result)
     } catch (e) {
       setAppliedCoupon(null)
-      setCouponError(e instanceof ApiError ? e.message : 'Cupom inválido para esta campanha.')
+      setCouponError(e instanceof ApiError ? e.message : 'Cupom inválido para esta promoção.')
     } finally {
       setCouponChecking(false)
     }
@@ -104,8 +104,8 @@ export default function BannerCheckout() {
 
   const handleSubmit = async () => {
     setError(null)
-    if (!campaign || lines.length === 0) {
-      setError('Seu carrinho de campanha está vazio.')
+    if (!promotion || lines.length === 0) {
+      setError('Seu carrinho de promoção está vazio.')
       return
     }
     if (!customer.name.trim()) {
@@ -146,7 +146,7 @@ export default function BannerCheckout() {
         payment_method: paymentMethod,
         items: lines.map((l) => ({ product_id: l.product.id, quantity: l.item.quantity })),
         coupon_code: appliedCoupon?.code,
-        campaign_id: campaign.id,
+        promotion_id: promotion.id,
       })
       bannerCart.clear()
       api.orders.notifyCreated(order.id).catch(() => {})
@@ -170,7 +170,7 @@ export default function BannerCheckout() {
     )
   }
 
-  if (loadError || !campaign) {
+  if (loadError || !promotion) {
     return (
       <main className="min-h-screen bg-son-black text-white">
         <SiteHeader />
@@ -184,22 +184,22 @@ export default function BannerCheckout() {
   return (
     <main className="min-h-screen bg-son-black text-white relative overflow-hidden">
       {/* Layout próprio do checkout de banner: fundo com glow laranja/roxo
-          fixo no topo, cartão de campanha destacado — visualmente diferente
+          fixo no topo, cartão de promoção destacado — visualmente diferente
           do checkout comum, pra nunca confundir os dois fluxos. */}
       <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[36rem] h-[36rem] rounded-full bg-son-orange/20 blur-[140px] pointer-events-none" />
       <SiteHeader />
       <div className="max-w-xl mx-auto px-5 sm:px-10 pb-24 relative">
         <div className="flex items-center gap-2 mb-1">
           <Sparkles className="w-5 h-5 text-orange-400" />
-          <h1 className="text-2xl sm:text-3xl font-black">Checkout da campanha</h1>
+          <h1 className="text-2xl sm:text-3xl font-black">Checkout da promoção</h1>
         </div>
         <p className="text-xs text-son-silver-dim mb-6">Este checkout é exclusivo pros itens escolhidos em /banner.</p>
 
         <div className="glass rounded-2xl p-4 mb-6 flex items-center gap-3 border border-orange-400/20">
-          <img src={campaign.image_url} alt={campaign.title} className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
+          <img src={promotion.image_url} alt={promotion.title} className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
           <div className="min-w-0">
-            <p className="font-semibold text-white truncate">{campaign.title}</p>
-            <p className="text-xs text-orange-400 font-medium">{campaign.campaign_type === 'kit' ? 'Pacote fechado' : 'Carrinho selfie service'}</p>
+            <p className="font-semibold text-white truncate">{promotion.title}</p>
+            <p className="text-xs text-orange-400 font-medium">{promotion.promotion_type === 'kit' ? 'Pacote fechado' : 'Carrinho selfie service'}</p>
           </div>
         </div>
 
@@ -316,7 +316,7 @@ export default function BannerCheckout() {
           </div>
 
           <div>
-            <label className="label">Cupom de desconto (se a campanha aceitar)</label>
+            <label className="label">Cupom de desconto (se a promoção aceitar)</label>
             {appliedCoupon ? (
               <div className="flex items-center justify-between bg-son-surface border border-orange-400/30 rounded-2xl px-4 py-3">
                 <span className="flex items-center gap-2 text-sm font-medium text-white">
@@ -363,10 +363,10 @@ export default function BannerCheckout() {
                 <span className="flex-shrink-0">{currency(l.product.price * l.item.quantity)}</span>
               </div>
             ))}
-            {campaignProductDiscount > 0 && (
+            {promotionProductDiscount > 0 && (
               <div className="flex justify-between text-emerald-400">
-                <span>Desconto da campanha</span>
-                <span>-{currency(campaignProductDiscount)}</span>
+                <span>Desconto da promoção</span>
+                <span>-{currency(promotionProductDiscount)}</span>
               </div>
             )}
             <div className="flex justify-between text-son-silver-dim">
@@ -375,7 +375,7 @@ export default function BannerCheckout() {
             </div>
             <div className="flex justify-between items-center pt-1">
               <span className="font-bold text-white">Total (produtos)</span>
-              <span className="sunset-text font-black text-lg">{currency(Math.max(subtotal - campaignProductDiscount, 0))}</span>
+              <span className="sunset-text font-black text-lg">{currency(Math.max(subtotal - promotionProductDiscount, 0))}</span>
             </div>
           </div>
 

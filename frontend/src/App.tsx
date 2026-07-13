@@ -16,7 +16,7 @@ import AdminProdutos from './pages/admin/AdminProdutos'
 import AdminMotoboys from './pages/admin/AdminMotoboys'
 import AdminFinanceiro from './pages/admin/AdminFinanceiro'
 import AdminSenha from './pages/admin/AdminSenha'
-import AdminCampanhas from './pages/admin/AdminCampanhas'
+import AdminPromocoes from './pages/admin/AdminPromocoes'
 import AdminCrm from './pages/admin/AdminCrm'
 import MotoboyFila from './pages/motoboy/MotoboyFila'
 import MotoboyCorrida from './pages/motoboy/MotoboyCorrida'
@@ -67,7 +67,8 @@ export default function App() {
           <Route path="produtos" element={<AdminProdutos />} />
           <Route path="motoboys" element={<AdminMotoboys />} />
           <Route path="crm" element={<AdminCrm />} />
-          <Route path="campanhas" element={<AdminCampanhas />} />
+          <Route path="promocoes" element={<AdminPromocoes />} />
+          <Route path="campanhas" element={<Navigate to="/admin/promocoes" replace />} />
           <Route path="financeiro" element={<AdminFinanceiro />} />
           <Route path="conta" element={<AdminSenha />} />
         </Route>

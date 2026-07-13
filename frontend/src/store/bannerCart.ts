@@ -4,12 +4,12 @@ import { persist } from 'zustand/middleware'
 export type BannerCartItem = { productId: string; quantity: number }
 
 // Carrinho separado do carrinho normal do catálogo — só existe pra
-// campanha "selfie service" em /banner. Checkout de banner só aceita o
+// promoção "selfie service" em /banner. Checkout de banner só aceita o
 // que vier daqui, nunca do carrinho do site.
 interface BannerCartState {
-  campaignId: string | null
+  promotionId: string | null
   items: BannerCartItem[]
-  setCampaign: (campaignId: string, items: BannerCartItem[]) => void
+  setPromotion: (promotionId: string, items: BannerCartItem[]) => void
   addItem: (productId: string, max?: number) => void
   changeQty: (productId: string, delta: number, max?: number) => void
   clear: () => void
@@ -18,11 +18,11 @@ interface BannerCartState {
 export const useBannerCart = create<BannerCartState>()(
   persist(
     (set) => ({
-      campaignId: null,
+      promotionId: null,
       items: [],
       // Kit: carrinho vem pronto (todo o pacote, quantidade 1 cada) e não
       // pode ser editado pelo cliente. Selfie service: começa vazio.
-      setCampaign: (campaignId, items) => set({ campaignId, items }),
+      setPromotion: (promotionId, items) => set({ promotionId, items }),
       addItem: (productId, max) =>
         set((state) => {
           const existing = state.items.find((i) => i.productId === productId)
@@ -42,7 +42,7 @@ export const useBannerCart = create<BannerCartState>()(
             })
             .filter((i) => i.quantity > 0),
         })),
-      clear: () => set({ campaignId: null, items: [] }),
+      clear: () => set({ promotionId: null, items: [] }),
     }),
     { name: 'sonset_banner_cart' }
   )

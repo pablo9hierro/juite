@@ -6,26 +6,26 @@ import heroBanner from '../assets/hero-banner.png'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
 import { api } from '../lib/api'
-import type { Campaign } from '../lib/types'
+import type { Promotion } from '../lib/types'
 
 const CAROUSEL_INTERVAL_MS = 2000
 
-type Slide = { kind: 'hero' } | { kind: 'campaign'; campaign: Campaign }
+type Slide = { kind: 'hero' } | { kind: 'promotion'; promotion: Promotion }
 
 function BannerCarousel() {
   const navigate = useNavigate()
   const [heroUrl, setHeroUrl] = useState<string | null>(null)
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [promotions, setPromotions] = useState<Promotion[]>([])
   const [index, setIndex] = useState(0)
 
   useEffect(() => {
     api.siteSettings.get().then((s) => setHeroUrl(s.hero_image_url)).catch(() => setHeroUrl(null))
-    api.campaigns.listActive().then(setCampaigns).catch(() => setCampaigns([]))
+    api.promotions.listActive().then(setPromotions).catch(() => setPromotions([]))
   }, [])
 
-  // Imagem inicial é sempre a primeira do carrossel — mesmo com campanhas
-  // cadastradas — só depois ele desliza pras campanhas, em loop.
-  const slides: Slide[] = [{ kind: 'hero' }, ...campaigns.map((c) => ({ kind: 'campaign' as const, campaign: c }))]
+  // Imagem inicial é sempre a primeira do carrossel — mesmo com promoções
+  // cadastradas — só depois ele desliza pras promoções, em loop.
+  const slides: Slide[] = [{ kind: 'hero' }, ...promotions.map((p) => ({ kind: 'promotion' as const, promotion: p }))]
 
   useEffect(() => {
     if (slides.length < 2) return
@@ -42,20 +42,20 @@ function BannerCarousel() {
     <div className={`${containerClass} aspect-[2/1]`}>
       <AnimatePresence mode="wait" initial={false}>
         <motion.button
-          key={current.kind === 'hero' ? 'hero' : current.campaign.id}
+          key={current.kind === 'hero' ? 'hero' : current.promotion.id}
           type="button"
           onClick={() => {
-            if (current.kind === 'campaign') navigate(`/banner?campanha=${current.campaign.id}`)
+            if (current.kind === 'promotion') navigate(`/banner?promocao=${current.promotion.id}`)
           }}
           initial={{ x: '100%', opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: '-100%', opacity: 0 }}
           transition={{ duration: 0.5, ease: 'easeInOut' }}
           className="absolute inset-0 w-full h-full text-left"
-          aria-label={current.kind === 'campaign' ? current.campaign.title : 'Sunset Tabas'}
+          aria-label={current.kind === 'promotion' ? current.promotion.title : 'Sunset Tabas'}
         >
           <img
-            src={current.kind === 'hero' ? heroUrl ?? heroBanner : current.campaign.image_url}
+            src={current.kind === 'hero' ? heroUrl ?? heroBanner : current.promotion.image_url}
             alt=""
             className="w-full h-full object-cover block"
           />
@@ -65,7 +65,7 @@ function BannerCarousel() {
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
           {slides.map((s, i) => (
             <span
-              key={s.kind === 'hero' ? 'hero' : s.campaign.id}
+              key={s.kind === 'hero' ? 'hero' : s.promotion.id}
               className={`w-1.5 h-1.5 rounded-full ${i === safeIndex ? 'bg-white' : 'bg-white/40'}`}
             />
           ))}
@@ -83,8 +83,8 @@ export default function Landing() {
       <div className="absolute bottom-0 left-1/3 w-80 h-80 rounded-full bg-son-pink/15 blur-[120px]" />
 
       {/* Banner scrolls with the page (not fixed) — only the WhatsApp button stays put.
-          Sem campanha ativa cadastrada, cai no banner estático de sempre; com
-          campanha(s), vira um carrossel que troca a cada 2s e leva direto pro
+          Sem promoção ativa cadastrada, cai no banner estático de sempre; com
+          promoção(ões), vira um carrossel que troca a cada 2s e leva direto pro
           checkout com o desconto já aplicado. */}
       <BannerCarousel />
 

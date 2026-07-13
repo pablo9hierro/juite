@@ -4,11 +4,11 @@ import { localApi } from './localApi'
 import { supabasePublicApi } from './supabasePublicApi'
 import { supabase } from './supabaseClient'
 import type {
-  Campaign,
-  CampaignType,
+  CampanhaOrientation,
   Category,
   Coupon,
   CouponGrant,
+  CrmCampanhaCoupon,
   CrmCustomer,
   CrmFilterCriteria,
   CrmSegment,
@@ -26,6 +26,8 @@ import type {
   PdvSaleItemInput,
   Product,
   ProductDiscount,
+  Promotion,
+  PromotionType,
   ShippingSettings,
   Vendedor,
   VendedorRelatorio,
@@ -108,8 +110,8 @@ const remoteApi = {
   siteSettings: supabasePublicApi.siteSettings,
   estimateShipping: supabasePublicApi.estimateShipping,
   trackDeliveryPosition: supabasePublicApi.trackDeliveryPosition,
-  // Carrossel da landing (campanhas ativas) + cupom digitado no checkout.
-  campaigns: supabasePublicApi.campaigns,
+  // Carrossel da landing (promoções ativas) + cupom digitado no checkout.
+  promotions: supabasePublicApi.promotions,
   coupons: supabasePublicApi.coupons,
   orders: {
     create: supabasePublicApi.orders.create,
@@ -319,7 +321,7 @@ const remoteApi = {
         kind: 'desconto' | 'frete' | 'aniversario' | 'produto'
         discount_type?: 'percent' | 'fixed'
         discount_value?: number
-        allow_campaign_checkout?: boolean
+        allow_promotion_checkout?: boolean
         expires_at?: string
         max_uses?: number
         product_discounts?: ProductDiscount[]
@@ -330,7 +332,7 @@ const remoteApi = {
           p_kind: payload.kind,
           p_discount_type: payload.discount_type ?? null,
           p_discount_value: payload.discount_value ?? null,
-          p_allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
+          p_allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
           p_expires_at: payload.expires_at || null,
           p_max_uses: payload.max_uses ?? null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
@@ -339,7 +341,7 @@ const remoteApi = {
         id: string,
         payload: {
           active: boolean
-          allow_campaign_checkout: boolean
+          allow_promotion_checkout: boolean
           expires_at?: string
           max_uses?: number
           discount_type?: 'percent' | 'fixed'
@@ -351,7 +353,7 @@ const remoteApi = {
           p_token: adminToken(),
           p_id: id,
           p_active: payload.active,
-          p_allow_campaign_checkout: payload.allow_campaign_checkout,
+          p_allow_promotion_checkout: payload.allow_promotion_checkout,
           p_expires_at: payload.expires_at || null,
           p_max_uses: payload.max_uses ?? null,
           p_discount_type: payload.discount_type ?? null,
@@ -369,7 +371,7 @@ const remoteApi = {
         notify_customers?: boolean
         custom_message?: string
         combinable_with_public?: boolean
-        allow_campaign_checkout?: boolean
+        allow_promotion_checkout?: boolean
         expires_at?: string
         max_uses?: number
         discount_type?: 'percent' | 'fixed'
@@ -386,7 +388,7 @@ const remoteApi = {
           p_notify_customers: payload.notify_customers ?? true,
           p_custom_message: payload.custom_message || null,
           p_combinable_with_public: payload.combinable_with_public ?? false,
-          p_allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
+          p_allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
           p_expires_at: payload.expires_at || null,
           p_max_uses: payload.max_uses ?? null,
           p_discount_type: payload.discount_type ?? null,
@@ -401,7 +403,7 @@ const remoteApi = {
           active: boolean
           uses_per_customer?: number
           combinable_with_public?: boolean
-          allow_campaign_checkout?: boolean
+          allow_promotion_checkout?: boolean
           expires_at?: string
           max_uses?: number
           discount_type?: 'percent' | 'fixed'
@@ -417,7 +419,7 @@ const remoteApi = {
           p_active: payload.active,
           p_uses_per_customer: payload.uses_per_customer ?? 1,
           p_combinable_with_public: payload.combinable_with_public ?? false,
-          p_allow_campaign_checkout: payload.allow_campaign_checkout ?? false,
+          p_allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
           p_expires_at: payload.expires_at || null,
           p_max_uses: payload.max_uses ?? null,
           p_discount_type: payload.discount_type ?? null,
@@ -429,13 +431,13 @@ const remoteApi = {
       listGrants: (couponId: string) =>
         rpc<CouponGrant[]>('admin_list_coupon_grants', { p_token: adminToken(), p_coupon_id: couponId }),
     },
-    campaigns: {
-      list: () => rpc<Campaign[]>('admin_list_campaigns', { p_token: adminToken() }),
+    promotions: {
+      list: () => rpc<Promotion[]>('admin_list_promotions', { p_token: adminToken() }),
       create: (payload: {
         title: string
         image_url: string
         product_ids: string[]
-        campaign_type: CampaignType
+        promotion_type: PromotionType
         discount_type?: 'percent' | 'fixed'
         discount_value?: number
         shipping_discount_type?: 'percent' | 'fixed'
@@ -444,12 +446,12 @@ const remoteApi = {
         expires_at?: string
         product_discounts?: ProductDiscount[]
       }) =>
-        rpc<Campaign>('admin_create_campaign', {
+        rpc<Promotion>('admin_create_promotion', {
           p_token: adminToken(),
           p_title: payload.title,
           p_image_url: payload.image_url,
           p_product_ids: payload.product_ids,
-          p_campaign_type: payload.campaign_type,
+          p_promotion_type: payload.promotion_type,
           p_discount_type: payload.discount_type ?? null,
           p_discount_value: payload.discount_value ?? null,
           p_shipping_discount_type: payload.shipping_discount_type ?? null,
@@ -464,7 +466,7 @@ const remoteApi = {
           title: string
           image_url: string
           product_ids: string[]
-          campaign_type: CampaignType
+          promotion_type: PromotionType
           discount_type?: 'percent' | 'fixed'
           discount_value?: number
           shipping_discount_type?: 'percent' | 'fixed'
@@ -475,13 +477,13 @@ const remoteApi = {
           product_discounts?: ProductDiscount[]
         }
       ) =>
-        rpc<Campaign>('admin_update_campaign', {
+        rpc<Promotion>('admin_update_promotion', {
           p_token: adminToken(),
           p_id: id,
           p_title: payload.title,
           p_image_url: payload.image_url,
           p_product_ids: payload.product_ids,
-          p_campaign_type: payload.campaign_type,
+          p_promotion_type: payload.promotion_type,
           p_discount_type: payload.discount_type ?? null,
           p_discount_value: payload.discount_value ?? null,
           p_shipping_discount_type: payload.shipping_discount_type ?? null,
@@ -491,7 +493,7 @@ const remoteApi = {
           p_expires_at: payload.expires_at || null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
         }),
-      delete: (id: string) => rpc<void>('admin_delete_campaign', { p_token: adminToken(), p_id: id }),
+      delete: (id: string) => rpc<void>('admin_delete_promotion', { p_token: adminToken(), p_id: id }),
     },
     orders: {
       list: (status?: string) => rpc<Order[]>('admin_list_orders', { p_token: adminToken(), p_status: status ?? null }),
@@ -534,29 +536,78 @@ const remoteApi = {
     },
     segments: {
       list: () => rpc<CrmSegment[]>('admin_list_segments', { p_token: adminToken() }),
-      create: (payload: { name: string; description?: string; filter_criteria: CrmFilterCriteria; coupon_id?: string; campaign_id?: string }) =>
+      create: (payload: { name: string; description?: string; filter_criteria: CrmFilterCriteria }) =>
         rpc<CrmSegment>('admin_create_segment', {
           p_token: adminToken(),
           p_name: payload.name,
           p_description: payload.description || null,
           p_filter_criteria: payload.filter_criteria,
-          p_coupon_id: payload.coupon_id || null,
-          p_campaign_id: payload.campaign_id || null,
         }),
-      update: (
-        id: string,
-        payload: { name: string; description?: string; filter_criteria: CrmFilterCriteria; coupon_id?: string; campaign_id?: string }
-      ) =>
+      update: (id: string, payload: { name: string; description?: string; filter_criteria: CrmFilterCriteria }) =>
         rpc<CrmSegment>('admin_update_segment', {
           p_token: adminToken(),
           p_id: id,
           p_name: payload.name,
           p_description: payload.description || null,
           p_filter_criteria: payload.filter_criteria,
-          p_coupon_id: payload.coupon_id || null,
-          p_campaign_id: payload.campaign_id || null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_segment', { p_token: adminToken(), p_id: id }),
+    },
+    // "Campanha": notifica os clientes de um segmento via WhatsApp com um
+    // cupom exclusivo — 'segmento' dispara uma vez pros clientes que casam
+    // com o critério do segmento agora; 'evento' guarda um critério
+    // diferente (trigger_criteria) e dispara (uma vez por cliente) quando
+    // esse critério passar a valer pra ele.
+    campanhaCoupons: {
+      list: (segmentId: string) =>
+        rpc<CrmCampanhaCoupon[]>('admin_list_campanha_coupons', { p_token: adminToken(), p_segment_id: segmentId }),
+      create: (payload: {
+        segment_id: string
+        orientation: CampanhaOrientation
+        trigger_criteria?: CrmFilterCriteria
+        message_template: string
+        code: string
+        uses_per_customer?: number
+        combinable_with_public?: boolean
+        allow_promotion_checkout?: boolean
+        expires_at?: string
+        max_uses?: number
+        discount_type?: 'percent' | 'fixed'
+        discount_value?: number
+        shipping_discount_type?: 'percent' | 'fixed'
+        shipping_discount_value?: number
+        product_discounts?: ProductDiscount[]
+        customer_whatsapps: string[]
+      }) =>
+        rpc<CrmCampanhaCoupon>('admin_create_campanha_coupon', {
+          p_token: adminToken(),
+          p_segment_id: payload.segment_id,
+          p_orientation: payload.orientation,
+          p_trigger_criteria: payload.trigger_criteria ?? null,
+          p_message_template: payload.message_template,
+          p_code: payload.code,
+          p_uses_per_customer: payload.uses_per_customer ?? 1,
+          p_combinable_with_public: payload.combinable_with_public ?? false,
+          p_allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
+          p_expires_at: payload.expires_at || null,
+          p_max_uses: payload.max_uses ?? null,
+          p_discount_type: payload.discount_type ?? null,
+          p_discount_value: payload.discount_value ?? null,
+          p_shipping_discount_type: payload.shipping_discount_type ?? null,
+          p_shipping_discount_value: payload.shipping_discount_value ?? null,
+          p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
+          p_customer_whatsapps: payload.customer_whatsapps,
+        }),
+      // Reavalia o trigger_criteria de uma campanha 'evento' contra a lista
+      // atual de whatsapps que casam com ele (calculada no front) — grants
+      // pra quem ainda não tinha, idempotente (não duplica).
+      fireEvent: (id: string, customerWhatsapps: string[]) =>
+        rpc<{ newly_granted: string[] }>('admin_fire_campanha_event', {
+          p_token: adminToken(),
+          p_id: id,
+          p_customer_whatsapps: customerWhatsapps,
+        }),
+      delete: (id: string) => rpc<void>('admin_delete_campanha_coupon', { p_token: adminToken(), p_id: id }),
     },
     // Único pedaço do admin que ainda fala com o backend Rust (Railway) em
     // vez do Supabase — a chave da Evolution API precisa ficar fora do

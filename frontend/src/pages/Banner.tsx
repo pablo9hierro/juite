@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, Minus, Package, Plus, X } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
 import { api } from '../lib/api'
-import type { Campaign, DiscountType, Product } from '../lib/types'
+import type { DiscountType, Product, Promotion } from '../lib/types'
 import { useBannerCart } from '../store/bannerCart'
 
 function currency(v: number) {
@@ -21,44 +21,44 @@ function discountText(type: DiscountType, value: number) {
 export default function Banner() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const campaignId = searchParams.get('campanha')
+  const promotionId = searchParams.get('promocao')
   const bannerCart = useBannerCart()
 
-  const [campaign, setCampaign] = useState<Campaign | null>(null)
+  const [promotion, setPromotion] = useState<Promotion | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [infoProduct, setInfoProduct] = useState<Product | null>(null)
 
   useEffect(() => {
-    if (!campaignId) {
-      setError('Nenhuma campanha informada.')
+    if (!promotionId) {
+      setError('Nenhuma promoção informada.')
       setLoading(false)
       return
     }
-    Promise.all([api.campaigns.get(campaignId), api.products.list()])
-      .then(([c, p]) => {
-        setCampaign(c)
-        setProducts(p)
-        if (bannerCart.campaignId !== c.id) {
-          bannerCart.setCampaign(c.id, c.campaign_type === 'kit' ? c.product_ids.map((id) => ({ productId: id, quantity: 1 })) : [])
+    Promise.all([api.promotions.get(promotionId), api.products.list()])
+      .then(([p, prods]) => {
+        setPromotion(p)
+        setProducts(prods)
+        if (bannerCart.promotionId !== p.id) {
+          bannerCart.setPromotion(p.id, p.promotion_type === 'kit' ? p.product_ids.map((id) => ({ productId: id, quantity: 1 })) : [])
         }
       })
-      .catch(() => setError('Essa campanha não está mais disponível.'))
+      .catch(() => setError('Essa promoção não está mais disponível.'))
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaignId])
+  }, [promotionId])
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
-  const campaignProducts = useMemo(
-    () => (campaign ? campaign.product_ids.map((id) => productById.get(id)).filter((p): p is Product => !!p) : []),
-    [campaign, productById]
+  const promotionProducts = useMemo(
+    () => (promotion ? promotion.product_ids.map((id) => productById.get(id)).filter((p): p is Product => !!p) : []),
+    [promotion, productById]
   )
   const productDiscountById = useMemo(() => {
     const map = new Map<string, { discount_type: DiscountType; discount_value: number }>()
-    for (const pd of campaign?.product_discounts ?? []) map.set(pd.product_id, pd)
+    for (const pd of promotion?.product_discounts ?? []) map.set(pd.product_id, pd)
     return map
-  }, [campaign])
+  }, [promotion])
 
   const qtyInCart = (id: string) => bannerCart.items.find((i) => i.productId === id)?.quantity ?? 0
 
@@ -72,17 +72,17 @@ export default function Banner() {
       const lineTotal = product.price * item.quantity
       original += lineTotal
       count += item.quantity
-      if (campaign?.campaign_type === 'selfie_service') {
+      if (promotion?.promotion_type === 'selfie_service') {
         const pd = productDiscountById.get(item.productId)
         if (pd) discount += pd.discount_type === 'percent' ? (lineTotal * pd.discount_value) / 100 : Math.min(pd.discount_value * item.quantity, lineTotal)
       }
     }
-    if (campaign?.campaign_type === 'kit' && campaign.discount_type && campaign.discount_value != null) {
-      discount += campaign.discount_type === 'percent' ? (original * campaign.discount_value) / 100 : campaign.discount_value
+    if (promotion?.promotion_type === 'kit' && promotion.discount_type && promotion.discount_value != null) {
+      discount += promotion.discount_type === 'percent' ? (original * promotion.discount_value) / 100 : promotion.discount_value
     }
     discount = Math.min(discount, original)
     return { original, discount, total: original - discount, count }
-  }, [bannerCart.items, productById, campaign, productDiscountById])
+  }, [bannerCart.items, productById, promotion, productDiscountById])
 
   if (loading) {
     return (
@@ -92,12 +92,12 @@ export default function Banner() {
     )
   }
 
-  if (error || !campaign) {
+  if (error || !promotion) {
     return (
       <main className="min-h-screen bg-son-black text-white">
         <SiteHeader />
         <div className="max-w-xl mx-auto px-5 sm:px-10 py-16 text-center">
-          <p className="error-msg inline-block">{error ?? 'Campanha não encontrada.'}</p>
+          <p className="error-msg inline-block">{error ?? 'Promoção não encontrada.'}</p>
         </div>
       </main>
     )
@@ -107,20 +107,20 @@ export default function Banner() {
     <main className="min-h-screen bg-son-black text-white">
       <SiteHeader />
       <div className="max-w-xl mx-auto px-5 sm:px-10 pb-32">
-        <img src={campaign.image_url} alt={campaign.title} className="w-full aspect-[2/1] object-cover rounded-2xl mb-4" />
-        <h1 className="text-2xl font-black mb-1">{campaign.title}</h1>
+        <img src={promotion.image_url} alt={promotion.title} className="w-full aspect-[2/1] object-cover rounded-2xl mb-4" />
+        <h1 className="text-2xl font-black mb-1">{promotion.title}</h1>
         <p className="text-xs text-son-silver-dim mb-5">
-          {campaign.campaign_type === 'kit'
-            ? 'Pacote fechado — leve todos os itens juntos com o desconto da campanha.'
-            : 'Monte seu carrinho escolhendo entre os itens desta campanha, cada um com seu desconto.'}
+          {promotion.promotion_type === 'kit'
+            ? 'Pacote fechado — leve todos os itens juntos com o desconto da promoção.'
+            : 'Monte seu carrinho escolhendo entre os itens desta promoção, cada um com seu desconto.'}
         </p>
 
         <div className="space-y-2">
-          {campaignProducts.map((product) => {
+          {promotionProducts.map((product) => {
             const pd = productDiscountById.get(product.id)
             const inCart = qtyInCart(product.id)
             const outOfStock = product.quantity <= 0
-            const isKit = campaign.campaign_type === 'kit'
+            const isKit = promotion.promotion_type === 'kit'
             return (
               <div key={product.id} className="bg-son-surface border border-white/5 rounded-2xl p-3 flex items-center gap-3">
                 <button

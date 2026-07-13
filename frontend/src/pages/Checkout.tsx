@@ -6,7 +6,7 @@ import LocationPicker from '../components/checkout/LocationPicker'
 import BirthdateInput from '../components/checkout/BirthdateInput'
 import { api, ApiError } from '../lib/api'
 import type { CouponPreview, PromotionalProduct } from '../lib/supabasePublicApi'
-import type { Campaign, PaymentMethod, Product, ShippingEstimate } from '../lib/types'
+import type { Promotion, PaymentMethod, Product, ShippingEstimate } from '../lib/types'
 import { useCart } from '../store/cart'
 import { useCustomer } from '../store/customer'
 
@@ -27,7 +27,7 @@ type AppliedCoupon = CouponPreview
 export default function Checkout() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const campaignId = searchParams.get('campanha')
+  const promotionId = searchParams.get('promocao')
   const { items, clear } = useCart()
   const customer = useCustomer()
 
@@ -39,11 +39,13 @@ export default function Checkout() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [shippingEstimate, setShippingEstimate] = useState<ShippingEstimate | null>(null)
 
-  // Checkout de campanha: veio de um clique no banner da landing, com o(s)
+  // Checkout de promoção: veio de um clique no banner da landing, com o(s)
   // produto(s) e desconto já definidos pelo admin — ignora o carrinho normal
-  // enquanto essa campanha estiver carregada.
-  const [campaign, setCampaign] = useState<Campaign | null>(null)
-  const [campaignError, setCampaignError] = useState<string | null>(null)
+  // enquanto essa promoção estiver carregada. Na prática esse fluxo tá morto
+  // (Landing.tsx manda pra /banner agora), mas os tipos/identificadores
+  // seguem acompanhando o rename campaign->promotion por consistência.
+  const [promotion, setPromotion] = useState<Promotion | null>(null)
+  const [promotionError, setPromotionError] = useState<string | null>(null)
 
   const [couponInput, setCouponInput] = useState('')
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null)
@@ -65,13 +67,13 @@ export default function Checkout() {
   }, [])
 
   useEffect(() => {
-    if (!campaignId) return
-    api.campaigns
-      .get(campaignId)
-      .then(setCampaign)
-      .catch(() => setCampaignError('Essa campanha não está mais disponível.'))
+    if (!promotionId) return
+    api.promotions
+      .get(promotionId)
+      .then(setPromotion)
+      .catch(() => setPromotionError('Essa campanha não está mais disponível.'))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaignId])
+  }, [promotionId])
 
   // Se o cliente já tinha escolhido um local numa visita anterior, revalida
   // o frete (o preço por km do admin pode ter mudado desde então).
@@ -106,8 +108,8 @@ export default function Checkout() {
   }, [customer.whatsapp])
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
-  const lines = campaign
-    ? campaign.product_ids
+  const lines = promotion
+    ? promotion.product_ids
         .map((id) => productById.get(id))
         .filter((p): p is Product => !!p)
         .map((product) => ({ item: { productId: product.id, quantity: 1 }, product }))
@@ -132,7 +134,7 @@ export default function Checkout() {
     if (autoPromoCode === promo.coupon_code) return
     const digits = customer.whatsapp.replace(/\D/g, '')
     api.coupons
-      .validate(promo.coupon_code, campaign?.id, customer.birthdate, digits ? `55${digits}` : undefined)
+      .validate(promo.coupon_code, promotion?.id, customer.birthdate, digits ? `55${digits}` : undefined)
       .then((result) => {
         setAutoPromoCode(promo.coupon_code)
         setAppliedCoupon((current) => current ?? result)
@@ -157,16 +159,16 @@ export default function Checkout() {
   // Promoção (campanha) e cupom são fontes de desconto separadas — cada uma
   // some numa linha própria no resumo ("Desconto de promoção" / "Desconto de
   // cupom"), mas o cálculo de frete/total usa os dois somados.
-  let campaignProductDiscount = 0
-  let campaignShippingDiscount = 0
-  if (campaign) {
-    if (campaign.discount_type === 'percent') campaignProductDiscount = (subtotal * (campaign.discount_value ?? 0)) / 100
-    else if (campaign.discount_type === 'fixed') campaignProductDiscount = campaign.discount_value ?? 0
-    if (campaign.shipping_discount_type === 'percent')
-      campaignShippingDiscount = (shippingPrice * (campaign.shipping_discount_value ?? 0)) / 100
-    else if (campaign.shipping_discount_type === 'fixed') campaignShippingDiscount = campaign.shipping_discount_value ?? 0
+  let promotionProductDiscount = 0
+  let promotionShippingDiscount = 0
+  if (promotion) {
+    if (promotion.discount_type === 'percent') promotionProductDiscount = (subtotal * (promotion.discount_value ?? 0)) / 100
+    else if (promotion.discount_type === 'fixed') promotionProductDiscount = promotion.discount_value ?? 0
+    if (promotion.shipping_discount_type === 'percent')
+      promotionShippingDiscount = (shippingPrice * (promotion.shipping_discount_value ?? 0)) / 100
+    else if (promotion.shipping_discount_type === 'fixed') promotionShippingDiscount = promotion.shipping_discount_value ?? 0
   }
-  const campaignDiscountTotal = campaignProductDiscount + campaignShippingDiscount
+  const promotionDiscountTotal = promotionProductDiscount + promotionShippingDiscount
 
   // Mapa produto -> desconto desse item pelo cupom (kind='produto') — usado
   // aqui pro total e também pra linha "item promocional" do resumo.
@@ -208,8 +210,8 @@ export default function Checkout() {
   }
   const couponDiscountTotal = couponProductDiscount + couponShippingDiscount
 
-  const discountAmount = Math.min(Math.max(campaignProductDiscount + couponProductDiscount, 0), subtotal)
-  const shippingDiscount = Math.min(Math.max(campaignShippingDiscount + couponShippingDiscount, 0), shippingPrice)
+  const discountAmount = Math.min(Math.max(promotionProductDiscount + couponProductDiscount, 0), subtotal)
+  const shippingDiscount = Math.min(Math.max(promotionShippingDiscount + couponShippingDiscount, 0), shippingPrice)
   const total = subtotal - discountAmount + shippingPrice - shippingDiscount
 
   const applyCoupon = async () => {
@@ -218,7 +220,7 @@ export default function Checkout() {
     setCouponChecking(true)
     try {
       const digits = customer.whatsapp.replace(/\D/g, '')
-      const result = await api.coupons.validate(couponInput.trim(), campaign?.id, customer.birthdate, digits ? `55${digits}` : undefined)
+      const result = await api.coupons.validate(couponInput.trim(), promotion?.id, customer.birthdate, digits ? `55${digits}` : undefined)
       setAppliedCoupon(result)
     } catch (e) {
       setAppliedCoupon(null)
@@ -231,7 +233,7 @@ export default function Checkout() {
   const handleSubmit = async () => {
     setError(null)
     if (lines.length === 0) {
-      setError(campaign ? 'Essa campanha não tem produtos disponíveis no momento.' : 'Sua sacola está vazia.')
+      setError(promotion ? 'Essa campanha não tem produtos disponíveis no momento.' : 'Sua sacola está vazia.')
       return
     }
     if (!customer.name.trim()) {
@@ -272,11 +274,11 @@ export default function Checkout() {
         payment_method: paymentMethod,
         items: lines.map((l) => ({ product_id: l.product.id, quantity: l.item.quantity })),
         coupon_code: appliedCoupon?.code,
-        campaign_id: campaign?.id,
+        promotion_id: promotion?.id,
       })
       // Checkout de campanha nunca mexeu no carrinho normal — só limpa o
       // carrinho quando o pedido realmente veio dele.
-      if (!campaign) clear()
+      if (!promotion) clear()
       api.orders.notifyCreated(order.id).catch(() => {})
       if (paymentMethod === 'pix') {
         navigate(`/pagamento/${order.id}`)
@@ -296,20 +298,20 @@ export default function Checkout() {
       <div className="max-w-xl mx-auto px-5 sm:px-10 pb-24">
         <h1 className="text-2xl sm:text-3xl font-black mb-6">Checkout</h1>
 
-        {campaignError && <p className="error-msg mb-4">{campaignError}</p>}
+        {promotionError && <p className="error-msg mb-4">{promotionError}</p>}
 
-        {campaign && (
+        {promotion && (
           <div className="glass rounded-2xl p-4 mb-5 flex items-center gap-3">
-            <img src={campaign.image_url} alt={campaign.title} className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
+            <img src={promotion.image_url} alt={promotion.title} className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
             <div className="min-w-0">
-              <p className="font-semibold text-white truncate">{campaign.title}</p>
+              <p className="font-semibold text-white truncate">{promotion.title}</p>
               <p className="text-xs text-son-pink font-medium">
-                {campaign.discount_type === 'percent' && `${campaign.discount_value}% off`}
-                {campaign.discount_type === 'fixed' && `R$ ${campaign.discount_value?.toFixed(2).replace('.', ',')} off`}
-                {campaign.discount_type && campaign.shipping_discount_type && ' + '}
-                {campaign.shipping_discount_type === 'percent' && `${campaign.shipping_discount_value}% off no frete`}
-                {campaign.shipping_discount_type === 'fixed' &&
-                  `R$ ${campaign.shipping_discount_value?.toFixed(2).replace('.', ',')} off no frete`}
+                {promotion.discount_type === 'percent' && `${promotion.discount_value}% off`}
+                {promotion.discount_type === 'fixed' && `R$ ${promotion.discount_value?.toFixed(2).replace('.', ',')} off`}
+                {promotion.discount_type && promotion.shipping_discount_type && ' + '}
+                {promotion.shipping_discount_type === 'percent' && `${promotion.shipping_discount_value}% off no frete`}
+                {promotion.shipping_discount_type === 'fixed' &&
+                  `R$ ${promotion.shipping_discount_value?.toFixed(2).replace('.', ',')} off no frete`}
               </p>
             </div>
           </div>
@@ -567,10 +569,10 @@ export default function Checkout() {
                 </div>
               )
             })}
-            {campaignDiscountTotal > 0 && (
+            {promotionDiscountTotal > 0 && (
               <div className="flex justify-between text-emerald-400">
-                <span>Desconto de promoção{campaign ? ` - ${campaign.title}` : ''}</span>
-                <span>-{currency(campaignDiscountTotal)}</span>
+                <span>Desconto de promoção{promotion ? ` - ${promotion.title}` : ''}</span>
+                <span>-{currency(promotionDiscountTotal)}</span>
               </div>
             )}
             {couponDiscountTotal > 0 && (

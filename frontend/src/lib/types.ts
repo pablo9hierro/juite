@@ -53,7 +53,7 @@ export interface Coupon {
   shipping_discount_type: DiscountType | null
   shipping_discount_value: number | null
   product_discounts?: ProductDiscount[]
-  allow_campaign_checkout: boolean
+  allow_promotion_checkout: boolean
   // Só relevante pra cupom alvo (com concessões) — se pode ser combinado
   // com um cupom avulso digitado manualmente no checkout.
   combinable_with_public?: boolean
@@ -77,8 +77,26 @@ export interface CrmSegment {
   name: string
   description: string | null
   filter_criteria: CrmFilterCriteria
-  coupon_id: string | null
-  campaign_id: string | null
+  created_at: string
+}
+
+// "Campanha" (novo conceito): notifica os clientes de um segmento via
+// WhatsApp com um cupom exclusivo — 'segmento' dispara uma vez só, pros
+// clientes que casam com o critério do segmento no momento da criação;
+// 'evento' fica de olho num critério DIFERENTE do critério original do
+// segmento (trigger_criteria) e dispara (uma vez por cliente) assim que
+// esse critério mais apertado/diferente passar a valer pra ele.
+export type CampanhaOrientation = 'segmento' | 'evento'
+
+export interface CrmCampanhaCoupon {
+  id: string
+  segment_id: string
+  coupon_id: string
+  orientation: CampanhaOrientation
+  trigger_criteria: CrmFilterCriteria | null
+  message_template: string
+  uses_per_customer: number
+  fired_at: string | null
   created_at: string
 }
 
@@ -90,14 +108,17 @@ export interface CouponGrant {
   used_count: number
 }
 
-export type CampaignType = 'selfie_service' | 'kit'
+export type PromotionType = 'selfie_service' | 'kit'
 
-export interface Campaign {
+// "Promoção" — o antigo "campanha": banner/carrossel da landing, kit ou
+// selfie-service, leva pro checkout de /banner. Renomeado pra abrir
+// espaço pro novo conceito de "campanha" (ver CrmCampanhaCoupon).
+export interface Promotion {
   id: string
   title: string
   image_url: string
   product_ids: string[]
-  campaign_type: CampaignType
+  promotion_type: PromotionType
   // kit: desconto sobre o valor total somado (discount_type/value).
   // selfie_service: desconto por produto (product_discounts) — cliente
   // monta o próprio carrinho em /banner com só os itens que quiser.
@@ -165,7 +186,7 @@ export interface Order {
   discount_amount?: number
   shipping_discount?: number
   coupon_code?: string | null
-  campaign_id?: string | null
+  promotion_id?: string | null
   motoboy_id: string | null
   motoboy_name?: string | null
   motoboy_whatsapp?: string | null
@@ -356,8 +377,8 @@ export interface FinanceiroTimeseriesPoint {
   orders_count: number
   coupon_orders: number
   coupon_discount: number
-  campaign_orders: number
-  campaign_discount: number
+  promotion_orders: number
+  promotion_discount: number
 }
 
 export interface FinanceiroSummary {
