@@ -3,8 +3,6 @@ import { Cake, Gift, Layers, Loader2, Plus, Search, Sparkles, Tag, Trash2, Users
 import Card from '../../components/ui/Card'
 import WhatsAppLink from '../../components/ui/WhatsAppLink'
 import ExpiryInput from '../../components/admin/ExpiryInput'
-import DateInput from '../../components/admin/DateInput'
-import ProductMultiSelect from '../../components/admin/ProductMultiSelect'
 import ProductCategoryMultiSelect from '../../components/admin/ProductCategoryMultiSelect'
 import ProductDiscountList from '../../components/admin/ProductDiscountList'
 import { api, ApiError } from '../../lib/api'
@@ -60,9 +58,6 @@ type FilterState = {
   maxDistanceKm: string
   neighborhoods: string[]
   birthdayMonth: string
-  productIds: string[]
-  periodStart: string
-  periodEnd: string
   recurringProductIds: string[]
   recurringCategoryIds: string[]
   recurringDays: string
@@ -81,9 +76,6 @@ const EMPTY_FILTER: FilterState = {
   maxDistanceKm: '',
   neighborhoods: [],
   birthdayMonth: '',
-  productIds: [],
-  periodStart: '',
-  periodEnd: '',
   recurringProductIds: [],
   recurringCategoryIds: [],
   recurringDays: '',
@@ -99,7 +91,6 @@ function filterIsEmpty(f: FilterState) {
     !f.maxDistanceKm &&
     !f.birthdayMonth &&
     f.neighborhoods.length === 0 &&
-    f.productIds.length === 0 &&
     f.recurringProductIds.length === 0 &&
     f.recurringCategoryIds.length === 0
   )
@@ -194,15 +185,6 @@ function applyFilters(customers: CrmCustomer[], f: FilterState, products: Produc
     if (f.neighborhoods.length > 0 && !c.neighborhoods.some((n) => f.neighborhoods.includes(n))) return false
     if (f.birthdayMonth) {
       if (!c.birthdate || new Date(c.birthdate).getMonth() !== Number(f.birthdayMonth)) return false
-    }
-    if (f.productIds.length > 0) {
-      const matches = c.purchases.some(
-        (p) =>
-          f.productIds.includes(p.product_id) &&
-          (!f.periodStart || p.created_at >= f.periodStart) &&
-          (!f.periodEnd || p.created_at <= f.periodEnd + 'T23:59:59')
-      )
-      if (!matches) return false
     }
     if ((f.recurringProductIds.length > 0 || f.recurringCategoryIds.length > 0) && f.recurringDays) {
       if (!matchesRecurring(c, f.recurringProductIds, f.recurringCategoryIds, Number(f.recurringDays), products)) return false
@@ -402,10 +384,13 @@ export default function AdminCrm() {
       if (editingSegmentId) {
         await api.admin.segments.update(editingSegmentId, payload)
       } else {
-        const created = await api.admin.segments.create(payload)
-        setEditingSegmentId(created.id)
+        await api.admin.segments.create(payload)
       }
       loadSegments()
+      resetSegmentForm()
+      setFilter(EMPTY_FILTER)
+      setAppliedFilter(null)
+      setFilterOpen(false)
     } catch (err) {
       setSegmentError(err instanceof ApiError ? err.message : 'Não foi possível salvar a segmentação.')
     } finally {
@@ -772,28 +757,7 @@ export default function AdminCrm() {
           </div>
 
           <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Comprou o(s) produto(s)</label>
-            <ProductMultiSelect
-              products={products}
-              selectedIds={filter.productIds}
-              onChange={(productIds) => setFilter({ ...filter, productIds })}
-            />
-            {filter.productIds.length > 0 && (
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                <div>
-                  <label className="label">No período de (opcional)</label>
-                  <DateInput value={filter.periodStart} onChange={(periodStart) => setFilter({ ...filter, periodStart })} />
-                </div>
-                <div>
-                  <label className="label">Até (opcional)</label>
-                  <DateInput value={filter.periodEnd} onChange={(periodEnd) => setFilter({ ...filter, periodEnd })} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Lista de clientes que na média costuma reincidir o consumo a cada 15 dias, por exemplo</label>
+            <label className="label">Recorrência Média de Consumo</label>
             <ProductCategoryMultiSelect
               products={products}
               categories={categories}
@@ -803,10 +767,10 @@ export default function AdminCrm() {
               onChangeCategories={(recurringCategoryIds) => setFilter({ ...filter, recurringCategoryIds })}
             />
             <input
-              className={`input-field mt-2 w-32 ${NO_SPINNER}`}
+              className={`input-field mt-2 w-44 ${NO_SPINNER}`}
               type="number"
               min="1"
-              placeholder="N° Dias"
+              placeholder="N° Dias (Opcional)"
               value={filter.recurringDays}
               onChange={(e) => setFilter({ ...filter, recurringDays: e.target.value })}
             />
@@ -913,44 +877,45 @@ export default function AdminCrm() {
         )}
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
-        </div>
-      ) : visible.length === 0 ? (
-        <div className="text-center py-16 text-son-silver-dim">
-          <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
-          <p>Nenhum cliente encontrado.</p>
-        </div>
-      ) : (
-        <div className="space-y-3 mb-10">
-          {visible.map((c) => (
-            <Card key={c.id} className="p-4 flex items-center justify-between gap-3 flex-wrap">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-semibold text-white">{c.name}</p>
-                  {isBirthdayMonth(c.birthdate) && (
-                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">
-                      <Cake className="w-3 h-3" /> Aniversário
-                    </span>
-                  )}
+      {query.trim() &&
+        (loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="text-center py-16 text-son-silver-dim">
+            <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
+            <p>Nenhum cliente encontrado.</p>
+          </div>
+        ) : (
+          <div className="space-y-3 mb-10">
+            {visible.map((c) => (
+              <Card key={c.id} className="p-4 flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-white">{c.name}</p>
+                    {isBirthdayMonth(c.birthdate) && (
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">
+                        <Cake className="w-3 h-3" /> Aniversário
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1">
+                    <WhatsAppLink phone={c.whatsapp} />
+                  </div>
+                  <p className="text-xs text-son-silver-dim mt-1">
+                    {c.birthdate ? `Nascimento: ${formatDate(c.birthdate)}` : 'Sem data de nascimento'} · Último pedido:{' '}
+                    {formatDate(c.last_order_at)}
+                  </p>
                 </div>
-                <div className="mt-1">
-                  <WhatsAppLink phone={c.whatsapp} />
+                <div className="text-right flex-shrink-0">
+                  <p className="sunset-text font-black text-lg">{currency(c.total_spent)}</p>
+                  <p className="text-xs text-son-silver-dim">{c.order_count} pedido(s)</p>
                 </div>
-                <p className="text-xs text-son-silver-dim mt-1">
-                  {c.birthdate ? `Nascimento: ${formatDate(c.birthdate)}` : 'Sem data de nascimento'} · Último pedido:{' '}
-                  {formatDate(c.last_order_at)}
-                </p>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="sunset-text font-black text-lg">{currency(c.total_spent)}</p>
-                <p className="text-xs text-son-silver-dim">{c.order_count} pedido(s)</p>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+              </Card>
+            ))}
+          </div>
+        ))}
 
       <div className="flex items-center gap-2 mb-4">
         <Layers className="w-5 h-5 text-son-gold" />
