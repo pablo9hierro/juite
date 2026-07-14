@@ -1310,21 +1310,16 @@ export default function AdminCrm() {
                       const cCoupon = coupons.find((c) => c.id === cc.coupon_id)
                       const isEditing = editingCampanhaId === cc.id
                       return (
-                        <motion.div
-                          layout
-                          key={cc.id}
-                          transition={{ layout: { duration: 0.3, ease: 'easeInOut' } }}
-                          className="rounded-2xl border border-purple-400/30 bg-purple-500/5 overflow-hidden"
-                        >
+                        <motion.div layout key={cc.id} transition={{ layout: { duration: 0.3, ease: 'easeInOut' } }}>
                           <AnimatePresence mode="wait" initial={false}>
                             {isEditing ? (
                               <motion.div
                                 key="edit"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: 0.15 }}
-                                className="p-4 space-y-3"
+                                initial={{ opacity: 0, scale: 0.92 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.92 }}
+                                transition={{ duration: 0.25, ease: 'easeOut' }}
+                                className="p-4 space-y-3 rounded-2xl border-2 border-purple-400/50 bg-son-surface"
                               >
                                 <div className="flex items-center justify-between">
                                   <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
@@ -1474,9 +1469,17 @@ export default function AdminCrm() {
                                 </button>
                               </motion.div>
                             ) : (
-                              <motion.div key="view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-                                <div className="flex items-stretch">
-                                  <div className="flex-1 min-w-0 p-3 flex items-center gap-2">
+                              <motion.div
+                                key="view"
+                                initial={{ opacity: 0, scale: 0.96 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.96 }}
+                                transition={{ duration: 0.2, ease: 'easeOut' }}
+                                className="flex items-center gap-2 flex-wrap"
+                              >
+                                {/* subcard: orientada a segmento/evento */}
+                                <div className="flex-shrink-0 w-56 rounded-xl border border-purple-400/30 bg-purple-500/5 px-3 py-2">
+                                  <div className="flex items-center gap-2">
                                     {cc.orientation === 'evento' ? (
                                       <Zap className="w-4 h-4 text-amber-400 flex-shrink-0" />
                                     ) : (
@@ -1495,22 +1498,7 @@ export default function AdminCrm() {
                                       </p>
                                     </div>
                                   </div>
-                                  {cCoupon && (
-                                    <>
-                                      <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
-                                      <div className="flex-shrink-0 p-3 flex flex-col items-center justify-center min-w-[6.5rem]">
-                                        <span className="font-mono text-xs font-bold text-white">{cCoupon.code}</span>
-                                        <span className="text-sm font-black text-purple-300">
-                                          {discountLabel(cCoupon.discount_type, cCoupon.discount_value) ??
-                                            discountLabel(cCoupon.shipping_discount_type, cCoupon.shipping_discount_value) ??
-                                            `${cCoupon.product_discounts?.length ?? 0} produto(s)`}
-                                        </span>
-                                      </div>
-                                    </>
-                                  )}
-                                </div>
-                                <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-purple-400/20">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 mt-1.5">
                                     {cc.orientation === 'evento' && (
                                       <button
                                         type="button"
@@ -1531,8 +1519,32 @@ export default function AdminCrm() {
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
-                                  <ToggleSwitch checked={cc.active} onClick={() => toggleCampanhaActive(cc)} />
                                 </div>
+
+                                {cCoupon && (
+                                  <>
+                                    <div className="w-5 border-t-2 border-dashed border-purple-400/40 flex-shrink-0" />
+                                    {/* subcard: cupom exclusivo — mesmo desenho de bilhete do cupom avulso, só que pequeno e ligado */}
+                                    <div className="flex-shrink-0 w-40 rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch">
+                                      <div className="min-w-0 flex-1 p-2.5">
+                                        <p className="font-mono text-xs font-bold text-white truncate">{cCoupon.code}</p>
+                                        <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
+                                          {COUPON_KIND_LABEL[cCoupon.kind]}
+                                        </span>
+                                      </div>
+                                      <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
+                                      <div className="flex-shrink-0 p-2.5 flex items-center justify-center">
+                                        <span className="text-xs font-black text-purple-300 text-center">
+                                          {discountLabel(cCoupon.discount_type, cCoupon.discount_value) ??
+                                            discountLabel(cCoupon.shipping_discount_type, cCoupon.shipping_discount_value) ??
+                                            `${cCoupon.product_discounts?.length ?? 0} prod.`}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+
+                                <ToggleSwitch checked={cc.active} onClick={() => toggleCampanhaActive(cc)} />
                               </motion.div>
                             )}
                           </AnimatePresence>
@@ -1554,10 +1566,10 @@ export default function AdminCrm() {
           {showCouponForm && !editingCouponId ? (
             <motion.div
               key="form"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
               className="rounded-2xl border-2 border-son-gold/40 bg-son-surface p-4 space-y-3"
             >
               {couponFormFields(false)}
@@ -1566,10 +1578,10 @@ export default function AdminCrm() {
             <motion.button
               key="button"
               type="button"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
               onClick={() => {
                 setEditingCouponId(null)
                 setCouponForm(EMPTY_COUPON_FORM)
@@ -1667,7 +1679,7 @@ export default function AdminCrm() {
 
       {showCampanhaForm && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
           onClick={() => setShowCampanhaForm(false)}
         >
           <div className="glass rounded-2xl p-6 max-w-lg w-full my-8" onClick={(e) => e.stopPropagation()}>
