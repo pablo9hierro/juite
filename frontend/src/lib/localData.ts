@@ -57,6 +57,14 @@ export interface LocalCampanhaCoupon {
   created_at: string
 }
 
+// Cupom extra de uma campanha (além do principal em LocalCampanhaCoupon.coupon_id).
+export interface LocalCampanhaExtraCoupon {
+  id: string
+  campanha_id: string
+  coupon_id: string
+  created_at: string
+}
+
 export interface LocalDb {
   categories: Category[]
   products: Product[]
@@ -70,6 +78,7 @@ export interface LocalDb {
   couponGrants: LocalCouponGrant[]
   segments: CrmSegment[]
   campanhaCoupons: LocalCampanhaCoupon[]
+  campanhaExtraCoupons: LocalCampanhaExtraCoupon[]
   pricePerKm: number
   maxKm: number | null
   heroImageUrl: string | null
@@ -146,6 +155,7 @@ function seedDb(): LocalDb {
     couponGrants: [],
     segments: [],
     campanhaCoupons: [],
+    campanhaExtraCoupons: [],
     pricePerKm: 1.5,
     maxKm: null,
     heroImageUrl: null,

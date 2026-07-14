@@ -649,6 +649,40 @@ const remoteApi = {
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
           p_trigger_criteria: payload.trigger_criteria ?? null,
         }),
+      // Cupom extra — mais um cupom entregue junto com o principal da
+      // mesma campanha (mesma orientação/mensagem, desconto próprio).
+      createExtra: (
+        campanhaId: string,
+        payload: {
+          code: string
+          uses_per_customer?: number
+          combinable_with_public?: boolean
+          allow_promotion_checkout?: boolean
+          expires_at?: string
+          max_uses?: number
+          discount_type?: 'percent' | 'fixed'
+          discount_value?: number
+          shipping_discount_type?: 'percent' | 'fixed'
+          shipping_discount_value?: number
+          product_discounts?: ProductDiscount[]
+        }
+      ) =>
+        rpc<Coupon>('admin_create_campanha_extra_coupon', {
+          p_token: adminToken(),
+          p_campanha_id: campanhaId,
+          p_code: payload.code,
+          p_uses_per_customer: payload.uses_per_customer ?? 1,
+          p_combinable_with_public: payload.combinable_with_public ?? false,
+          p_allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
+          p_expires_at: payload.expires_at || null,
+          p_max_uses: payload.max_uses ?? null,
+          p_discount_type: payload.discount_type ?? null,
+          p_discount_value: payload.discount_value ?? null,
+          p_shipping_discount_type: payload.shipping_discount_type ?? null,
+          p_shipping_discount_value: payload.shipping_discount_value ?? null,
+          p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
+        }),
+      deleteExtra: (id: string) => rpc<void>('admin_delete_campanha_extra_coupon', { p_token: adminToken(), p_id: id }),
     },
     // Único pedaço do admin que ainda fala com o backend Rust (Railway) em
     // vez do Supabase — a chave da Evolution API precisa ficar fora do

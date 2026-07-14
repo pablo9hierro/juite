@@ -93,6 +93,14 @@ export interface CrmSegment {
 // esse critério mais apertado/diferente passar a valer pra ele.
 export type CampanhaOrientation = 'segmento' | 'evento'
 
+// Cupom "extra" — a campanha pode entregar mais de um cupom junto com o
+// principal (coupon_id), cada um com seu próprio código/desconto/prazo,
+// mas todos ligados/desligados e concedidos juntos.
+export interface CrmCampanhaExtraCoupon {
+  id: string
+  coupon: Coupon
+}
+
 export interface CrmCampanhaCoupon {
   id: string
   segment_id: string
@@ -104,6 +112,7 @@ export interface CrmCampanhaCoupon {
   active: boolean
   fired_at: string | null
   created_at: string
+  extra_coupons: CrmCampanhaExtraCoupon[]
 }
 
 export interface CouponGrant {

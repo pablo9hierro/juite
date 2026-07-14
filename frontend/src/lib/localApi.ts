@@ -1054,11 +1054,23 @@ async function deleteSegment(id: string): Promise<void> {
 
 // ---------- campanhas (segmento + cupom exclusivo) ----------
 
+function campanhaExtraCoupons(db: LocalDb, campanhaId: string): import('./types').CrmCampanhaExtraCoupon[] {
+  return (db.campanhaExtraCoupons ?? [])
+    .filter((ec) => ec.campanha_id === campanhaId)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map((ec) => {
+      const coupon = (db.coupons ?? []).find((c) => c.id === ec.coupon_id)
+      return coupon ? { id: ec.id, coupon: withGrantCount(db, coupon) } : null
+    })
+    .filter((x): x is import('./types').CrmCampanhaExtraCoupon => !!x)
+}
+
 async function adminListCampanhaCoupons(segmentId: string): Promise<import('./types').CrmCampanhaCoupon[]> {
   const db = loadDb()
   return (db.campanhaCoupons ?? [])
     .filter((c) => c.segment_id === segmentId)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .map((c) => ({ ...c, extra_coupons: campanhaExtraCoupons(db, c.id) }))
 }
 
 async function createCampanhaCoupon(payload: {
@@ -1124,7 +1136,7 @@ async function createCampanhaCoupon(payload: {
   }
   db.campanhaCoupons.push(row)
   saveDb(db)
-  return row
+  return { ...row, extra_coupons: [] }
 }
 
 async function fireCampanhaEvent(id: string, customerWhatsapps: string[]): Promise<{ newly_granted: string[] }> {
@@ -1134,13 +1146,16 @@ async function fireCampanhaEvent(id: string, customerWhatsapps: string[]): Promi
   if (row.orientation !== 'evento') throw new ApiError(400, 'only orientation=evento campanhas can be re-fired')
   if (!row.active) throw new ApiError(400, 'this campanha is paused')
   db.couponGrants = db.couponGrants ?? []
+  const couponIds = [row.coupon_id, ...campanhaExtraCoupons(db, row.id).map((ec) => ec.coupon.id)]
   const newlyGranted: string[] = []
-  for (const whatsapp of customerWhatsapps) {
-    if (!whatsapp?.trim()) continue
-    const exists = db.couponGrants.some((g) => g.coupon_id === row.coupon_id && g.customer_whatsapp === whatsapp)
-    if (!exists) {
-      db.couponGrants.push({ id: uid(), coupon_id: row.coupon_id, customer_whatsapp: whatsapp, granted_uses: 1, used_count: 0, created_at: nowIso() })
-      newlyGranted.push(whatsapp)
+  for (const couponId of couponIds) {
+    for (const whatsapp of customerWhatsapps) {
+      if (!whatsapp?.trim()) continue
+      const exists = db.couponGrants.some((g) => g.coupon_id === couponId && g.customer_whatsapp === whatsapp)
+      if (!exists) {
+        db.couponGrants.push({ id: uid(), coupon_id: couponId, customer_whatsapp: whatsapp, granted_uses: row.uses_per_customer, used_count: 0, created_at: nowIso() })
+        if (couponId === row.coupon_id) newlyGranted.push(whatsapp)
+      }
     }
   }
   if (newlyGranted.length > 0) row.fired_at = nowIso()
@@ -1163,10 +1178,12 @@ async function toggleCampanhaCoupon(id: string, active: boolean): Promise<import
   const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
   if (!row) throw new ApiError(404, 'campanha coupon not found')
   row.active = active
-  const coupon = (db.coupons ?? []).find((c) => c.id === row.coupon_id)
-  if (coupon) coupon.active = active
+  const extraCouponIds = (db.campanhaExtraCoupons ?? []).filter((ec) => ec.campanha_id === id).map((ec) => ec.coupon_id)
+  for (const coupon of db.coupons ?? []) {
+    if (coupon.id === row.coupon_id || extraCouponIds.includes(coupon.id)) coupon.active = active
+  }
   saveDb(db)
-  return row
+  return { ...row, extra_coupons: campanhaExtraCoupons(db, row.id) }
 }
 
 async function updateCampanhaCoupon(
@@ -1213,7 +1230,63 @@ async function updateCampanhaCoupon(
   row.uses_per_customer = payload.uses_per_customer ?? 1
   if (row.orientation === 'evento' && payload.trigger_criteria) row.trigger_criteria = payload.trigger_criteria
   saveDb(db)
-  return row
+  return { ...row, extra_coupons: campanhaExtraCoupons(db, row.id) }
+}
+
+async function createCampanhaExtraCoupon(
+  campanhaId: string,
+  payload: {
+    code: string
+    uses_per_customer?: number
+    combinable_with_public?: boolean
+    allow_promotion_checkout?: boolean
+    expires_at?: string
+    max_uses?: number
+    discount_type?: 'percent' | 'fixed'
+    discount_value?: number
+    shipping_discount_type?: 'percent' | 'fixed'
+    shipping_discount_value?: number
+    product_discounts?: import('./types').ProductDiscount[]
+  }
+): Promise<Coupon> {
+  const campanhaCheck = (loadDb().campanhaCoupons ?? []).find((c) => c.id === campanhaId)
+  if (!campanhaCheck) throw new ApiError(404, 'campanha not found')
+  const coupon = await createTargetedCoupon({ ...payload, customer_whatsapps: [] })
+  // createTargetedCoupon já salvou o cupom novo — recarrega pra não
+  // sobrescrever esse save com um snapshot antigo do db.
+  const db = loadDb()
+  const campanha = (db.campanhaCoupons ?? []).find((c) => c.id === campanhaId)!
+  if (!campanha.active) {
+    const savedCoupon = db.coupons.find((c) => c.id === coupon.id)
+    if (savedCoupon) savedCoupon.active = false
+    coupon.active = false
+  }
+  db.campanhaExtraCoupons = db.campanhaExtraCoupons ?? []
+  db.campanhaExtraCoupons.push({ id: uid(), campanha_id: campanhaId, coupon_id: coupon.id, created_at: nowIso() })
+  // A campanha já disparou antes (tem concessão do cupom principal)? Esse
+  // cupom novo entra pra mesma turma na hora.
+  db.couponGrants = db.couponGrants ?? []
+  const existingGrants = db.couponGrants.filter((g) => g.coupon_id === campanha.coupon_id)
+  for (const g of existingGrants) {
+    db.couponGrants.push({
+      id: uid(),
+      coupon_id: coupon.id,
+      customer_whatsapp: g.customer_whatsapp,
+      granted_uses: payload.uses_per_customer ?? 1,
+      used_count: 0,
+      created_at: nowIso(),
+    })
+  }
+  saveDb(db)
+  return withGrantCount(db, coupon)
+}
+
+async function deleteCampanhaExtraCoupon(id: string): Promise<void> {
+  const db = loadDb()
+  const idx = (db.campanhaExtraCoupons ?? []).findIndex((ec) => ec.id === id)
+  if (idx === -1) throw new ApiError(404, 'extra coupon not found')
+  db.campanhaExtraCoupons.splice(idx, 1)
+  saveDb(db)
 }
 
 // ---------- campanhas (admin) ----------
@@ -1909,6 +1982,8 @@ export const localApi = {
       delete: deleteCampanhaCoupon,
       toggleActive: toggleCampanhaCoupon,
       update: updateCampanhaCoupon,
+      createExtra: createCampanhaExtraCoupon,
+      deleteExtra: deleteCampanhaExtraCoupon,
     },
     whatsapp: {
       status: async () => ({ instance: { state: 'close' } }),

@@ -14,6 +14,7 @@ import type {
   CouponKind,
   CouponGrant,
   CrmCampanhaCoupon,
+  CrmCampanhaExtraCoupon,
   CrmCustomer,
   CrmFilterCriteria,
   CrmSegment,
@@ -417,6 +418,15 @@ export default function AdminCrm() {
   const [campanhaEditForm, setCampanhaEditForm] = useState<CampanhaForm>(EMPTY_CAMPANHA_FORM)
   const [savingCampanhaEdit, setSavingCampanhaEdit] = useState(false)
   const [campanhaEditError, setCampanhaEditError] = useState<string | null>(null)
+
+  // Cupom extra — mais um cupom entregue junto com o principal da mesma
+  // campanha (reaproveita o shape de CampanhaForm, ignorando os campos
+  // que não fazem sentido aqui: segmentId/orientation/triggerCriteria/
+  // messageTemplate são da campanha, não do cupom extra).
+  const [extraCouponCampanha, setExtraCouponCampanha] = useState<CrmCampanhaCoupon | null>(null)
+  const [extraCouponForm, setExtraCouponForm] = useState<CampanhaForm>(EMPTY_CAMPANHA_FORM)
+  const [savingExtraCoupon, setSavingExtraCoupon] = useState(false)
+  const [extraCouponError, setExtraCouponError] = useState<string | null>(null)
 
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [couponsLoading, setCouponsLoading] = useState(true)
@@ -901,7 +911,12 @@ export default function AdminCrm() {
       const matching = applyFilters(customers, row.trigger_criteria as unknown as FilterState, products).map((c) => c.whatsapp)
       const result = await api.admin.campanhaCoupons.fireEvent(row.id, matching)
       if (result.newly_granted.length > 0) {
-        api.admin.whatsapp.notifyCouponGrant(row.coupon_id, row.message_template).catch(() => {})
+        // Extras são concedidos junto com o principal na mesma chamada
+        // (mesmo critério de "novo"), então avisa pra todos os cupons da
+        // campanha, cada um com seu próprio código na mensagem.
+        for (const couponId of [row.coupon_id, ...row.extra_coupons.map((ec) => ec.coupon.id)]) {
+          api.admin.whatsapp.notifyCouponGrant(couponId, row.message_template).catch(() => {})
+        }
       }
       loadCampanhaCoupons(row.segment_id)
       const grants = await api.admin.coupons.listGrants(row.coupon_id)
@@ -986,6 +1001,54 @@ export default function AdminCrm() {
       setSavingCampanhaEdit(false)
     }
   }
+
+  const openNewCampanhaExtraCoupon = (cc: CrmCampanhaCoupon) => {
+    setExtraCouponError(null)
+    setExtraCouponForm(EMPTY_CAMPANHA_FORM)
+    setExtraCouponCampanha(cc)
+  }
+
+  const saveExtraCoupon = async () => {
+    if (!extraCouponCampanha) return
+    setExtraCouponError(null)
+    setSavingExtraCoupon(true)
+    try {
+      const created = await api.admin.campanhaCoupons.createExtra(extraCouponCampanha.id, {
+        code: extraCouponForm.code,
+        uses_per_customer: Number(extraCouponForm.uses_per_customer) || 1,
+        combinable_with_public: extraCouponForm.combinable_with_public,
+        allow_promotion_checkout: extraCouponForm.allow_promotion_checkout,
+        expires_at: extraCouponForm.expires_at || undefined,
+        max_uses: extraCouponForm.max_uses ? Number(extraCouponForm.max_uses) : undefined,
+        discount_type: extraCouponForm.productMode === 'flat' ? extraCouponForm.discount_type : undefined,
+        discount_value: extraCouponForm.productMode === 'flat' ? Number(extraCouponForm.discount_value) : undefined,
+        shipping_discount_type: extraCouponForm.shippingEnabled ? extraCouponForm.shipping_discount_type : undefined,
+        shipping_discount_value: extraCouponForm.shippingEnabled ? Number(extraCouponForm.shipping_discount_value) : undefined,
+        product_discounts: extraCouponForm.productMode === 'produto' ? extraCouponForm.productDiscounts : undefined,
+      })
+      // Campanha já disparou pra alguém antes (segmento imediato ou evento
+      // já concedido)? Esse cupom novo é concedido pra mesma turma na
+      // hora (regra do backend) — então também avisa por WhatsApp agora.
+      if (extraCouponCampanha.fired_at) {
+        api.admin.whatsapp.notifyCouponGrant(created.id, extraCouponCampanha.message_template).catch(() => {})
+      }
+      const segmentId = extraCouponCampanha.segment_id
+      setExtraCouponCampanha(null)
+      loadCampanhaCoupons(segmentId)
+      loadCoupons()
+    } catch (err) {
+      setExtraCouponError(err instanceof ApiError ? err.message : 'Não foi possível criar o cupom.')
+    } finally {
+      setSavingExtraCoupon(false)
+    }
+  }
+
+  const removeCampanhaExtraCoupon = (ec: CrmCampanhaExtraCoupon, cc: CrmCampanhaCoupon) =>
+    askConfirm('Remover este cupom da campanha?', async () => {
+      await api.admin.campanhaCoupons.deleteExtra(ec.id)
+      loadCampanhaCoupons(cc.segment_id)
+      loadCoupons()
+    })
 
   const clearFilters = () => {
     resetSegmentForm()
@@ -1707,6 +1770,39 @@ export default function AdminCrm() {
                             </>
                           )}
 
+                          {cc.extra_coupons.map((ec) => (
+                            <div key={ec.id} className="flex items-center gap-2">
+                              <div className="w-5 border-t-2 border-dashed border-purple-400/40 flex-shrink-0" />
+                              <div className="flex-shrink-0 w-40 rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch">
+                                <div className="min-w-0 flex-1 p-2.5">
+                                  <p className="font-mono text-xs font-bold text-white truncate">{ec.coupon.code}</p>
+                                  <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
+                                    {COUPON_KIND_LABEL[ec.coupon.kind]}
+                                  </span>
+                                </div>
+                                <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
+                                <div className="flex-shrink-0 p-2.5 flex flex-col items-center justify-center gap-1">
+                                  <span className="text-xs font-black text-purple-300 text-center">
+                                    {discountLabel(ec.coupon.discount_type, ec.coupon.discount_value) ??
+                                      discountLabel(ec.coupon.shipping_discount_type, ec.coupon.shipping_discount_value) ??
+                                      `${ec.coupon.product_discounts?.length ?? 0} prod.`}
+                                  </span>
+                                  <button type="button" onClick={() => removeCampanhaExtraCoupon(ec, cc)} className="text-son-silver-dim hover:text-son-pink">
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+
+                          <button
+                            type="button"
+                            onClick={() => openNewCampanhaExtraCoupon(cc)}
+                            className="flex items-center gap-1 px-2.5 py-2 rounded-xl border border-dashed border-son-gold/40 text-son-gold text-[10px] font-semibold hover:bg-son-gold/10 flex-shrink-0"
+                          >
+                            <Plus className="w-3 h-3" /> Novo Cupom
+                          </button>
+
                           <ToggleSwitch checked={!stale && cc.active} onClick={() => (stale ? setStaleDialogCampanha(cc) : toggleCampanhaActive(cc))} />
                         </div>
                         )
@@ -1990,6 +2086,180 @@ export default function AdminCrm() {
                 <button onClick={saveCampanhaEdit} disabled={savingCampanhaEdit || !campanhaEditMessageValid} className="btn-primary w-full mt-2">
                   {savingCampanhaEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Salvar alterações
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {extraCouponCampanha && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="glass rounded-2xl p-6 max-w-lg w-full my-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-white flex items-center gap-2">
+                  <Gift className="w-4 h-4 text-purple-300" /> Novo cupom da campanha
+                </h3>
+                <button type="button" onClick={() => setExtraCouponCampanha(null)} className="text-son-silver-dim hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-xs text-son-silver-dim mb-3">
+                Entregue junto com o cupom principal desta campanha — mesma mensagem, mesmo gatilho, desconto e código próprios.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="label">Código</label>
+                  <input
+                    className="input-field font-mono uppercase"
+                    value={extraCouponForm.code}
+                    onChange={(e) => setExtraCouponForm({ ...extraCouponForm, code: e.target.value })}
+                    placeholder="SUNSET16"
+                  />
+                </div>
+                <div>
+                  <label className="label">Desconto no produto</label>
+                  <div className="grid grid-cols-2 gap-1.5 mb-2">
+                    {(
+                      [
+                        { value: 'flat', label: 'Valor total' },
+                        { value: 'produto', label: 'Produto/Categoria' },
+                      ] as const
+                    ).map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setExtraCouponForm({ ...extraCouponForm, productMode: value })}
+                        className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
+                          extraCouponForm.productMode === value
+                            ? 'bg-purple-500 text-white border-transparent'
+                            : 'bg-son-surface border-white/10 text-son-silver'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {extraCouponForm.productMode === 'flat' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        className="input-field"
+                        value={extraCouponForm.discount_type}
+                        onChange={(e) => setExtraCouponForm({ ...extraCouponForm, discount_type: e.target.value as DiscountType })}
+                      >
+                        <option value="percent">Percentual</option>
+                        <option value="fixed">Valor fixo (R$)</option>
+                      </select>
+                      <input
+                        className="input-field"
+                        type="number"
+                        min="0"
+                        placeholder="Valor"
+                        value={extraCouponForm.discount_value}
+                        onChange={(e) => setExtraCouponForm({ ...extraCouponForm, discount_value: e.target.value })}
+                      />
+                    </div>
+                  )}
+                  {extraCouponForm.productMode === 'produto' && (
+                    <ProductDiscountList
+                      products={products}
+                      categories={categories}
+                      discounts={extraCouponForm.productDiscounts}
+                      onChange={(productDiscounts) => setExtraCouponForm({ ...extraCouponForm, productDiscounts })}
+                    />
+                  )}
+                </div>
+                <label className="flex items-center gap-2 text-sm text-son-silver">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-purple-400"
+                    checked={extraCouponForm.shippingEnabled}
+                    onChange={(e) => setExtraCouponForm({ ...extraCouponForm, shippingEnabled: e.target.checked })}
+                  />
+                  Também dar desconto no frete
+                </label>
+                {extraCouponForm.shippingEnabled && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      className="input-field"
+                      value={extraCouponForm.shipping_discount_type}
+                      onChange={(e) => setExtraCouponForm({ ...extraCouponForm, shipping_discount_type: e.target.value as DiscountType })}
+                    >
+                      <option value="percent">Percentual</option>
+                      <option value="fixed">Valor fixo (R$)</option>
+                    </select>
+                    <input
+                      className="input-field"
+                      type="number"
+                      min="0"
+                      placeholder="Valor"
+                      value={extraCouponForm.shipping_discount_value}
+                      onChange={(e) => setExtraCouponForm({ ...extraCouponForm, shipping_discount_value: e.target.value })}
+                    />
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Usos por cliente</label>
+                    <input
+                      className="input-field"
+                      type="number"
+                      min="1"
+                      value={extraCouponForm.uses_per_customer}
+                      onChange={(e) => setExtraCouponForm({ ...extraCouponForm, uses_per_customer: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Limite global (opcional)</label>
+                    <input
+                      className="input-field"
+                      type="number"
+                      min="1"
+                      value={extraCouponForm.max_uses}
+                      onChange={(e) => setExtraCouponForm({ ...extraCouponForm, max_uses: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-son-silver">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-purple-400"
+                    checked={extraCouponForm.combinable_with_public}
+                    onChange={(e) => setExtraCouponForm({ ...extraCouponForm, combinable_with_public: e.target.checked })}
+                  />
+                  Pode ser combinado com um cupom avulso no checkout de catálogo
+                </label>
+                <label className="flex items-center gap-2 text-sm text-son-silver">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-purple-400"
+                    checked={extraCouponForm.allow_promotion_checkout}
+                    onChange={(e) => setExtraCouponForm({ ...extraCouponForm, allow_promotion_checkout: e.target.checked })}
+                  />
+                  Pode ser usado também num checkout de promoção
+                </label>
+                <div>
+                  <label className="label">Validade (opcional)</label>
+                  <ExpiryInput value={extraCouponForm.expires_at} onChange={(expires_at) => setExtraCouponForm({ ...extraCouponForm, expires_at })} />
+                </div>
+                {extraCouponError && <p className="error-msg">{extraCouponError}</p>}
+                <button onClick={saveExtraCoupon} disabled={savingExtraCoupon} className="btn-primary w-full mt-2">
+                  {savingExtraCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Criar cupom
                 </button>
               </div>
             </motion.div>
