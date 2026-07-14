@@ -332,6 +332,12 @@ export default function AdminCrm() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [query, setQuery] = useState('')
+
+  // Diálogo de confirmação (substitui window.confirm nativo) — mesmo
+  // padrão de popup usado no resto da página.
+  const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null)
+  const askConfirm = (message: string, onConfirm: () => void) => setConfirmDialog({ message, onConfirm })
+
   const [filterOpen, setFilterOpen] = useState(false)
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
   const [appliedFilter, setAppliedFilter] = useState<FilterState | null>(null)
@@ -530,17 +536,17 @@ export default function AdminCrm() {
       setSavingSegment(false)
     }
   }
-  const removeSegment = async (id: string) => {
-    if (!confirm('Remover esta segmentação?')) return
-    await api.admin.segments.delete(id)
-    if (editingSegmentId === id) {
-      resetSegmentForm()
-      setAppliedFilter(null)
-      setFilter(EMPTY_FILTER)
-      setFilterOpen(false)
-    }
-    loadSegments()
-  }
+  const removeSegment = (id: string) =>
+    askConfirm('Remover esta segmentação?', async () => {
+      await api.admin.segments.delete(id)
+      if (editingSegmentId === id) {
+        resetSegmentForm()
+        setAppliedFilter(null)
+        setFilter(EMPTY_FILTER)
+        setFilterOpen(false)
+      }
+      loadSegments()
+    })
 
   // 'segmento': usa o critério do próprio segmento (appliedFilter/filter).
   // 'evento': captura o critério ATUAL do painel de filtro como o "critério
@@ -629,11 +635,11 @@ export default function AdminCrm() {
     loadCampanhaCoupons(row.segment_id)
   }
 
-  const removeCampanha = async (row: CrmCampanhaCoupon) => {
-    if (!confirm('Remover esta campanha?')) return
-    await api.admin.campanhaCoupons.delete(row.id)
-    loadCampanhaCoupons(row.segment_id)
-  }
+  const removeCampanha = (row: CrmCampanhaCoupon) =>
+    askConfirm('Remover esta campanha?', async () => {
+      await api.admin.campanhaCoupons.delete(row.id)
+      loadCampanhaCoupons(row.segment_id)
+    })
 
   const toggleCampanhaActive = async (row: CrmCampanhaCoupon) => {
     try {
@@ -769,11 +775,11 @@ export default function AdminCrm() {
     loadCoupons()
   }
 
-  const removeCoupon = async (id: string) => {
-    if (!confirm('Remover este cupom?')) return
-    await api.admin.coupons.delete(id)
-    loadCoupons()
-  }
+  const removeCoupon = (id: string) =>
+    askConfirm('Remover este cupom?', async () => {
+      await api.admin.coupons.delete(id)
+      loadCoupons()
+    })
 
   const closeCouponForm = () => {
     setShowCouponForm(false)
@@ -943,8 +949,30 @@ export default function AdminCrm() {
         </button>
       </div>
 
-      {filterOpen && (
-        <Card className="p-5 mb-4 space-y-3">
+      <AnimatePresence>
+        {filterOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
+            onClick={() => setFilterOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="glass rounded-2xl p-5 max-w-lg w-full my-8 space-y-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-white text-lg">{editingSegmentId ? 'Editar segmentação' : 'Nova segmentação'}</h3>
+                <button type="button" onClick={() => setFilterOpen(false)} className="text-son-silver-dim hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
           <div className="border border-white/10 rounded-xl p-3">
             <label className="label">Volume de Compras no Período</label>
             <div className="flex items-center gap-2">
@@ -1227,8 +1255,10 @@ export default function AdminCrm() {
               )}
             </div>
           )}
-        </Card>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs text-son-silver-dim">
@@ -1841,6 +1871,45 @@ export default function AdminCrm() {
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {confirmDialog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+            onClick={() => setConfirmDialog(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="glass rounded-2xl p-6 max-w-sm w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-white font-semibold mb-5">{confirmDialog.message}</p>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setConfirmDialog(null)} className="btn-secondary flex-1">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    confirmDialog.onConfirm()
+                    setConfirmDialog(null)
+                  }}
+                  className="flex-1 rounded-2xl bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 transition-all"
+                >
+                  Remover
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
