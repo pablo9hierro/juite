@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Package, Search, X } from 'lucide-react'
-import type { DiscountType, Product, ProductDiscount } from '../../lib/types'
+import { Package, Search, Tag, X } from 'lucide-react'
+import type { Category, DiscountType, Product, ProductDiscount } from '../../lib/types'
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
@@ -16,14 +16,21 @@ function equivalentLabel(price: number, type: DiscountType, value: number) {
 
 export default function ProductDiscountList({
   products,
+  categories,
   discounts,
   onChange,
 }: {
   products: Product[]
+  // Opcional — quando passado, mostra uma busca separada pra adicionar
+  // uma categoria inteira de uma vez (expande em uma linha por produto,
+  // cada uma editável depois, já que ProductDiscount não tem noção de
+  // categoria — é só um atalho de cadastro em lote).
+  categories?: Category[]
   discounts: ProductDiscount[]
   onChange: (discounts: ProductDiscount[]) => void
 }) {
   const [query, setQuery] = useState('')
+  const [categoryQuery, setCategoryQuery] = useState('')
   const [infoProduct, setInfoProduct] = useState<Product | null>(null)
 
   const productById = new Map(products.map((p) => [p.id, p]))
@@ -38,10 +45,21 @@ export default function ProductDiscountList({
           )
           .slice(0, 8)
       : []
+  const categoryMatches =
+    categories && categoryQuery.trim().length > 0
+      ? categories.filter((c) => c.name.toLowerCase().includes(categoryQuery.trim().toLowerCase())).slice(0, 8)
+      : []
 
   const addProduct = (id: string) => {
     onChange([...discounts, { product_id: id, discount_type: 'percent', discount_value: 0 }])
     setQuery('')
+  }
+  const addCategory = (categoryId: string) => {
+    const newOnes = products
+      .filter((p) => p.category_id === categoryId && !discounts.some((d) => d.product_id === p.id))
+      .map((p) => ({ product_id: p.id, discount_type: 'percent' as DiscountType, discount_value: 0 }))
+    if (newOnes.length > 0) onChange([...discounts, ...newOnes])
+    setCategoryQuery('')
   }
   const removeProduct = (id: string) => onChange(discounts.filter((d) => d.product_id !== id))
   const updateDiscount = (id: string, patch: Partial<ProductDiscount>) =>
@@ -101,7 +119,7 @@ export default function ProductDiscountList({
         <Search className="w-4 h-4 text-son-silver-dim absolute left-3 top-1/2 -translate-y-1/2" />
         <input
           className="input-field pl-9"
-          placeholder="Buscar por nome ou código de barras..."
+          placeholder="Buscar produto por nome ou código de barras..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -121,6 +139,35 @@ export default function ProductDiscountList({
           </div>
         )}
       </div>
+
+      {categories && (
+        <div className="relative mt-2">
+          <Tag className="w-4 h-4 text-son-silver-dim absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            className="input-field pl-9"
+            placeholder="...ou adicionar uma categoria inteira"
+            value={categoryQuery}
+            onChange={(e) => setCategoryQuery(e.target.value)}
+          />
+          {categoryMatches.length > 0 && (
+            <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-son-surface border border-white/10 rounded-xl overflow-hidden shadow-lg max-h-48 overflow-y-auto">
+              {categoryMatches.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => addCategory(c.id)}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-son-silver hover:bg-son-surface-light text-left"
+                >
+                  <span className="truncate">{c.name}</span>
+                  <span className="text-xs text-son-silver-dim flex-shrink-0">
+                    {products.filter((p) => p.category_id === c.id).length} produto(s)
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {infoProduct && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => setInfoProduct(null)}>

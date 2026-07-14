@@ -445,6 +445,11 @@ export default function AdminCrm() {
     () => coupons.filter((c) => (c.grant_count ?? 0) === 0 && !campanhaCouponIds.has(c.id)),
     [coupons, campanhaCouponIds]
   )
+  const editingCampanhaRow = editingCampanhaId
+    ? Object.values(campanhaCouponsBySegment)
+        .flat()
+        .find((cc) => cc.id === editingCampanhaId)
+    : null
 
   const filteredBase = appliedFilter ? applyFilters(customers, appliedFilter, products) : customers
   const searched = query.trim()
@@ -631,8 +636,12 @@ export default function AdminCrm() {
   }
 
   const toggleCampanhaActive = async (row: CrmCampanhaCoupon) => {
-    await api.admin.campanhaCoupons.toggleActive(row.id, !row.active)
-    loadCampanhaCoupons(row.segment_id)
+    try {
+      await api.admin.campanhaCoupons.toggleActive(row.id, !row.active)
+      loadCampanhaCoupons(row.segment_id)
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Não foi possível atualizar o status da campanha.')
+    }
   }
 
   // Não dá pra editar orientation/trigger_criteria/código de uma campanha
@@ -1308,247 +1317,77 @@ export default function AdminCrm() {
                   <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
                     {campanhas.map((cc) => {
                       const cCoupon = coupons.find((c) => c.id === cc.coupon_id)
-                      const isEditing = editingCampanhaId === cc.id
                       return (
-                        <motion.div layout key={cc.id} transition={{ layout: { duration: 0.3, ease: 'easeInOut' } }}>
-                          <AnimatePresence mode="wait" initial={false}>
-                            {isEditing ? (
-                              <motion.div
-                                key="edit"
-                                initial={{ opacity: 0, scale: 0.92 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.92 }}
-                                transition={{ duration: 0.25, ease: 'easeOut' }}
-                                className="p-4 space-y-3 rounded-2xl border-2 border-purple-400/50 bg-son-surface"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                                    {cc.orientation === 'evento' ? (
-                                      <Zap className="w-4 h-4 text-amber-400" />
-                                    ) : (
-                                      <Gift className="w-4 h-4 text-purple-300" />
-                                    )}
-                                    Editar campanha
-                                  </h4>
-                                  <button type="button" onClick={() => setEditingCampanhaId(null)} className="text-son-silver-dim hover:text-white">
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-                                <div>
-                                  <label className="label">Mensagem pro cliente (WhatsApp)</label>
-                                  <textarea
-                                    className="input-field"
-                                    rows={4}
-                                    value={campanhaEditForm.messageTemplate}
-                                    onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, messageTemplate: e.target.value })}
-                                  />
-                                  <p className="text-[10px] text-son-silver-dim mt-1">
-                                    Precisa citar <code>/nome</code> e <code>/cupom</code>.
-                                  </p>
-                                </div>
-                                <div>
-                                  <label className="label">Desconto no produto</label>
-                                  <div className="grid grid-cols-3 gap-1.5 mb-2">
-                                    {(
-                                      [
-                                        { value: 'nenhum', label: 'Nenhum' },
-                                        { value: 'flat', label: 'Valor total' },
-                                        { value: 'produto', label: 'Por produto' },
-                                      ] as const
-                                    ).map(({ value, label }) => (
-                                      <button
-                                        key={value}
-                                        type="button"
-                                        onClick={() => setCampanhaEditForm({ ...campanhaEditForm, productMode: value })}
-                                        className={`py-2 rounded-xl border text-xs font-medium transition-all ${
-                                          campanhaEditForm.productMode === value
-                                            ? 'bg-purple-500 text-white border-transparent'
-                                            : 'bg-son-surface border-white/10 text-son-silver'
-                                        }`}
-                                      >
-                                        {label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                  {campanhaEditForm.productMode === 'flat' && (
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <select
-                                        className="input-field"
-                                        value={campanhaEditForm.discount_type}
-                                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, discount_type: e.target.value as DiscountType })}
-                                      >
-                                        <option value="percent">Percentual</option>
-                                        <option value="fixed">Valor fixo (R$)</option>
-                                      </select>
-                                      <input
-                                        className="input-field"
-                                        type="number"
-                                        min="0"
-                                        placeholder="Valor"
-                                        value={campanhaEditForm.discount_value}
-                                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, discount_value: e.target.value })}
-                                      />
-                                    </div>
-                                  )}
-                                  {campanhaEditForm.productMode === 'produto' && (
-                                    <ProductDiscountList
-                                      products={products}
-                                      discounts={campanhaEditForm.productDiscounts}
-                                      onChange={(productDiscounts) => setCampanhaEditForm({ ...campanhaEditForm, productDiscounts })}
-                                    />
-                                  )}
-                                </div>
-                                <label className="flex items-center gap-2 text-sm text-son-silver">
-                                  <input
-                                    type="checkbox"
-                                    className="w-4 h-4 accent-purple-400"
-                                    checked={campanhaEditForm.shippingEnabled}
-                                    onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, shippingEnabled: e.target.checked })}
-                                  />
-                                  Também dar desconto no frete
-                                </label>
-                                {campanhaEditForm.shippingEnabled && (
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <select
-                                      className="input-field"
-                                      value={campanhaEditForm.shipping_discount_type}
-                                      onChange={(e) =>
-                                        setCampanhaEditForm({ ...campanhaEditForm, shipping_discount_type: e.target.value as DiscountType })
-                                      }
-                                    >
-                                      <option value="percent">Percentual</option>
-                                      <option value="fixed">Valor fixo (R$)</option>
-                                    </select>
-                                    <input
-                                      className="input-field"
-                                      type="number"
-                                      min="0"
-                                      placeholder="Valor"
-                                      value={campanhaEditForm.shipping_discount_value}
-                                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, shipping_discount_value: e.target.value })}
-                                    />
-                                  </div>
-                                )}
-                                <div className="grid grid-cols-2 gap-3">
-                                  <div>
-                                    <label className="label">Usos por cliente</label>
-                                    <input
-                                      className="input-field"
-                                      type="number"
-                                      min="1"
-                                      value={campanhaEditForm.uses_per_customer}
-                                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, uses_per_customer: e.target.value })}
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="label">Limite global (opcional)</label>
-                                    <input
-                                      className="input-field"
-                                      type="number"
-                                      min="1"
-                                      value={campanhaEditForm.max_uses}
-                                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, max_uses: e.target.value })}
-                                    />
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className="label">Validade (opcional)</label>
-                                  <ExpiryInput
-                                    value={campanhaEditForm.expires_at}
-                                    onChange={(expires_at) => setCampanhaEditForm({ ...campanhaEditForm, expires_at })}
-                                  />
-                                </div>
-                                {campanhaEditError && <p className="error-msg">{campanhaEditError}</p>}
+                        <div key={cc.id} className="flex items-center gap-2 flex-wrap">
+                          {/* subcard: orientada a segmento/evento */}
+                          <div className="flex-shrink-0 w-56 rounded-xl border border-purple-400/30 bg-purple-500/5 px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              {cc.orientation === 'evento' ? (
+                                <Zap className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                              ) : (
+                                <Gift className="w-4 h-4 text-purple-300 flex-shrink-0" />
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-white">
+                                  {cc.orientation === 'evento' ? 'Orientada a evento' : 'Orientada a segmento'}
+                                </p>
+                                <p className="text-[10px] text-son-silver-dim">
+                                  {cc.orientation === 'evento'
+                                    ? cc.fired_at
+                                      ? `Disparado em ${formatDate(cc.fired_at)}`
+                                      : 'Aguardando evento'
+                                    : `Disparada em ${formatDate(cc.fired_at ?? cc.created_at)}`}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1.5">
+                              {cc.orientation === 'evento' && (
                                 <button
-                                  onClick={saveCampanhaEdit}
-                                  disabled={savingCampanhaEdit || !campanhaEditMessageValid}
-                                  className="btn-primary w-full"
+                                  type="button"
+                                  onClick={() => fireCampanha(cc)}
+                                  className="text-[10px] font-semibold text-son-gold hover:text-white"
                                 >
-                                  {savingCampanhaEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                                  Salvar alterações
+                                  Verificar
                                 </button>
-                              </motion.div>
-                            ) : (
-                              <motion.div
-                                key="view"
-                                initial={{ opacity: 0, scale: 0.96 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.96 }}
-                                transition={{ duration: 0.2, ease: 'easeOut' }}
-                                className="flex items-center gap-2 flex-wrap"
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => openEditCampanha(cc)}
+                                className="text-[10px] font-semibold text-son-silver-dim hover:text-white"
                               >
-                                {/* subcard: orientada a segmento/evento */}
-                                <div className="flex-shrink-0 w-56 rounded-xl border border-purple-400/30 bg-purple-500/5 px-3 py-2">
-                                  <div className="flex items-center gap-2">
-                                    {cc.orientation === 'evento' ? (
-                                      <Zap className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                                    ) : (
-                                      <Gift className="w-4 h-4 text-purple-300 flex-shrink-0" />
-                                    )}
-                                    <div className="min-w-0">
-                                      <p className="text-xs font-semibold text-white">
-                                        {cc.orientation === 'evento' ? 'Orientada a evento' : 'Orientada a segmento'}
-                                      </p>
-                                      <p className="text-[10px] text-son-silver-dim">
-                                        {cc.orientation === 'evento'
-                                          ? cc.fired_at
-                                            ? `Disparado em ${formatDate(cc.fired_at)}`
-                                            : 'Aguardando evento'
-                                          : `Disparada em ${formatDate(cc.fired_at ?? cc.created_at)}`}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2 mt-1.5">
-                                    {cc.orientation === 'evento' && (
-                                      <button
-                                        type="button"
-                                        onClick={() => fireCampanha(cc)}
-                                        className="text-[10px] font-semibold text-son-gold hover:text-white"
-                                      >
-                                        Verificar
-                                      </button>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={() => openEditCampanha(cc)}
-                                      className="text-[10px] font-semibold text-son-silver-dim hover:text-white"
-                                    >
-                                      Editar
-                                    </button>
-                                    <button type="button" onClick={() => removeCampanha(cc)} className="text-son-silver-dim hover:text-son-pink">
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
+                                Editar
+                              </button>
+                              <button type="button" onClick={() => removeCampanha(cc)} className="text-son-silver-dim hover:text-son-pink">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {cCoupon && (
+                            <>
+                              <div className="w-5 border-t-2 border-dashed border-purple-400/40 flex-shrink-0" />
+                              {/* subcard: cupom exclusivo — mesmo desenho de bilhete do cupom avulso, só que pequeno e ligado */}
+                              <div className="flex-shrink-0 w-40 rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch">
+                                <div className="min-w-0 flex-1 p-2.5">
+                                  <p className="font-mono text-xs font-bold text-white truncate">{cCoupon.code}</p>
+                                  <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
+                                    {COUPON_KIND_LABEL[cCoupon.kind]}
+                                  </span>
                                 </div>
+                                <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
+                                <div className="flex-shrink-0 p-2.5 flex items-center justify-center">
+                                  <span className="text-xs font-black text-purple-300 text-center">
+                                    {discountLabel(cCoupon.discount_type, cCoupon.discount_value) ??
+                                      discountLabel(cCoupon.shipping_discount_type, cCoupon.shipping_discount_value) ??
+                                      `${cCoupon.product_discounts?.length ?? 0} prod.`}
+                                  </span>
+                                </div>
+                              </div>
+                            </>
+                          )}
 
-                                {cCoupon && (
-                                  <>
-                                    <div className="w-5 border-t-2 border-dashed border-purple-400/40 flex-shrink-0" />
-                                    {/* subcard: cupom exclusivo — mesmo desenho de bilhete do cupom avulso, só que pequeno e ligado */}
-                                    <div className="flex-shrink-0 w-40 rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch">
-                                      <div className="min-w-0 flex-1 p-2.5">
-                                        <p className="font-mono text-xs font-bold text-white truncate">{cCoupon.code}</p>
-                                        <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
-                                          {COUPON_KIND_LABEL[cCoupon.kind]}
-                                        </span>
-                                      </div>
-                                      <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
-                                      <div className="flex-shrink-0 p-2.5 flex items-center justify-center">
-                                        <span className="text-xs font-black text-purple-300 text-center">
-                                          {discountLabel(cCoupon.discount_type, cCoupon.discount_value) ??
-                                            discountLabel(cCoupon.shipping_discount_type, cCoupon.shipping_discount_value) ??
-                                            `${cCoupon.product_discounts?.length ?? 0} prod.`}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </>
-                                )}
-
-                                <ToggleSwitch checked={cc.active} onClick={() => toggleCampanhaActive(cc)} />
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </motion.div>
+                          <ToggleSwitch checked={cc.active} onClick={() => toggleCampanhaActive(cc)} />
+                        </div>
                       )
                     })}
                   </div>
@@ -1561,40 +1400,20 @@ export default function AdminCrm() {
 
       <h2 className="text-xl font-black mb-4">Cupons avulsos</h2>
 
-      <motion.div layout transition={{ layout: { duration: 0.3, ease: 'easeInOut' } }} className="max-w-md mx-auto mb-6">
-        <AnimatePresence mode="wait" initial={false}>
-          {showCouponForm && !editingCouponId ? (
-            <motion.div
-              key="form"
-              initial={{ opacity: 0, scale: 0.92 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.92 }}
-              transition={{ duration: 0.25, ease: 'easeOut' }}
-              className="rounded-2xl border-2 border-son-gold/40 bg-son-surface p-4 space-y-3"
-            >
-              {couponFormFields(false)}
-            </motion.div>
-          ) : (
-            <motion.button
-              key="button"
-              type="button"
-              initial={{ opacity: 0, scale: 0.92 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.92 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              onClick={() => {
-                setEditingCouponId(null)
-                setCouponForm(EMPTY_COUPON_FORM)
-                setCouponError(null)
-                setShowCouponForm(true)
-              }}
-              className="btn-primary w-full py-4 text-base rounded-2xl"
-            >
-              <Plus className="w-5 h-5" /> Novo cupom
-            </motion.button>
-          )}
-        </AnimatePresence>
-      </motion.div>
+      <div className="max-w-md mx-auto mb-6">
+        <button
+          type="button"
+          onClick={() => {
+            setEditingCouponId(null)
+            setCouponForm(EMPTY_COUPON_FORM)
+            setCouponError(null)
+            setShowCouponForm(true)
+          }}
+          className="btn-primary w-full py-4 text-base rounded-2xl"
+        >
+          <Plus className="w-5 h-5" /> Novo cupom
+        </button>
+      </div>
 
       {couponsLoading ? (
         <div className="flex justify-center py-10">
@@ -1607,75 +1426,233 @@ export default function AdminCrm() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {avulsoCoupons.map((c) => {
-            const isEditing = showCouponForm && editingCouponId === c.id
-            return (
-              <motion.div
-                layout
-                key={c.id}
-                transition={{ layout: { duration: 0.3, ease: 'easeInOut' } }}
-                className="rounded-2xl border border-blue-400/30 bg-blue-500/5 overflow-hidden"
-              >
-                <AnimatePresence mode="wait" initial={false}>
-                  {isEditing ? (
-                    <motion.div
-                      key="edit"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
-                      className="p-4 space-y-3"
-                    >
-                      {couponFormFields(true)}
-                    </motion.div>
-                  ) : (
-                    <motion.div key="view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-                      <div className="flex items-stretch">
-                        <div className="flex-1 min-w-0 p-3">
-                          <p className="font-mono font-bold text-white">{c.code}</p>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[10px]">
-                              {COUPON_KIND_LABEL[c.kind]}
-                            </span>
-                            {discountLabel(c.shipping_discount_type, c.shipping_discount_value) && (
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold">
-                                Frete: {discountLabel(c.shipping_discount_type, c.shipping_discount_value)}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-son-silver-dim mt-1">
-                            {c.max_uses ? `${c.used_count}/${c.max_uses} usos` : `${c.used_count} usos · sem limite`}
-                            {c.expires_at ? ` · até ${new Date(c.expires_at).toLocaleDateString('pt-BR')}` : ' · sem validade'}
-                          </p>
-                        </div>
-                        <div className="border-l-2 border-dashed border-blue-400/30 my-2" />
-                        <div className="flex-shrink-0 p-3 flex flex-col items-center justify-center min-w-[6.5rem]">
-                          <span className="text-sm font-black text-blue-300 text-center">
-                            {c.kind === 'produto'
-                              ? `${c.product_discounts?.length ?? 0} produto(s)`
-                              : discountLabel(c.discount_type, c.discount_value) ?? '—'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-blue-400/20">
-                        <div className="flex items-center gap-2">
-                          <button type="button" onClick={() => openEditCoupon(c)} className="text-[10px] font-semibold text-son-silver-dim hover:text-white">
-                            Editar
-                          </button>
-                          <button type="button" onClick={() => removeCoupon(c.id)} className="text-son-silver-dim hover:text-son-pink">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                        <ToggleSwitch checked={c.active} onClick={() => toggleCouponActive(c)} />
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            )
-          })}
+          {avulsoCoupons.map((c) => (
+            <div key={c.id} className="rounded-2xl border border-blue-400/30 bg-blue-500/5 overflow-hidden">
+              <div className="flex items-stretch">
+                <div className="flex-1 min-w-0 p-3">
+                  <p className="font-mono font-bold text-white">{c.code}</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[10px]">{COUPON_KIND_LABEL[c.kind]}</span>
+                    {discountLabel(c.shipping_discount_type, c.shipping_discount_value) && (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold">
+                        Frete: {discountLabel(c.shipping_discount_type, c.shipping_discount_value)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-son-silver-dim mt-1">
+                    {c.max_uses ? `${c.used_count}/${c.max_uses} usos` : `${c.used_count} usos · sem limite`}
+                    {c.expires_at ? ` · até ${new Date(c.expires_at).toLocaleDateString('pt-BR')}` : ' · sem validade'}
+                  </p>
+                </div>
+                <div className="border-l-2 border-dashed border-blue-400/30 my-2" />
+                <div className="flex-shrink-0 p-3 flex flex-col items-center justify-center min-w-[6.5rem]">
+                  <span className="text-sm font-black text-blue-300 text-center">
+                    {c.kind === 'produto' ? `${c.product_discounts?.length ?? 0} produto(s)` : discountLabel(c.discount_type, c.discount_value) ?? '—'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-blue-400/20">
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => openEditCoupon(c)} className="text-[10px] font-semibold text-son-silver-dim hover:text-white">
+                    Editar
+                  </button>
+                  <button type="button" onClick={() => removeCoupon(c.id)} className="text-son-silver-dim hover:text-son-pink">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <ToggleSwitch checked={c.active} onClick={() => toggleCouponActive(c)} />
+              </div>
+            </div>
+          ))}
         </div>
       )}
+
+      <AnimatePresence>
+        {showCouponForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
+            onClick={closeCouponForm}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="glass rounded-2xl p-6 max-w-lg w-full my-8 space-y-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {couponFormFields(!!editingCouponId)}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {editingCampanhaId && editingCampanhaRow && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
+            onClick={() => setEditingCampanhaId(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="glass rounded-2xl p-6 max-w-lg w-full my-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-white flex items-center gap-2">
+                  {editingCampanhaRow.orientation === 'evento' ? (
+                    <Zap className="w-4 h-4 text-amber-400" />
+                  ) : (
+                    <Gift className="w-4 h-4 text-purple-300" />
+                  )}
+                  Editar campanha
+                </h3>
+                <button type="button" onClick={() => setEditingCampanhaId(null)} className="text-son-silver-dim hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="label">Mensagem pro cliente (WhatsApp)</label>
+                  <textarea
+                    className="input-field"
+                    rows={4}
+                    value={campanhaEditForm.messageTemplate}
+                    onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, messageTemplate: e.target.value })}
+                  />
+                  <p className="text-xs text-son-silver-dim mt-1">
+                    Precisa citar <code>/nome</code> e <code>/cupom</code>.
+                  </p>
+                </div>
+                <div>
+                  <label className="label">Desconto no produto</label>
+                  <div className="grid grid-cols-3 gap-1.5 mb-2">
+                    {(
+                      [
+                        { value: 'nenhum', label: 'Nenhum' },
+                        { value: 'flat', label: 'Valor total' },
+                        { value: 'produto', label: 'Produto/Categoria' },
+                      ] as const
+                    ).map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setCampanhaEditForm({ ...campanhaEditForm, productMode: value })}
+                        className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
+                          campanhaEditForm.productMode === value
+                            ? 'bg-purple-500 text-white border-transparent'
+                            : 'bg-son-surface border-white/10 text-son-silver'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {campanhaEditForm.productMode === 'flat' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        className="input-field"
+                        value={campanhaEditForm.discount_type}
+                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, discount_type: e.target.value as DiscountType })}
+                      >
+                        <option value="percent">Percentual</option>
+                        <option value="fixed">Valor fixo (R$)</option>
+                      </select>
+                      <input
+                        className="input-field"
+                        type="number"
+                        min="0"
+                        placeholder="Valor"
+                        value={campanhaEditForm.discount_value}
+                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, discount_value: e.target.value })}
+                      />
+                    </div>
+                  )}
+                  {campanhaEditForm.productMode === 'produto' && (
+                    <ProductDiscountList
+                      products={products}
+                      categories={categories}
+                      discounts={campanhaEditForm.productDiscounts}
+                      onChange={(productDiscounts) => setCampanhaEditForm({ ...campanhaEditForm, productDiscounts })}
+                    />
+                  )}
+                </div>
+                <label className="flex items-center gap-2 text-sm text-son-silver">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-purple-400"
+                    checked={campanhaEditForm.shippingEnabled}
+                    onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, shippingEnabled: e.target.checked })}
+                  />
+                  Também dar desconto no frete
+                </label>
+                {campanhaEditForm.shippingEnabled && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      className="input-field"
+                      value={campanhaEditForm.shipping_discount_type}
+                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, shipping_discount_type: e.target.value as DiscountType })}
+                    >
+                      <option value="percent">Percentual</option>
+                      <option value="fixed">Valor fixo (R$)</option>
+                    </select>
+                    <input
+                      className="input-field"
+                      type="number"
+                      min="0"
+                      placeholder="Valor"
+                      value={campanhaEditForm.shipping_discount_value}
+                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, shipping_discount_value: e.target.value })}
+                    />
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Usos por cliente</label>
+                    <input
+                      className="input-field"
+                      type="number"
+                      min="1"
+                      value={campanhaEditForm.uses_per_customer}
+                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, uses_per_customer: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Limite global (opcional)</label>
+                    <input
+                      className="input-field"
+                      type="number"
+                      min="1"
+                      value={campanhaEditForm.max_uses}
+                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, max_uses: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Validade (opcional)</label>
+                  <ExpiryInput value={campanhaEditForm.expires_at} onChange={(expires_at) => setCampanhaEditForm({ ...campanhaEditForm, expires_at })} />
+                </div>
+                {campanhaEditError && <p className="error-msg">{campanhaEditError}</p>}
+                <button onClick={saveCampanhaEdit} disabled={savingCampanhaEdit || !campanhaEditMessageValid} className="btn-primary w-full mt-2">
+                  {savingCampanhaEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Salvar alterações
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {showCampanhaForm && (
         <div
@@ -1721,7 +1698,7 @@ export default function AdminCrm() {
                     [
                       { value: 'nenhum', label: 'Nenhum' },
                       { value: 'flat', label: 'Valor total' },
-                      { value: 'produto', label: 'Por produto' },
+                      { value: 'produto', label: 'Produto/Categoria' },
                     ] as const
                   ).map(({ value, label }) => (
                     <button
@@ -1761,6 +1738,7 @@ export default function AdminCrm() {
                 {campanhaForm.productMode === 'produto' && (
                   <ProductDiscountList
                     products={products}
+                    categories={categories}
                     discounts={campanhaForm.productDiscounts}
                     onChange={(productDiscounts) => setCampanhaForm({ ...campanhaForm, productDiscounts })}
                   />
