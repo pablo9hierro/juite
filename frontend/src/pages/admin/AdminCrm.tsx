@@ -456,6 +456,7 @@ export default function AdminCrm() {
         .flat()
         .find((cc) => cc.id === editingCampanhaId)
     : null
+  const campanhaFormSegment = segments.find((s) => s.id === campanhaForm.segmentId)
 
   const filteredBase = appliedFilter ? applyFilters(customers, appliedFilter, products) : customers
   const searched = query.trim()
@@ -548,23 +549,209 @@ export default function AdminCrm() {
       loadSegments()
     })
 
-  // 'segmento': usa o critério do próprio segmento (appliedFilter/filter).
-  // 'evento': captura o critério ATUAL do painel de filtro como o "critério
-  // futuro" (triggerCriteria) — precisa ser diferente do filter_criteria
-  // já salvo no segmento, senão não faz sentido nenhum (o evento já seria
-  // o presente). Essa validação roda em saveCampanha (não aqui!) — abrir o
-  // formulário sempre funciona, mesmo que o filtro ainda não tenha
-  // mudado, senão o botão parece simplesmente não fazer nada.
-  const openNewCampanha = (orientation: CampanhaOrientation) => {
-    if (!editingSegmentId || !appliedFilter) return
+  // Um segmento só pode ter UMA campanha 'segmento' (dispara uma vez, não
+  // faz sentido duplicar), mas pode ter várias 'evento'. O botão "+
+  // Campanha" já abre no modo que ainda cabe pro segmento; a escolha de
+  // orientação dentro do popup (switchCampanhaOrientation) respeita o
+  // mesmo limite.
+  const hasSegmentoCampanha = (segmentId: string) => (campanhaCouponsBySegment[segmentId] ?? []).some((cc) => cc.orientation === 'segmento')
+
+  const openNewCampanha = (segment: CrmSegment) => {
     setCampanhaError(null)
+    const orientation: CampanhaOrientation = hasSegmentoCampanha(segment.id) ? 'evento' : 'segmento'
     setCampanhaForm({
       ...EMPTY_CAMPANHA_FORM,
-      segmentId: editingSegmentId,
+      segmentId: segment.id,
       orientation,
-      triggerCriteria: orientation === 'evento' ? filter : null,
+      triggerCriteria: orientation === 'evento' ? (segment.filter_criteria as unknown as FilterState) : null,
     })
     setShowCampanhaForm(true)
+  }
+
+  // Só renderiza os campos que o segmento realmente usa no filtro dele —
+  // ao lado de cada um, a pill dourada mostra o valor ATUAL (do
+  // segmento) e o campo ao lado é o valor-ALVO editável que, quando
+  // atingido por um cliente, dispara a campanha 'evento'.
+  const renderTriggerFields = (segmentCriteria: FilterState, value: FilterState, onChange: (patch: Partial<FilterState>) => void) => {
+    const gold = (partial: Partial<FilterState>) => (
+      <span className="px-2.5 py-1 rounded-full bg-son-gold/15 text-son-gold text-[11px] font-medium w-fit">
+        {describeFilter({ ...EMPTY_FILTER, ...partial }, products, categories)[0]}
+      </span>
+    )
+    const blocks: React.ReactNode[] = []
+    if (segmentCriteria.minOrders) {
+      blocks.push(
+        <div key="minOrders" className="border border-white/10 rounded-xl p-3 space-y-2">
+          {gold({ minOrders: segmentCriteria.minOrders, minOrdersDays: segmentCriteria.minOrdersDays })}
+          <div className="flex items-center gap-2">
+            <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="1" placeholder="N° Vezes" value={value.minOrders} onChange={(e) => onChange({ minOrders: e.target.value })} />
+            <span className="text-son-silver-dim text-xs whitespace-nowrap">no período de</span>
+            <input className={`input-field w-20 ${NO_SPINNER}`} type="number" min="1" placeholder="Opcional" value={value.minOrdersDays} onChange={(e) => onChange({ minOrdersDays: e.target.value })} />
+            <span className="text-son-silver-dim text-xs whitespace-nowrap">Dias</span>
+          </div>
+        </div>
+      )
+    }
+    if (segmentCriteria.minItems) {
+      blocks.push(
+        <div key="minItems" className="border border-white/10 rounded-xl p-3 space-y-2">
+          {gold({ minItems: segmentCriteria.minItems, minItemsDays: segmentCriteria.minItemsDays })}
+          <div className="flex items-center gap-2">
+            <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="1" placeholder="N° Produtos" value={value.minItems} onChange={(e) => onChange({ minItems: e.target.value })} />
+            <span className="text-son-silver-dim text-xs whitespace-nowrap">no período de</span>
+            <input className={`input-field w-20 ${NO_SPINNER}`} type="number" min="1" placeholder="Opcional" value={value.minItemsDays} onChange={(e) => onChange({ minItemsDays: e.target.value })} />
+            <span className="text-son-silver-dim text-xs whitespace-nowrap">Dias</span>
+          </div>
+        </div>
+      )
+    }
+    if (segmentCriteria.spentBelowAmount) {
+      blocks.push(
+        <div key="spentBelow" className="border border-white/10 rounded-xl p-3 space-y-2">
+          {gold({ spentBelowAmount: segmentCriteria.spentBelowAmount, spentBelowDays: segmentCriteria.spentBelowDays })}
+          <div className="flex items-center gap-2">
+            <span className="text-son-silver-dim text-xs">R$</span>
+            <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="0" value={value.spentBelowAmount} onChange={(e) => onChange({ spentBelowAmount: e.target.value })} />
+            <span className="text-son-silver-dim text-xs whitespace-nowrap">em</span>
+            <input className={`input-field w-20 ${NO_SPINNER}`} type="number" min="1" placeholder="Opcional" value={value.spentBelowDays} onChange={(e) => onChange({ spentBelowDays: e.target.value })} />
+            <span className="text-son-silver-dim text-xs whitespace-nowrap">dias</span>
+          </div>
+        </div>
+      )
+    }
+    if (segmentCriteria.spentAboveAmount) {
+      blocks.push(
+        <div key="spentAbove" className="border border-white/10 rounded-xl p-3 space-y-2">
+          {gold({ spentAboveAmount: segmentCriteria.spentAboveAmount, spentAboveDays: segmentCriteria.spentAboveDays })}
+          <div className="flex items-center gap-2">
+            <span className="text-son-silver-dim text-xs">R$</span>
+            <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="0" value={value.spentAboveAmount} onChange={(e) => onChange({ spentAboveAmount: e.target.value })} />
+            <span className="text-son-silver-dim text-xs whitespace-nowrap">em</span>
+            <input className={`input-field w-20 ${NO_SPINNER}`} type="number" min="1" placeholder="Opcional" value={value.spentAboveDays} onChange={(e) => onChange({ spentAboveDays: e.target.value })} />
+            <span className="text-son-silver-dim text-xs whitespace-nowrap">dias</span>
+          </div>
+        </div>
+      )
+    }
+    if (segmentCriteria.frequencyDropPercent) {
+      blocks.push(
+        <div key="frequencyDrop" className="border border-white/10 rounded-xl p-3 space-y-2">
+          {gold({ frequencyDropPercent: segmentCriteria.frequencyDropPercent })}
+          <input
+            className={`input-field w-24 ${NO_SPINNER}`}
+            type="number"
+            min="1"
+            max="100"
+            value={value.frequencyDropPercent}
+            onChange={(e) => onChange({ frequencyDropPercent: e.target.value })}
+          />
+        </div>
+      )
+    }
+    if (segmentCriteria.newCustomerDays) {
+      blocks.push(
+        <div key="newCustomer" className="border border-white/10 rounded-xl p-3 space-y-2">
+          {gold({ newCustomerDays: segmentCriteria.newCustomerDays })}
+          <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="1" value={value.newCustomerDays} onChange={(e) => onChange({ newCustomerDays: e.target.value })} />
+        </div>
+      )
+    }
+    if (segmentCriteria.maxDistanceKm) {
+      blocks.push(
+        <div key="maxDistance" className="border border-white/10 rounded-xl p-3 space-y-2">
+          {gold({ maxDistanceKm: segmentCriteria.maxDistanceKm })}
+          <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="0" value={value.maxDistanceKm} onChange={(e) => onChange({ maxDistanceKm: e.target.value })} />
+        </div>
+      )
+    }
+    if (segmentCriteria.neighborhoods.length > 0) {
+      blocks.push(
+        <div key="neighborhoods" className="border border-white/10 rounded-xl p-3 space-y-2">
+          {gold({ neighborhoods: segmentCriteria.neighborhoods })}
+          <select
+            className="input-field appearance-none cursor-pointer"
+            value=""
+            onChange={(e) => {
+              if (!e.target.value || value.neighborhoods.includes(e.target.value)) return
+              onChange({ neighborhoods: [...value.neighborhoods, e.target.value] })
+            }}
+          >
+            <option value="">Adicionar bairro...</option>
+            {neighborhoods
+              .filter((n) => !value.neighborhoods.includes(n))
+              .map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+          </select>
+          {value.neighborhoods.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {value.neighborhoods.map((n) => (
+                <span key={n} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-son-pink/15 text-son-pink text-xs font-medium">
+                  {n}
+                  <button type="button" onClick={() => onChange({ neighborhoods: value.neighborhoods.filter((x) => x !== n) })}>
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+    if (segmentCriteria.birthdayMonth) {
+      blocks.push(
+        <div key="birthday" className="border border-white/10 rounded-xl p-3 space-y-2">
+          {gold({ birthdayMonth: segmentCriteria.birthdayMonth })}
+          <select className="input-field appearance-none cursor-pointer" value={value.birthdayMonth} onChange={(e) => onChange({ birthdayMonth: e.target.value })}>
+            <option value="">Qualquer mês</option>
+            {MONTH_NAMES.map((m, i) => (
+              <option key={m} value={i}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+      )
+    }
+    if (segmentCriteria.recurringProductIds.length > 0 || segmentCriteria.recurringCategoryIds.length > 0) {
+      blocks.push(
+        <div key="recurring" className="border border-white/10 rounded-xl p-3 space-y-2">
+          {gold({
+            recurringProductIds: segmentCriteria.recurringProductIds,
+            recurringCategoryIds: segmentCriteria.recurringCategoryIds,
+            recurringDays: segmentCriteria.recurringDays,
+          })}
+          <ProductCategoryMultiSelect
+            products={products}
+            categories={categories}
+            selectedProductIds={value.recurringProductIds}
+            selectedCategoryIds={value.recurringCategoryIds}
+            onChangeProducts={(recurringProductIds) => onChange({ recurringProductIds })}
+            onChangeCategories={(recurringCategoryIds) => onChange({ recurringCategoryIds })}
+          />
+          <input
+            className={`input-field w-44 ${NO_SPINNER}`}
+            type="number"
+            min="1"
+            placeholder="N° Dias (Opcional)"
+            value={value.recurringDays}
+            onChange={(e) => onChange({ recurringDays: e.target.value })}
+          />
+        </div>
+      )
+    }
+    return blocks
+  }
+
+  const switchCampanhaOrientation = (orientation: CampanhaOrientation) => {
+    const segment = segments.find((s) => s.id === campanhaForm.segmentId)
+    setCampanhaForm({
+      ...campanhaForm,
+      orientation,
+      triggerCriteria: orientation === 'evento' ? ((segment?.filter_criteria as unknown as FilterState) ?? EMPTY_FILTER) : null,
+    })
   }
 
   const campanhaMessageValid = campanhaForm.messageTemplate.includes('/nome') && campanhaForm.messageTemplate.includes('/cupom')
@@ -578,13 +765,13 @@ export default function AdminCrm() {
     const segment = segments.find((s) => s.id === campanhaForm.segmentId)
     if (campanhaForm.orientation === 'evento' && segment && JSON.stringify(segment.filter_criteria) === JSON.stringify(campanhaForm.triggerCriteria)) {
       setCampanhaError(
-        'O critério do evento precisa ser diferente do critério atual do segmento — altere pelo menos 1 campo do filtro acima antes de criar a campanha orientada a evento.'
+        'O critério do evento precisa ser diferente do critério atual do segmento — altere pelo menos 1 valor abaixo antes de criar a campanha orientada a evento.'
       )
       return
     }
     setSavingCampanha(true)
     try {
-      const criteria = campanhaForm.orientation === 'segmento' ? segment?.filter_criteria ?? filter : campanhaForm.triggerCriteria!
+      const criteria = campanhaForm.orientation === 'segmento' ? segment?.filter_criteria ?? EMPTY_FILTER : campanhaForm.triggerCriteria!
       const matchingWhatsapps =
         campanhaForm.orientation === 'segmento'
           ? applyFilters(customers, criteria as unknown as FilterState, products).map((c) => c.whatsapp)
@@ -1229,29 +1416,10 @@ export default function AdminCrm() {
                 {savingSegment ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 {editingSegmentId ? 'Atualizar segmentação' : 'Salvar segmentação'}
               </button>
-
               {editingSegmentId && (
-                <div className="border-t border-white/10 pt-3">
-                  <p className="text-xs text-son-silver-dim mb-2">
-                    Campanhas já criadas pra este segmento aparecem encadeadas na lista "Segmentações salvas" abaixo.
-                  </p>
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => openNewCampanha('segmento')}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-son-pink/15 text-son-pink text-xs font-semibold hover:bg-son-pink/25"
-                    >
-                      <Gift className="w-3.5 h-3.5" /> + Cupom exclusivo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openNewCampanha('evento')}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 text-son-silver text-xs font-semibold hover:bg-white/15"
-                    >
-                      <Zap className="w-3.5 h-3.5" /> + Cupom orientado a evento
-                    </button>
-                  </div>
-                </div>
+                <p className="text-xs text-son-silver-dim text-center">
+                  Campanhas se criam pelo botão "+ Campanha" no card desta segmentação, na lista abaixo.
+                </p>
               )}
             </div>
           )}
@@ -1331,7 +1499,14 @@ export default function AdminCrm() {
                   <button type="button" onClick={() => openSegment(s)} className="text-left min-w-[160px]">
                     <p className="font-semibold text-white">{s.name}</p>
                     {s.description && <p className="text-xs text-son-silver-dim mt-0.5">{s.description}</p>}
-                    <p className="text-xs font-bold sunset-text mt-1">{count} cliente(s)</p>
+                    <p className="text-xs font-bold sunset-text mt-1 mb-1.5">{count} cliente(s)</p>
+                    <div className="flex flex-wrap gap-1">
+                      {describeFilter(s.filter_criteria as unknown as FilterState, products, categories).map((line, i) => (
+                        <span key={i} className="px-2.5 py-1 rounded-full bg-son-gold/15 text-son-gold text-[10px] font-medium">
+                          {line}
+                        </span>
+                      ))}
+                    </div>
                   </button>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button type="button" onClick={() => openSegment(s)} className="text-xs font-semibold text-son-silver-dim hover:text-white">
@@ -1343,10 +1518,19 @@ export default function AdminCrm() {
                   </div>
                 </div>
 
-                {campanhas.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
-                    {campanhas.map((cc) => {
-                      const cCoupon = coupons.find((c) => c.id === cc.coupon_id)
+                <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
+                  {campanhas.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => openNewCampanha(s)}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed border-son-gold/40 text-son-gold text-sm font-semibold hover:bg-son-gold/10"
+                    >
+                      <Plus className="w-4 h-4" /> Campanha
+                    </button>
+                  ) : (
+                    <>
+                      {campanhas.map((cc) => {
+                        const cCoupon = coupons.find((c) => c.id === cc.coupon_id)
                       return (
                         <div key={cc.id} className="flex items-center gap-2 flex-wrap">
                           {/* subcard: orientada a segmento/evento */}
@@ -1418,10 +1602,18 @@ export default function AdminCrm() {
 
                           <ToggleSwitch checked={cc.active} onClick={() => toggleCampanhaActive(cc)} />
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
+                        )
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => openNewCampanha(s)}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-son-gold/40 text-son-gold text-xs font-semibold hover:bg-son-gold/10"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Campanha
+                      </button>
+                    </>
+                  )}
+                </div>
               </Card>
             )
           })}
@@ -1699,18 +1891,62 @@ export default function AdminCrm() {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            <div className="grid grid-cols-2 gap-1.5 mb-3">
+              <button
+                type="button"
+                disabled={campanhaForm.orientation !== 'segmento' && hasSegmentoCampanha(campanhaForm.segmentId)}
+                onClick={() => switchCampanhaOrientation('segmento')}
+                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                  campanhaForm.orientation === 'segmento' ? 'bg-son-pink text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
+                }`}
+              >
+                <Gift className="w-3.5 h-3.5" /> Orientada a segmento
+              </button>
+              <button
+                type="button"
+                onClick={() => switchCampanhaOrientation('evento')}
+                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                  campanhaForm.orientation === 'evento' ? 'bg-amber-500 text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5" /> Orientada a evento
+              </button>
+            </div>
+            {campanhaForm.orientation === 'segmento' && hasSegmentoCampanha(campanhaForm.segmentId) && (
+              <p className="text-xs text-amber-400 mb-3">Este segmento já tem uma campanha orientada a segmento — só uma é permitida.</p>
+            )}
+
             {campanhaForm.orientation === 'segmento' ? (
               <p className="text-xs text-son-silver-dim mb-3">
-                Dispara agora pra <strong className="text-white">{visible.length} cliente(s)</strong> que casam com o critério salvo do
-                segmento — cupom exclusivo, intransferível.
+                Dispara agora pra{' '}
+                <strong className="text-white">
+                  {campanhaFormSegment ? applyFilters(customers, campanhaFormSegment.filter_criteria as unknown as FilterState, products).length : 0}{' '}
+                  cliente(s)
+                </strong>{' '}
+                que casam com o critério salvo do segmento — cupom exclusivo, intransferível.
               </p>
             ) : (
               <p className="text-xs text-son-silver-dim mb-3">
-                Não dispara agora. Fica "armado" com o critério mais apertado do filtro acima — quando você clicar em{' '}
-                <strong className="text-white">Verificar</strong> (ou reabrir o CRM), os clientes que já baterem esse critério recebem o
-                cupom via WhatsApp automaticamente. Só concede pra quem ainda não recebeu.
+                Não dispara agora. Fica "armado" com o critério que você definir abaixo — quando algum cliente passar a bater esse
+                critério (checado ao abrir o CRM, ou no botão <strong className="text-white">Verificar</strong>), ele recebe o cupom via
+                WhatsApp automaticamente. Só concede pra quem ainda não recebeu.
               </p>
             )}
+
+            {campanhaForm.orientation === 'evento' && campanhaFormSegment && (
+              <div className="space-y-2 mb-3">
+                <label className="label">
+                  Critério do evento <span className="text-son-silver-dim font-normal">(altere pelo menos 1 valor abaixo)</span>
+                </label>
+                {renderTriggerFields(
+                  campanhaFormSegment.filter_criteria as unknown as FilterState,
+                  campanhaForm.triggerCriteria ?? EMPTY_FILTER,
+                  (patch) => setCampanhaForm({ ...campanhaForm, triggerCriteria: { ...(campanhaForm.triggerCriteria ?? EMPTY_FILTER), ...patch } })
+                )}
+              </div>
+            )}
+
             <div className="space-y-3">
               <div>
                 <label className="label">Código</label>
