@@ -28,13 +28,16 @@ export const useAdminAuth = create<AdminAuthState>()(
     }),
     {
       name: 'sonset_admin_auth',
-      // sessionStorage (não localStorage): cada aba mantém sua própria
-      // sessão. Com localStorage, logar como admin numa aba e vendedor
-      // noutra fazia as DUAS abas virarem o último papel logado ao
-      // recarregar, porque localStorage é compartilhado entre abas da
-      // mesma origem — sessionStorage é isolado por aba (sobrevive a
-      // reload, mas não vaza pra outras abas/janelas).
-      storage: createJSONStorage(() => sessionStorage),
+      // localStorage (não sessionStorage): motoboy usa o celular como
+      // ferramenta de trabalho — o navegador/PWA é frequentemente
+      // fechado/reaberto ao longo do dia, e sessionStorage some nesse
+      // momento, forçando login de novo toda hora. localStorage
+      // sobrevive a isso. O preço é o bug antigo (logar como admin numa
+      // aba e vendedor noutra faz as duas virarem o último papel logado
+      // ao recarregar, já que localStorage é compartilhado entre abas da
+      // mesma origem) — aceitável porque isso só acontece em teste manual
+      // multi-aba do próprio dev, não no uso real de motoboy em campo.
+      storage: createJSONStorage(() => localStorage),
     }
   )
 )

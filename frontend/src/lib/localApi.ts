@@ -970,6 +970,7 @@ async function createTargetedCoupon(payload: {
       customer_whatsapp: whatsapp,
       granted_uses: payload.uses_per_customer ?? 1,
       used_count: 0,
+      created_at: nowIso(),
     })
   }
   saveDb(db)
@@ -988,9 +989,10 @@ async function adminListCouponGrants(couponId: string): Promise<CouponGrant[]> {
         customer_name: order?.customer_name ?? null,
         granted_uses: g.granted_uses,
         used_count: g.used_count,
+        created_at: g.created_at,
       }
     })
-    .sort((a, b) => (a.customer_name ?? '').localeCompare(b.customer_name ?? ''))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
 
 // ---------- segmentações do CRM (admin) ----------
@@ -1137,7 +1139,7 @@ async function fireCampanhaEvent(id: string, customerWhatsapps: string[]): Promi
     if (!whatsapp?.trim()) continue
     const exists = db.couponGrants.some((g) => g.coupon_id === row.coupon_id && g.customer_whatsapp === whatsapp)
     if (!exists) {
-      db.couponGrants.push({ id: uid(), coupon_id: row.coupon_id, customer_whatsapp: whatsapp, granted_uses: 1, used_count: 0 })
+      db.couponGrants.push({ id: uid(), coupon_id: row.coupon_id, customer_whatsapp: whatsapp, granted_uses: 1, used_count: 0, created_at: nowIso() })
       newlyGranted.push(whatsapp)
     }
   }

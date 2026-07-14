@@ -21,10 +21,13 @@ export default function ProductDiscountList({
   onChange,
 }: {
   products: Product[]
-  // Opcional — quando passado, mostra uma busca separada pra adicionar
-  // uma categoria inteira de uma vez (expande em uma linha por produto,
-  // cada uma editável depois, já que ProductDiscount não tem noção de
-  // categoria — é só um atalho de cadastro em lote).
+  // Opcional — quando passado, mostra uma busca separada pra adicionar uma
+  // categoria inteira de uma vez, com UM desconto só pra categoria toda
+  // (não um desconto por produto). O backend só entende desconto por
+  // produto, então por baixo dos panos ainda vira uma linha de
+  // ProductDiscount por produto — só que todas marcadas com o mesmo
+  // category_id (campo client-only) pra renderizar agrupado como
+  // "Categoria: Nome" e editar/remover tudo junto.
   categories?: Category[]
   discounts: ProductDiscount[]
   onChange: (discounts: ProductDiscount[]) => void
@@ -32,15 +35,26 @@ export default function ProductDiscountList({
   const [query, setQuery] = useState('')
   const [categoryQuery, setCategoryQuery] = useState('')
   const [infoProduct, setInfoProduct] = useState<Product | null>(null)
+  const [categoryProducts, setCategoryProducts] = useState<{ name: string; products: Product[] } | null>(null)
 
   const productById = new Map(products.map((p) => [p.id, p]))
-  const selected = discounts.map((d) => ({ discount: d, product: productById.get(d.product_id) })).filter((x) => x.product)
+  const categoryById = new Map((categories ?? []).map((c) => [c.id, c]))
+
+  const individual = discounts.filter((d) => !d.category_id).map((d) => ({ discount: d, product: productById.get(d.product_id) })).filter((x) => x.product)
+
+  const categoryGroups = Array.from(new Set(discounts.filter((d) => d.category_id).map((d) => d.category_id!))).map((categoryId) => {
+    const rows = discounts.filter((d) => d.category_id === categoryId)
+    const categoryProductList = rows.map((d) => productById.get(d.product_id)).filter((p): p is Product => !!p)
+    return { categoryId, name: categoryById.get(categoryId)?.name ?? categoryId, rows, products: categoryProductList }
+  })
+
+  const selectedProductIds = new Set(discounts.map((d) => d.product_id))
   const matches =
     query.trim().length > 0
       ? products
           .filter(
             (p) =>
-              !discounts.some((d) => d.product_id === p.id) &&
+              !selectedProductIds.has(p.id) &&
               (p.name.toLowerCase().includes(query.trim().toLowerCase()) || (p.barcode && p.barcode.includes(query.trim())))
           )
           .slice(0, 8)
@@ -56,20 +70,60 @@ export default function ProductDiscountList({
   }
   const addCategory = (categoryId: string) => {
     const newOnes = products
-      .filter((p) => p.category_id === categoryId && !discounts.some((d) => d.product_id === p.id))
-      .map((p) => ({ product_id: p.id, discount_type: 'percent' as DiscountType, discount_value: 0 }))
+      .filter((p) => p.category_id === categoryId && !selectedProductIds.has(p.id))
+      .map((p) => ({ product_id: p.id, discount_type: 'percent' as DiscountType, discount_value: 0, category_id: categoryId }))
     if (newOnes.length > 0) onChange([...discounts, ...newOnes])
     setCategoryQuery('')
   }
   const removeProduct = (id: string) => onChange(discounts.filter((d) => d.product_id !== id))
+  const removeCategory = (categoryId: string) => onChange(discounts.filter((d) => d.category_id !== categoryId))
   const updateDiscount = (id: string, patch: Partial<ProductDiscount>) =>
     onChange(discounts.map((d) => (d.product_id === id ? { ...d, ...patch } : d)))
+  // Um desconto só pra categoria inteira — atualiza todas as linhas do
+  // grupo de uma vez, mantendo o valor sincronizado entre elas.
+  const updateCategoryDiscount = (categoryId: string, patch: Partial<Pick<ProductDiscount, 'discount_type' | 'discount_value'>>) =>
+    onChange(discounts.map((d) => (d.category_id === categoryId ? { ...d, ...patch } : d)))
 
   return (
     <div>
-      {selected.length > 0 && (
+      {(categoryGroups.length > 0 || individual.length > 0) && (
         <div className="space-y-2 mb-2">
-          {selected.map(({ discount, product }) => {
+          {categoryGroups.map(({ categoryId, name, rows, products: groupProducts }) => {
+            const first = rows[0]
+            return (
+              <div key={categoryId} className="flex items-center gap-2 bg-son-surface-light rounded-xl p-2">
+                <button
+                  type="button"
+                  onClick={() => setCategoryProducts({ name, products: groupProducts })}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <p className="text-xs text-white truncate">
+                    Categoria: <span className="font-semibold">{name}</span>
+                  </p>
+                  <p className="text-xs text-son-silver-dim">{rows.length} produto(s) — clique pra ver</p>
+                </button>
+                <select
+                  className="input-field w-20 py-1.5 text-xs appearance-none cursor-pointer flex-shrink-0"
+                  value={first.discount_type}
+                  onChange={(e) => updateCategoryDiscount(categoryId, { discount_type: e.target.value as DiscountType })}
+                >
+                  <option value="percent">%</option>
+                  <option value="fixed">R$</option>
+                </select>
+                <input
+                  className="input-field w-20 py-1.5 text-xs flex-shrink-0"
+                  type="number"
+                  min="0"
+                  value={first.discount_value || ''}
+                  onChange={(e) => updateCategoryDiscount(categoryId, { discount_value: Number(e.target.value) })}
+                />
+                <button type="button" onClick={() => removeCategory(categoryId)} className="flex-shrink-0">
+                  <X className="w-3.5 h-3.5 text-son-silver-dim hover:text-son-pink" />
+                </button>
+              </div>
+            )
+          })}
+          {individual.map(({ discount, product }) => {
             const p = product!
             const finalPrice =
               discount.discount_type === 'percent'
@@ -169,8 +223,39 @@ export default function ProductDiscountList({
         </div>
       )}
 
+      {categoryProducts && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="glass rounded-2xl p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-white">Categoria: {categoryProducts.name}</h3>
+              <button onClick={() => setCategoryProducts(null)} className="text-son-silver-dim hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {categoryProducts.products.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setInfoProduct(p)}
+                  className="w-full flex items-center gap-2 bg-son-surface-light rounded-xl p-2 text-left hover:bg-son-surface"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-son-surface flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <Package className="w-4 h-4 text-son-silver-dim" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-white truncate">{p.name}</p>
+                    <p className="text-xs text-son-silver-dim">{currency(p.price)}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {infoProduct && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => setInfoProduct(null)}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
           <div className="glass rounded-2xl p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-white">{infoProduct.name}</h3>

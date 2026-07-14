@@ -37,6 +37,11 @@ export interface ProductDiscount {
   product_id: string
   discount_type: DiscountType
   discount_value: number
+  // Só existe no client — marca que esse produto entrou na lista via
+  // seleção de categoria inteira (pra agrupar visualmente como "Categoria:
+  // X" com um desconto só). O backend ignora esse campo, sempre grava
+  // linha por produto.
+  category_id?: string
 }
 
 export interface Coupon {
@@ -107,6 +112,7 @@ export interface CouponGrant {
   customer_name: string | null
   granted_uses: number
   used_count: number
+  created_at: string
 }
 
 export type PromotionType = 'selfie_service' | 'kit'

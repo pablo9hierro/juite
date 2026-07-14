@@ -384,6 +384,8 @@ export default function AdminCrm() {
   const [historyDialogCampanha, setHistoryDialogCampanha] = useState<CrmCampanhaCoupon | null>(null)
   const [historyGrants, setHistoryGrants] = useState<CouponGrant[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyTab, setHistoryTab] = useState<'resultados' | 'segmentados'>('resultados')
+  const [historyCustomerQuery, setHistoryCustomerQuery] = useState('')
 
   const [filterOpen, setFilterOpen] = useState(false)
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
@@ -481,6 +483,25 @@ export default function AdminCrm() {
       }
     })()
   }, [segments, customers, products])
+
+  // A UI já força "off" visualmente pra campanha desatualizada (segmento
+  // mudou), mas aqui sincroniza o servidor de fato — sem isso, o
+  // auto-check de evento acima poderia continuar dando match num critério
+  // velho enquanto o admin não edita.
+  const healedStale = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    for (const seg of segments) {
+      const rows = campanhaCouponsBySegment[seg.id] ?? []
+      for (const row of rows) {
+        if (!row.active || healedStale.current.has(row.id) || !isCampanhaStale(row, seg)) continue
+        healedStale.current.add(row.id)
+        api.admin.campanhaCoupons
+          .toggleActive(row.id, false)
+          .then(() => loadCampanhaCoupons(seg.id))
+          .catch(() => {})
+      }
+    }
+  }, [segments, campanhaCouponsBySegment])
 
   const neighborhoods = useMemo(
     () => Array.from(new Set(customers.flatMap((c) => c.neighborhoods))).sort(),
@@ -873,6 +894,8 @@ export default function AdminCrm() {
   // dessa campanha, não só os novos desta checagem.
   const openHistoryDialog = async (row: CrmCampanhaCoupon) => {
     setHistoryDialogCampanha(row)
+    setHistoryTab('resultados')
+    setHistoryCustomerQuery('')
     setHistoryLoading(true)
     try {
       const matching = applyFilters(customers, row.trigger_criteria as unknown as FilterState, products).map((c) => c.whatsapp)
@@ -1201,7 +1224,6 @@ export default function AdminCrm() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
-            onClick={() => setFilterOpen(false)}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.92 }}
@@ -1531,22 +1553,20 @@ export default function AdminCrm() {
           </div>
         ))}
 
-      <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Layers className="w-5 h-5 text-son-gold" />
-          <h2 className="text-xl font-black">Segmentações salvas</h2>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            if (!filterOpen) resetSegmentForm()
-            setFilterOpen(true)
-          }}
-          className="btn-primary text-sm py-2.5 px-5"
-        >
-          <Sparkles className="w-4 h-4" /> Nova segmentação
-        </button>
+      <div className="flex items-center gap-2 mb-4">
+        <Layers className="w-5 h-5 text-son-gold" />
+        <h2 className="text-xl font-black">Segmentações salvas</h2>
       </div>
+      <button
+        type="button"
+        onClick={() => {
+          if (!filterOpen) resetSegmentForm()
+          setFilterOpen(true)
+        }}
+        className="btn-primary text-base py-3.5 px-6 mb-4"
+      >
+        <Sparkles className="w-5 h-5" /> Nova segmentação
+      </button>
       {segmentsLoading ? (
         <div className="flex justify-center py-10">
           <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
@@ -1598,12 +1618,12 @@ export default function AdminCrm() {
 
                 <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
                   {campanhas.length === 0 ? (
-                    <button type="button" onClick={() => openNewCampanha(s)} className="btn-primary text-sm py-2.5 px-5">
+                    <button type="button" onClick={() => openNewCampanha(s)} className="btn-primary text-sm py-2.5 px-3">
                       <Plus className="w-4 h-4" /> Campanha
                     </button>
                   ) : (
                     <>
-                      <button type="button" onClick={() => openNewCampanha(s)} className="btn-primary text-sm py-2.5 px-5">
+                      <button type="button" onClick={() => openNewCampanha(s)} className="btn-primary text-sm py-2.5 px-3">
                         <Plus className="w-4 h-4" /> Campanha
                       </button>
                       {campanhas.map((cc) => {
@@ -1687,7 +1707,7 @@ export default function AdminCrm() {
                             </>
                           )}
 
-                          <ToggleSwitch checked={cc.active} onClick={() => (stale ? setStaleDialogCampanha(cc) : toggleCampanhaActive(cc))} />
+                          <ToggleSwitch checked={!stale && cc.active} onClick={() => (stale ? setStaleDialogCampanha(cc) : toggleCampanhaActive(cc))} />
                         </div>
                         )
                       })}
@@ -1711,7 +1731,7 @@ export default function AdminCrm() {
             setCouponError(null)
             setShowCouponForm(true)
           }}
-          className="btn-primary text-sm py-2.5 px-5"
+          className="btn-primary text-sm py-2.5 px-3"
         >
           <Plus className="w-4 h-4" /> Novo cupom
         </button>
@@ -1777,7 +1797,6 @@ export default function AdminCrm() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
-            onClick={closeCouponForm}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.92 }}
@@ -1801,7 +1820,6 @@ export default function AdminCrm() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
-            onClick={() => setEditingCampanhaId(null)}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.92 }}
@@ -1863,10 +1881,9 @@ export default function AdminCrm() {
                 </div>
                 <div>
                   <label className="label">Desconto no produto</label>
-                  <div className="grid grid-cols-3 gap-1.5 mb-2">
+                  <div className="grid grid-cols-2 gap-1.5 mb-2">
                     {(
                       [
-                        { value: 'nenhum', label: 'Nenhum' },
                         { value: 'flat', label: 'Valor total' },
                         { value: 'produto', label: 'Produto/Categoria' },
                       ] as const
@@ -1983,7 +2000,6 @@ export default function AdminCrm() {
       {showCampanhaForm && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
-          onClick={() => setShowCampanhaForm(false)}
         >
           <div className="glass rounded-2xl p-6 max-w-lg w-full my-8" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
@@ -2063,10 +2079,9 @@ export default function AdminCrm() {
               </div>
               <div>
                 <label className="label">Desconto no produto</label>
-                <div className="grid grid-cols-3 gap-1.5 mb-2">
+                <div className="grid grid-cols-2 gap-1.5 mb-2">
                   {(
                     [
-                      { value: 'nenhum', label: 'Nenhum' },
                       { value: 'flat', label: 'Valor total' },
                       { value: 'produto', label: 'Produto/Categoria' },
                     ] as const
@@ -2220,7 +2235,6 @@ export default function AdminCrm() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
-            onClick={() => setConfirmDialog(null)}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
@@ -2259,7 +2273,6 @@ export default function AdminCrm() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-start justify-center p-4 overflow-y-auto"
-            onClick={() => setCustomerListSegment(null)}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.92 }}
@@ -2318,7 +2331,6 @@ export default function AdminCrm() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
-            onClick={() => setStaleDialogCampanha(null)}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
@@ -2365,7 +2377,6 @@ export default function AdminCrm() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-start justify-center p-4 overflow-y-auto"
-            onClick={() => setHistoryDialogCampanha(null)}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.92 }}
@@ -2376,31 +2387,89 @@ export default function AdminCrm() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-white">Histórico de disparos</h3>
+                <h3 className="font-bold text-white">Resultados da segmentação</h3>
                 <button type="button" onClick={() => setHistoryDialogCampanha(null)} className="text-son-silver-dim hover:text-white">
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              {historyLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
-                </div>
-              ) : historyGrants.length === 0 ? (
-                <p className="text-center text-son-silver-dim py-8 text-sm">Nenhum cliente atingiu o evento ainda.</p>
-              ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {historyGrants.map((g) => (
-                    <div key={g.id} className="flex items-center justify-between gap-3 bg-son-surface border border-white/10 rounded-xl px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-white truncate">{g.customer_name ?? 'Sem nome'}</p>
-                        <WhatsAppLink phone={g.customer_whatsapp} />
+              <div className="grid grid-cols-2 gap-1.5 mb-3">
+                <button
+                  type="button"
+                  onClick={() => setHistoryTab('resultados')}
+                  className={`py-2 rounded-xl border text-xs font-semibold transition-all ${
+                    historyTab === 'resultados' ? 'bg-son-pink text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
+                  }`}
+                >
+                  Resultados da segmentação
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryTab('segmentados')}
+                  className={`py-2 rounded-xl border text-xs font-semibold transition-all ${
+                    historyTab === 'segmentados' ? 'bg-son-pink text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
+                  }`}
+                >
+                  Clientes segmentados na campanha
+                </button>
+              </div>
+
+              {historyTab === 'resultados' ? (
+                historyLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
+                  </div>
+                ) : historyGrants.length === 0 ? (
+                  <p className="text-center text-son-silver-dim py-8 text-sm">Nenhum cliente atingiu o evento ainda.</p>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {historyGrants.map((g) => (
+                      <div key={g.id} className="flex items-center justify-between gap-3 bg-son-surface border border-white/10 rounded-xl px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{g.customer_name ?? 'Sem nome'}</p>
+                          <WhatsAppLink phone={g.customer_whatsapp} />
+                          <p className="text-[10px] text-son-silver-dim mt-0.5">Disparado em {formatDate(g.created_at)}</p>
+                        </div>
+                        <span className="text-xs font-bold sunset-text flex-shrink-0">
+                          {g.used_count}/{g.granted_uses}
+                        </span>
                       </div>
-                      <span className="text-xs font-bold sunset-text flex-shrink-0">
-                        {g.used_count}/{g.granted_uses} usos
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <>
+                  <div className="relative mb-3">
+                    <Search className="w-4 h-4 text-son-silver-dim absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      className="input-field pl-9"
+                      placeholder="Buscar por nome ou WhatsApp..."
+                      value={historyCustomerQuery}
+                      onChange={(e) => setHistoryCustomerQuery(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  {(() => {
+                    const segment = historyDialogCampanha ? segments.find((s) => s.id === historyDialogCampanha.segment_id) : null
+                    const matched = segment ? applyFilters(customers, segment.filter_criteria as unknown as FilterState, products) : []
+                    const q = historyCustomerQuery.trim().toLowerCase()
+                    const shown = q ? matched.filter((c) => c.name.toLowerCase().includes(q) || c.whatsapp.includes(q)) : matched
+                    return shown.length === 0 ? (
+                      <p className="text-center text-son-silver-dim py-8 text-sm">Nenhum cliente encontrado.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {shown.map((c) => (
+                          <div key={c.id} className="flex items-center justify-between gap-3 bg-son-surface border border-white/10 rounded-xl px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-white truncate">{c.name}</p>
+                              <WhatsAppLink phone={c.whatsapp} />
+                            </div>
+                            <span className="text-xs font-bold sunset-text flex-shrink-0">{currency(c.total_spent)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </>
               )}
             </motion.div>
           </motion.div>

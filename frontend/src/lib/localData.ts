@@ -39,6 +39,7 @@ export interface LocalCouponGrant {
   customer_whatsapp: string
   granted_uses: number
   used_count: number
+  created_at: string
 }
 
 // "Campanha": notificação de WhatsApp + cupom exclusivo, atrelada a um
