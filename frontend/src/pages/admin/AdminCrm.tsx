@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Cake, Gift, Layers, Loader2, Plus, Search, Sparkles, Tag, Trash2, Users, X, Zap } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import WhatsAppLink from '../../components/ui/WhatsAppLink'
@@ -205,6 +206,57 @@ function applyFilters(customers: CrmCustomer[], f: FilterState, products: Produc
   })
 }
 
+// "Dias" é sempre opcional nesses pares — sem preencher, o filtro vale pro
+// histórico inteiro do cliente, então o resumo troca "em X dias" por
+// "em todo o período" em vez de simplesmente omitir a informação.
+function withPeriod(days: string): string {
+  return days ? `em ${days} dia${Number(days) === 1 ? '' : 's'}` : 'em todo o período'
+}
+
+// Traduz o filtro aplicado numa lista de frases curtas — mostrado como
+// resumo compacto antes de salvar a segmentação, pra confirmar o que foi
+// realmente preenchido sem precisar rolar o formulário inteiro de novo.
+function describeFilter(f: FilterState, products: Product[], categories: Category[]): string[] {
+  const out: string[] = []
+  if (f.minOrders) out.push(`Clientes que compraram ${f.minOrders} vez${Number(f.minOrders) === 1 ? '' : 'es'} ${withPeriod(f.minOrdersDays)}`)
+  if (f.minItems) out.push(`Clientes que compraram ${f.minItems} produto${Number(f.minItems) === 1 ? '' : 's'} ${withPeriod(f.minItemsDays)}`)
+  if (f.spentBelowAmount) out.push(`Clientes que consumiram abaixo de R$${f.spentBelowAmount} ${withPeriod(f.spentBelowDays)}`)
+  if (f.spentAboveAmount) out.push(`Clientes que consumiram acima de R$${f.spentAboveAmount} ${withPeriod(f.spentAboveDays)}`)
+  if (f.frequencyDropPercent) out.push(`Clientes que reduziram a frequência de compra em ${f.frequencyDropPercent}%`)
+  if (f.newCustomerDays) out.push(`Clientes novos em até ${f.newCustomerDays} dias`)
+  if (f.maxDistanceKm) out.push(`Clientes de até no máximo ${f.maxDistanceKm} Km de distância`)
+  if (f.neighborhoods.length > 0) out.push(`Clientes do(s) bairro(s): ${f.neighborhoods.join(', ')}`)
+  if (f.birthdayMonth) out.push(`Clientes que aniversariam em ${MONTH_NAMES[Number(f.birthdayMonth)] ?? f.birthdayMonth}`)
+  if (f.recurringProductIds.length > 0 || f.recurringCategoryIds.length > 0) {
+    const names = [
+      ...f.recurringProductIds.map((id) => products.find((p) => p.id === id)?.name).filter((n): n is string => !!n),
+      ...f.recurringCategoryIds.map((id) => categories.find((c) => c.id === id)?.name).filter((n): n is string => !!n),
+    ]
+    out.push(`Clientes com recorrência de compra de ${names.join(', ')} a cada ${f.recurringDays} dias`)
+  }
+  return out
+}
+
+// Chave-mestra de on/off do app — pill com bolinha deslizante, igual ao
+// modelo que o admin desenhou (ON: texto + bolinha à direita; OFF:
+// bolinha + texto à esquerda), em vez de um badge de texto "Ativo/Inativo".
+function ToggleSwitch({ checked, onClick }: { checked: boolean; onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center w-[4.5rem] h-7 px-1 rounded-full border transition-colors duration-200 flex-shrink-0 ${
+        checked ? 'justify-end bg-emerald-500/15 border-emerald-400/60' : 'justify-start bg-white/5 border-white/20'
+      }`}
+    >
+      <span className={`flex items-center gap-1.5 ${checked ? 'flex-row-reverse' : ''}`}>
+        <span className={`w-5 h-5 rounded-full flex-shrink-0 ${checked ? 'bg-emerald-400' : 'bg-son-silver-dim'}`} />
+        <span className={`text-[10px] font-bold ${checked ? 'text-emerald-300' : 'text-son-silver-dim'}`}>{checked ? 'ON' : 'OFF'}</span>
+      </span>
+    </button>
+  )
+}
+
 type CouponForm = {
   code: string
   kind: 'desconto' | 'frete' | 'aniversario' | 'produto'
@@ -227,41 +279,6 @@ const EMPTY_COUPON_FORM: CouponForm = {
 }
 
 type ProductDiscountMode = 'nenhum' | 'flat' | 'produto'
-
-type TargetedForm = {
-  code: string
-  productMode: ProductDiscountMode
-  discount_type: DiscountType
-  discount_value: string
-  productDiscounts: ProductDiscount[]
-  shippingEnabled: boolean
-  shipping_discount_type: DiscountType
-  shipping_discount_value: string
-  uses_per_customer: string
-  dontNotify: boolean
-  customMessage: string
-  combinable_with_public: boolean
-  allow_promotion_checkout: boolean
-  expires_at: string
-  max_uses: string
-}
-const EMPTY_TARGETED_FORM: TargetedForm = {
-  code: '',
-  productMode: 'flat',
-  discount_type: 'percent',
-  discount_value: '',
-  productDiscounts: [],
-  shippingEnabled: false,
-  shipping_discount_type: 'percent',
-  shipping_discount_value: '',
-  uses_per_customer: '1',
-  dontNotify: false,
-  customMessage: '',
-  combinable_with_public: false,
-  allow_promotion_checkout: false,
-  expires_at: '',
-  max_uses: '',
-}
 
 // "Campanha": um cupom exclusivo vinculado a um segmento. 'segmento'
 // dispara uma vez, na hora, pros clientes que casam com o critério do
@@ -339,6 +356,13 @@ export default function AdminCrm() {
   const [savingCampanha, setSavingCampanha] = useState(false)
   const [campanhaError, setCampanhaError] = useState<string | null>(null)
 
+  // Edição inline de uma campanha já criada — o card em si morfa num
+  // formulário (motion), não navega pra outro lugar.
+  const [editingCampanhaId, setEditingCampanhaId] = useState<string | null>(null)
+  const [campanhaEditForm, setCampanhaEditForm] = useState<CampanhaForm>(EMPTY_CAMPANHA_FORM)
+  const [savingCampanhaEdit, setSavingCampanhaEdit] = useState(false)
+  const [campanhaEditError, setCampanhaEditError] = useState<string | null>(null)
+
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [couponsLoading, setCouponsLoading] = useState(true)
   const [showCouponForm, setShowCouponForm] = useState(false)
@@ -346,12 +370,6 @@ export default function AdminCrm() {
   const [editingCouponId, setEditingCouponId] = useState<string | null>(null)
   const [savingCoupon, setSavingCoupon] = useState(false)
   const [couponError, setCouponError] = useState<string | null>(null)
-
-  const [showTargetedForm, setShowTargetedForm] = useState(false)
-  const [targetedForm, setTargetedForm] = useState<TargetedForm>(EMPTY_TARGETED_FORM)
-  const [editingTargetedCouponId, setEditingTargetedCouponId] = useState<string | null>(null)
-  const [savingTargeted, setSavingTargeted] = useState(false)
-  const [targetedError, setTargetedError] = useState<string | null>(null)
 
   const loadCustomers = () => {
     setLoading(true)
@@ -414,6 +432,18 @@ export default function AdminCrm() {
   const neighborhoods = useMemo(
     () => Array.from(new Set(customers.flatMap((c) => c.neighborhoods))).sort(),
     [customers]
+  )
+
+  // "Cupons avulsos" só mostra cupom público de verdade — cupom de
+  // campanha (mesmo um 'evento' que ainda não disparou nenhuma concessão)
+  // já aparece encadeado dentro do card da própria campanha, lá em cima.
+  const campanhaCouponIds = useMemo(
+    () => new Set(Object.values(campanhaCouponsBySegment).flat().map((cc) => cc.coupon_id)),
+    [campanhaCouponsBySegment]
+  )
+  const avulsoCoupons = useMemo(
+    () => coupons.filter((c) => (c.grant_count ?? 0) === 0 && !campanhaCouponIds.has(c.id)),
+    [coupons, campanhaCouponIds]
   )
 
   const filteredBase = appliedFilter ? applyFilters(customers, appliedFilter, products) : customers
@@ -509,21 +539,14 @@ export default function AdminCrm() {
 
   // 'segmento': usa o critério do próprio segmento (appliedFilter/filter).
   // 'evento': captura o critério ATUAL do painel de filtro como o "critério
-  // futuro" (triggerCriteria) — por isso precisa ser diferente do
-  // filter_criteria já salvo no segmento, senão não faz sentido nenhum
-  // (o evento já seria o presente).
+  // futuro" (triggerCriteria) — precisa ser diferente do filter_criteria
+  // já salvo no segmento, senão não faz sentido nenhum (o evento já seria
+  // o presente). Essa validação roda em saveCampanha (não aqui!) — abrir o
+  // formulário sempre funciona, mesmo que o filtro ainda não tenha
+  // mudado, senão o botão parece simplesmente não fazer nada.
   const openNewCampanha = (orientation: CampanhaOrientation) => {
     if (!editingSegmentId || !appliedFilter) return
     setCampanhaError(null)
-    if (orientation === 'evento') {
-      const original = segments.find((s) => s.id === editingSegmentId)?.filter_criteria
-      if (original && JSON.stringify(original) === JSON.stringify(filter)) {
-        setCampanhaError(
-          'O critério do evento precisa ser diferente do critério atual do segmento — altere pelo menos 1 campo do filtro acima antes de criar a campanha orientada a evento.'
-        )
-        return
-      }
-    }
     setCampanhaForm({
       ...EMPTY_CAMPANHA_FORM,
       segmentId: editingSegmentId,
@@ -541,9 +564,15 @@ export default function AdminCrm() {
       setCampanhaError('A mensagem precisa citar /nome e /cupom.')
       return
     }
+    const segment = segments.find((s) => s.id === campanhaForm.segmentId)
+    if (campanhaForm.orientation === 'evento' && segment && JSON.stringify(segment.filter_criteria) === JSON.stringify(campanhaForm.triggerCriteria)) {
+      setCampanhaError(
+        'O critério do evento precisa ser diferente do critério atual do segmento — altere pelo menos 1 campo do filtro acima antes de criar a campanha orientada a evento.'
+      )
+      return
+    }
     setSavingCampanha(true)
     try {
-      const segment = segments.find((s) => s.id === campanhaForm.segmentId)
       const criteria = campanhaForm.orientation === 'segmento' ? segment?.filter_criteria ?? filter : campanhaForm.triggerCriteria!
       const matchingWhatsapps =
         campanhaForm.orientation === 'segmento'
@@ -604,6 +633,64 @@ export default function AdminCrm() {
   const toggleCampanhaActive = async (row: CrmCampanhaCoupon) => {
     await api.admin.campanhaCoupons.toggleActive(row.id, !row.active)
     loadCampanhaCoupons(row.segment_id)
+  }
+
+  // Não dá pra editar orientation/trigger_criteria/código de uma campanha
+  // já criada (identidade fixa) — só mensagem, desconto e prazo.
+  const openEditCampanha = (cc: CrmCampanhaCoupon) => {
+    const coupon = coupons.find((c) => c.id === cc.coupon_id)
+    setCampanhaEditError(null)
+    setCampanhaEditForm({
+      ...EMPTY_CAMPANHA_FORM,
+      messageTemplate: cc.message_template,
+      productMode: coupon?.kind === 'produto' ? 'produto' : coupon?.discount_type ? 'flat' : 'nenhum',
+      discount_type: coupon?.discount_type ?? 'percent',
+      discount_value: coupon?.kind !== 'produto' && coupon?.discount_value != null ? String(coupon.discount_value) : '',
+      productDiscounts: coupon?.product_discounts ?? [],
+      shippingEnabled: !!coupon?.shipping_discount_type,
+      shipping_discount_type: coupon?.shipping_discount_type ?? 'percent',
+      shipping_discount_value: coupon?.shipping_discount_value != null ? String(coupon.shipping_discount_value) : '',
+      uses_per_customer: String(cc.uses_per_customer),
+      combinable_with_public: coupon?.combinable_with_public ?? false,
+      allow_promotion_checkout: coupon?.allow_promotion_checkout ?? false,
+      expires_at: coupon?.expires_at ?? '',
+      max_uses: coupon?.max_uses != null ? String(coupon.max_uses) : '',
+    })
+    setEditingCampanhaId(cc.id)
+  }
+
+  const campanhaEditMessageValid = campanhaEditForm.messageTemplate.includes('/nome') && campanhaEditForm.messageTemplate.includes('/cupom')
+
+  const saveCampanhaEdit = async () => {
+    if (!editingCampanhaId) return
+    setCampanhaEditError(null)
+    if (!campanhaEditMessageValid) {
+      setCampanhaEditError('A mensagem precisa citar /nome e /cupom.')
+      return
+    }
+    setSavingCampanhaEdit(true)
+    try {
+      const row = await api.admin.campanhaCoupons.update(editingCampanhaId, {
+        message_template: campanhaEditForm.messageTemplate,
+        uses_per_customer: Number(campanhaEditForm.uses_per_customer) || 1,
+        combinable_with_public: campanhaEditForm.combinable_with_public,
+        allow_promotion_checkout: campanhaEditForm.allow_promotion_checkout,
+        expires_at: campanhaEditForm.expires_at || undefined,
+        max_uses: campanhaEditForm.max_uses ? Number(campanhaEditForm.max_uses) : undefined,
+        discount_type: campanhaEditForm.productMode === 'flat' ? campanhaEditForm.discount_type : undefined,
+        discount_value: campanhaEditForm.productMode === 'flat' ? Number(campanhaEditForm.discount_value) : undefined,
+        shipping_discount_type: campanhaEditForm.shippingEnabled ? campanhaEditForm.shipping_discount_type : undefined,
+        shipping_discount_value: campanhaEditForm.shippingEnabled ? Number(campanhaEditForm.shipping_discount_value) : undefined,
+        product_discounts: campanhaEditForm.productMode === 'produto' ? campanhaEditForm.productDiscounts : undefined,
+      })
+      setEditingCampanhaId(null)
+      loadCampanhaCoupons(row.segment_id)
+      loadCoupons()
+    } catch (err) {
+      setCampanhaEditError(err instanceof ApiError ? err.message : 'Não foi possível salvar as alterações.')
+    } finally {
+      setSavingCampanhaEdit(false)
+    }
   }
 
   const clearFilters = () => {
@@ -679,111 +766,134 @@ export default function AdminCrm() {
     loadCoupons()
   }
 
-  const targetedMessageValid =
-    !!editingTargetedCouponId ||
-    targetedForm.dontNotify ||
-    (targetedForm.customMessage.includes('/nome') && targetedForm.customMessage.includes('/cupom'))
-
-  const openEditTargetedCoupon = async (c: Coupon) => {
-    setEditingTargetedCouponId(c.id)
-    setTargetedError(null)
-    const isFrete = c.kind === 'frete'
-    const grants = await api.admin.coupons.listGrants(c.id).catch(() => [])
-    setTargetedForm({
-      code: c.code,
-      productMode: c.kind === 'produto' ? 'produto' : c.kind === 'desconto' ? 'flat' : 'nenhum',
-      discount_type: (isFrete ? undefined : c.discount_type) ?? 'percent',
-      discount_value: !isFrete && c.discount_value != null ? String(c.discount_value) : '',
-      productDiscounts: c.product_discounts ?? [],
-      shippingEnabled: isFrete || !!c.shipping_discount_type,
-      shipping_discount_type: (isFrete ? c.discount_type : c.shipping_discount_type) ?? 'percent',
-      shipping_discount_value:
-        (isFrete ? c.discount_value : c.shipping_discount_value) != null
-          ? String(isFrete ? c.discount_value : c.shipping_discount_value)
-          : '',
-      uses_per_customer: grants[0] ? String(grants[0].granted_uses) : '1',
-      dontNotify: true,
-      customMessage: '',
-      combinable_with_public: c.combinable_with_public ?? false,
-      allow_promotion_checkout: c.allow_promotion_checkout,
-      expires_at: c.expires_at ?? '',
-      max_uses: c.max_uses != null ? String(c.max_uses) : '',
-    })
-    setShowTargetedForm(true)
+  const closeCouponForm = () => {
+    setShowCouponForm(false)
+    setEditingCouponId(null)
   }
 
-  const saveTargetedCoupon = async () => {
-    setTargetedError(null)
-    if (!targetedMessageValid) {
-      setTargetedError('A mensagem precisa citar /nome e /cupom.')
-      return
-    }
-    setSavingTargeted(true)
-    try {
-      if (editingTargetedCouponId) {
-        const active = coupons.find((c) => c.id === editingTargetedCouponId)?.active ?? true
-        await api.admin.coupons.updateTargeted(editingTargetedCouponId, {
-          active,
-          uses_per_customer: Number(targetedForm.uses_per_customer) || 1,
-          combinable_with_public: targetedForm.combinable_with_public,
-          allow_promotion_checkout: targetedForm.allow_promotion_checkout,
-          expires_at: targetedForm.expires_at || undefined,
-          max_uses: targetedForm.max_uses ? Number(targetedForm.max_uses) : undefined,
-          discount_type: targetedForm.productMode === 'flat' ? targetedForm.discount_type : undefined,
-          discount_value: targetedForm.productMode === 'flat' ? Number(targetedForm.discount_value) : undefined,
-          shipping_discount_type: targetedForm.shippingEnabled ? targetedForm.shipping_discount_type : undefined,
-          shipping_discount_value: targetedForm.shippingEnabled ? Number(targetedForm.shipping_discount_value) : undefined,
-          product_discounts: targetedForm.productMode === 'produto' ? targetedForm.productDiscounts : undefined,
-        })
-        setShowTargetedForm(false)
-        setEditingTargetedCouponId(null)
-        setTargetedForm(EMPTY_TARGETED_FORM)
-        loadCoupons()
-        return
-      }
-      const created = await api.admin.coupons.createTargeted({
-        code: targetedForm.code,
-        customer_whatsapps: visible.map((c) => c.whatsapp),
-        uses_per_customer: Number(targetedForm.uses_per_customer) || 1,
-        notify_customers: !targetedForm.dontNotify,
-        custom_message: targetedForm.dontNotify ? undefined : targetedForm.customMessage,
-        combinable_with_public: targetedForm.combinable_with_public,
-        allow_promotion_checkout: targetedForm.allow_promotion_checkout,
-        expires_at: targetedForm.expires_at || undefined,
-        max_uses: targetedForm.max_uses ? Number(targetedForm.max_uses) : undefined,
-        discount_type: targetedForm.productMode === 'flat' ? targetedForm.discount_type : undefined,
-        discount_value: targetedForm.productMode === 'flat' ? Number(targetedForm.discount_value) : undefined,
-        shipping_discount_type: targetedForm.shippingEnabled ? targetedForm.shipping_discount_type : undefined,
-        shipping_discount_value: targetedForm.shippingEnabled ? Number(targetedForm.shipping_discount_value) : undefined,
-        product_discounts: targetedForm.productMode === 'produto' ? targetedForm.productDiscounts : undefined,
-      })
-      if (!targetedForm.dontNotify) {
-        api.admin.whatsapp.notifyCouponGrant(created.id, targetedForm.customMessage).catch(() => {})
-      }
-      setShowTargetedForm(false)
-      setTargetedForm(EMPTY_TARGETED_FORM)
-      loadCoupons()
-    } catch (err) {
-      setTargetedError(err instanceof ApiError ? err.message : 'Não foi possível criar o cupom.')
-    } finally {
-      setSavingTargeted(false)
-    }
-  }
+  // Compartilhado entre o slot de criação (acima da lista) e o morph de
+  // edição de cada card — mesmos campos, só o cabeçalho/botão mudam.
+  const couponFormFields = (isEdit: boolean) => (
+    <>
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-white">{isEdit ? 'Editar cupom' : 'Novo cupom avulso'}</h3>
+        <button type="button" onClick={closeCouponForm} className="text-son-silver-dim hover:text-white">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <div>
+        <label className="label">Código</label>
+        <input
+          className="input-field font-mono uppercase disabled:opacity-50"
+          value={couponForm.code}
+          onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value })}
+          placeholder="SUNSET10"
+          disabled={isEdit}
+        />
+      </div>
+      <div>
+        <label className="label">Tipo</label>
+        <div className="grid grid-cols-2 gap-1.5">
+          {(['desconto', 'frete', 'produto', 'aniversario'] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              disabled={isEdit}
+              onClick={() => setCouponForm({ ...couponForm, kind: k })}
+              className={`py-2.5 rounded-xl border text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                couponForm.kind === k ? 'sunset-bg text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
+              }`}
+            >
+              {COUPON_KIND_LABEL[k]}
+            </button>
+          ))}
+        </div>
+        {couponForm.kind === 'frete' && (
+          <p className="text-xs text-son-silver-dim mt-1.5">
+            Desconta do frete que o cliente paga — o motoboy recebe o valor cheio do mesmo jeito, a loja absorve a diferença.
+          </p>
+        )}
+        {couponForm.kind === 'aniversario' && (
+          <p className="text-xs text-son-silver-dim mt-1.5">Só é aceito durante o mês de aniversário do cliente.</p>
+        )}
+        {couponForm.kind === 'produto' && (
+          <p className="text-xs text-son-silver-dim mt-1.5">
+            Os produtos escolhidos aparecem destacados em /catalogo na categoria "Promoção" com o desconto já visível, e o desconto se
+            aplica sozinho assim que o produto entra no carrinho — sem precisar digitar código.
+          </p>
+        )}
+      </div>
+      {couponForm.kind === 'produto' ? (
+        <div>
+          <label className="label">Produtos em promoção</label>
+          <ProductDiscountList
+            products={products}
+            discounts={couponForm.productDiscounts}
+            onChange={(productDiscounts) => setCouponForm({ ...couponForm, productDiscounts })}
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="label">Tipo de desconto</label>
+            <select
+              className="input-field"
+              value={couponForm.discount_type}
+              onChange={(e) => setCouponForm({ ...couponForm, discount_type: e.target.value as DiscountType })}
+            >
+              <option value="percent">Percentual</option>
+              <option value="fixed">Valor fixo (R$)</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Valor</label>
+            <input
+              className="input-field"
+              type="number"
+              min="0"
+              value={couponForm.discount_value}
+              onChange={(e) => setCouponForm({ ...couponForm, discount_value: e.target.value })}
+            />
+          </div>
+        </div>
+      )}
+      <label className="flex items-center gap-2 text-sm text-son-silver">
+        <input
+          type="checkbox"
+          className="w-4 h-4 accent-son-pink"
+          checked={couponForm.allow_promotion_checkout}
+          onChange={(e) => setCouponForm({ ...couponForm, allow_promotion_checkout: e.target.checked })}
+        />
+        Pode ser usado também num checkout de promoção
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="label">Validade (opcional)</label>
+          <ExpiryInput value={couponForm.expires_at} onChange={(expires_at) => setCouponForm({ ...couponForm, expires_at })} />
+        </div>
+        <div>
+          <label className="label">Limite de usos (opcional)</label>
+          <input
+            className="input-field"
+            type="number"
+            min="1"
+            value={couponForm.max_uses}
+            onChange={(e) => setCouponForm({ ...couponForm, max_uses: e.target.value })}
+          />
+        </div>
+      </div>
+      {couponError && <p className="error-msg">{couponError}</p>}
+      <button onClick={saveCoupon} disabled={savingCoupon} className="btn-primary w-full mt-2">
+        {savingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+        {isEdit ? 'Salvar alterações' : 'Salvar cupom'}
+      </button>
+    </>
+  )
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-black">CRM &amp; cupons</h1>
-        <button
-          onClick={() => {
-            setEditingCouponId(null)
-            setCouponForm(EMPTY_COUPON_FORM)
-            setShowCouponForm(true)
-          }}
-          className="btn-primary text-sm py-2 px-4"
-        >
-          <Plus className="w-4 h-4" /> Novo cupom
-        </button>
       </div>
       <div className="grid grid-cols-3 gap-3 mb-6">
         <Card className="p-4 text-center">
@@ -1051,6 +1161,13 @@ export default function AdminCrm() {
               <p className="text-xs text-son-silver-dim">
                 {visible.length} cliente(s) nessa segmentação — dê um nome e salve pra reabrir/reutilizar depois.
               </p>
+              <div className="flex flex-col gap-1">
+                {describeFilter(appliedFilter, products, categories).map((line, i) => (
+                  <span key={i} className="px-3 py-1.5 rounded-full bg-son-gold/15 text-son-gold text-xs font-medium w-fit">
+                    {line}
+                  </span>
+                ))}
+              </div>
               <div>
                 <label className="label">Nome da segmentação</label>
                 <input
@@ -1191,81 +1308,235 @@ export default function AdminCrm() {
                   <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
                     {campanhas.map((cc) => {
                       const cCoupon = coupons.find((c) => c.id === cc.coupon_id)
+                      const isEditing = editingCampanhaId === cc.id
                       return (
-                        <div key={cc.id} className="flex items-center gap-2 flex-wrap">
-                          <div className="w-4 h-px bg-white/15 flex-shrink-0 hidden sm:block" />
-                          <div
-                            className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${
-                              cc.orientation === 'evento' ? 'border-amber-500/30 bg-amber-500/5' : 'border-son-pink/30 bg-son-pink/5'
-                            }`}
-                          >
-                            {cc.orientation === 'evento' ? (
-                              <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                            ) : (
-                              <Gift className="w-3.5 h-3.5 text-son-pink flex-shrink-0" />
-                            )}
-                            <div className="min-w-0">
-                              <p className="text-xs font-semibold text-white">
-                                {cc.orientation === 'evento' ? 'Orientada a evento' : 'Orientada a segmento'}
-                              </p>
-                              <p className="text-[10px] text-son-silver-dim">
-                                {cc.orientation === 'evento'
-                                  ? cc.fired_at
-                                    ? `Disparado em ${formatDate(cc.fired_at)}`
-                                    : 'Aguardando evento'
-                                  : `Disparada em ${formatDate(cc.fired_at ?? cc.created_at)}`}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1.5 flex-shrink-0 ml-1">
-                              {cc.orientation === 'evento' && (
-                                <button
-                                  type="button"
-                                  onClick={() => fireCampanha(cc)}
-                                  className="text-[10px] font-semibold text-son-gold hover:text-white"
-                                >
-                                  Verificar
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => toggleCampanhaActive(cc)}
-                                className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                                  cc.active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/10 text-son-silver-dim'
-                                }`}
+                        <motion.div
+                          layout
+                          key={cc.id}
+                          transition={{ layout: { duration: 0.3, ease: 'easeInOut' } }}
+                          className="rounded-2xl border border-purple-400/30 bg-purple-500/5 overflow-hidden"
+                        >
+                          <AnimatePresence mode="wait" initial={false}>
+                            {isEditing ? (
+                              <motion.div
+                                key="edit"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.15 }}
+                                className="p-4 space-y-3"
                               >
-                                {cc.active ? 'On' : 'Off'}
-                              </button>
-                              <button type="button" onClick={() => removeCampanha(cc)} className="text-son-silver-dim hover:text-son-pink">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {cCoupon && (
-                            <>
-                              <div className="w-4 h-px bg-white/15 flex-shrink-0 hidden sm:block" />
-                              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-son-surface px-3 py-2">
-                                <span className="font-mono text-xs font-bold text-white">{cCoupon.code}</span>
+                                <div className="flex items-center justify-between">
+                                  <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                                    {cc.orientation === 'evento' ? (
+                                      <Zap className="w-4 h-4 text-amber-400" />
+                                    ) : (
+                                      <Gift className="w-4 h-4 text-purple-300" />
+                                    )}
+                                    Editar campanha
+                                  </h4>
+                                  <button type="button" onClick={() => setEditingCampanhaId(null)} className="text-son-silver-dim hover:text-white">
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                <div>
+                                  <label className="label">Mensagem pro cliente (WhatsApp)</label>
+                                  <textarea
+                                    className="input-field"
+                                    rows={4}
+                                    value={campanhaEditForm.messageTemplate}
+                                    onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, messageTemplate: e.target.value })}
+                                  />
+                                  <p className="text-[10px] text-son-silver-dim mt-1">
+                                    Precisa citar <code>/nome</code> e <code>/cupom</code>.
+                                  </p>
+                                </div>
+                                <div>
+                                  <label className="label">Desconto no produto</label>
+                                  <div className="grid grid-cols-3 gap-1.5 mb-2">
+                                    {(
+                                      [
+                                        { value: 'nenhum', label: 'Nenhum' },
+                                        { value: 'flat', label: 'Valor total' },
+                                        { value: 'produto', label: 'Por produto' },
+                                      ] as const
+                                    ).map(({ value, label }) => (
+                                      <button
+                                        key={value}
+                                        type="button"
+                                        onClick={() => setCampanhaEditForm({ ...campanhaEditForm, productMode: value })}
+                                        className={`py-2 rounded-xl border text-xs font-medium transition-all ${
+                                          campanhaEditForm.productMode === value
+                                            ? 'bg-purple-500 text-white border-transparent'
+                                            : 'bg-son-surface border-white/10 text-son-silver'
+                                        }`}
+                                      >
+                                        {label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  {campanhaEditForm.productMode === 'flat' && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <select
+                                        className="input-field"
+                                        value={campanhaEditForm.discount_type}
+                                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, discount_type: e.target.value as DiscountType })}
+                                      >
+                                        <option value="percent">Percentual</option>
+                                        <option value="fixed">Valor fixo (R$)</option>
+                                      </select>
+                                      <input
+                                        className="input-field"
+                                        type="number"
+                                        min="0"
+                                        placeholder="Valor"
+                                        value={campanhaEditForm.discount_value}
+                                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, discount_value: e.target.value })}
+                                      />
+                                    </div>
+                                  )}
+                                  {campanhaEditForm.productMode === 'produto' && (
+                                    <ProductDiscountList
+                                      products={products}
+                                      discounts={campanhaEditForm.productDiscounts}
+                                      onChange={(productDiscounts) => setCampanhaEditForm({ ...campanhaEditForm, productDiscounts })}
+                                    />
+                                  )}
+                                </div>
+                                <label className="flex items-center gap-2 text-sm text-son-silver">
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4 accent-purple-400"
+                                    checked={campanhaEditForm.shippingEnabled}
+                                    onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, shippingEnabled: e.target.checked })}
+                                  />
+                                  Também dar desconto no frete
+                                </label>
+                                {campanhaEditForm.shippingEnabled && (
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <select
+                                      className="input-field"
+                                      value={campanhaEditForm.shipping_discount_type}
+                                      onChange={(e) =>
+                                        setCampanhaEditForm({ ...campanhaEditForm, shipping_discount_type: e.target.value as DiscountType })
+                                      }
+                                    >
+                                      <option value="percent">Percentual</option>
+                                      <option value="fixed">Valor fixo (R$)</option>
+                                    </select>
+                                    <input
+                                      className="input-field"
+                                      type="number"
+                                      min="0"
+                                      placeholder="Valor"
+                                      value={campanhaEditForm.shipping_discount_value}
+                                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, shipping_discount_value: e.target.value })}
+                                    />
+                                  </div>
+                                )}
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="label">Usos por cliente</label>
+                                    <input
+                                      className="input-field"
+                                      type="number"
+                                      min="1"
+                                      value={campanhaEditForm.uses_per_customer}
+                                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, uses_per_customer: e.target.value })}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="label">Limite global (opcional)</label>
+                                    <input
+                                      className="input-field"
+                                      type="number"
+                                      min="1"
+                                      value={campanhaEditForm.max_uses}
+                                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, max_uses: e.target.value })}
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="label">Validade (opcional)</label>
+                                  <ExpiryInput
+                                    value={campanhaEditForm.expires_at}
+                                    onChange={(expires_at) => setCampanhaEditForm({ ...campanhaEditForm, expires_at })}
+                                  />
+                                </div>
+                                {campanhaEditError && <p className="error-msg">{campanhaEditError}</p>}
                                 <button
-                                  type="button"
-                                  onClick={() => openEditTargetedCoupon(cCoupon)}
-                                  className="text-[10px] font-semibold text-son-silver-dim hover:text-white"
+                                  onClick={saveCampanhaEdit}
+                                  disabled={savingCampanhaEdit || !campanhaEditMessageValid}
+                                  className="btn-primary w-full"
                                 >
-                                  Editar
+                                  {savingCampanhaEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                  Salvar alterações
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleCouponActive(cCoupon)}
-                                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                                    cCoupon.active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/10 text-son-silver-dim'
-                                  }`}
-                                >
-                                  {cCoupon.active ? 'On' : 'Off'}
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
+                              </motion.div>
+                            ) : (
+                              <motion.div key="view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                                <div className="flex items-stretch">
+                                  <div className="flex-1 min-w-0 p-3 flex items-center gap-2">
+                                    {cc.orientation === 'evento' ? (
+                                      <Zap className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                                    ) : (
+                                      <Gift className="w-4 h-4 text-purple-300 flex-shrink-0" />
+                                    )}
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-semibold text-white">
+                                        {cc.orientation === 'evento' ? 'Orientada a evento' : 'Orientada a segmento'}
+                                      </p>
+                                      <p className="text-[10px] text-son-silver-dim">
+                                        {cc.orientation === 'evento'
+                                          ? cc.fired_at
+                                            ? `Disparado em ${formatDate(cc.fired_at)}`
+                                            : 'Aguardando evento'
+                                          : `Disparada em ${formatDate(cc.fired_at ?? cc.created_at)}`}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  {cCoupon && (
+                                    <>
+                                      <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
+                                      <div className="flex-shrink-0 p-3 flex flex-col items-center justify-center min-w-[6.5rem]">
+                                        <span className="font-mono text-xs font-bold text-white">{cCoupon.code}</span>
+                                        <span className="text-sm font-black text-purple-300">
+                                          {discountLabel(cCoupon.discount_type, cCoupon.discount_value) ??
+                                            discountLabel(cCoupon.shipping_discount_type, cCoupon.shipping_discount_value) ??
+                                            `${cCoupon.product_discounts?.length ?? 0} produto(s)`}
+                                        </span>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                                <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-purple-400/20">
+                                  <div className="flex items-center gap-2">
+                                    {cc.orientation === 'evento' && (
+                                      <button
+                                        type="button"
+                                        onClick={() => fireCampanha(cc)}
+                                        className="text-[10px] font-semibold text-son-gold hover:text-white"
+                                      >
+                                        Verificar
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditCampanha(cc)}
+                                      className="text-[10px] font-semibold text-son-silver-dim hover:text-white"
+                                    >
+                                      Editar
+                                    </button>
+                                    <button type="button" onClick={() => removeCampanha(cc)} className="text-son-silver-dim hover:text-son-pink">
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                  <ToggleSwitch checked={cc.active} onClick={() => toggleCampanhaActive(cc)} />
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </motion.div>
                       )
                     })}
                   </div>
@@ -1276,417 +1547,121 @@ export default function AdminCrm() {
         </div>
       )}
 
-      <h2 className="text-xl font-black mb-4">Cupons</h2>
+      <h2 className="text-xl font-black mb-4">Cupons avulsos</h2>
+
+      <motion.div layout transition={{ layout: { duration: 0.3, ease: 'easeInOut' } }} className="max-w-md mx-auto mb-6">
+        <AnimatePresence mode="wait" initial={false}>
+          {showCouponForm && !editingCouponId ? (
+            <motion.div
+              key="form"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="rounded-2xl border-2 border-son-gold/40 bg-son-surface p-4 space-y-3"
+            >
+              {couponFormFields(false)}
+            </motion.div>
+          ) : (
+            <motion.button
+              key="button"
+              type="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              onClick={() => {
+                setEditingCouponId(null)
+                setCouponForm(EMPTY_COUPON_FORM)
+                setCouponError(null)
+                setShowCouponForm(true)
+              }}
+              className="btn-primary w-full py-4 text-base rounded-2xl"
+            >
+              <Plus className="w-5 h-5" /> Novo cupom
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
       {couponsLoading ? (
         <div className="flex justify-center py-10">
           <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
         </div>
-      ) : coupons.length === 0 ? (
+      ) : avulsoCoupons.length === 0 ? (
         <div className="text-center py-10 text-son-silver-dim">
           <Tag className="w-10 h-10 mx-auto mb-3 opacity-30" />
-          <p>Nenhum cupom cadastrado.</p>
+          <p>Nenhum cupom avulso cadastrado.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {coupons.map((c) => (
-            <Card key={c.id} className="p-4">
-              <div className="flex items-center justify-between mb-1">
-                <p className="font-mono font-bold text-white">{c.code}</p>
-                <button
-                  onClick={() => toggleCouponActive(c)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                    c.active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/10 text-son-silver-dim'
-                  }`}
-                >
-                  {c.active ? 'Ativo' : 'Inativo'}
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-1 mb-1">
-                <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-xs">{COUPON_KIND_LABEL[c.kind]}</span>
-                {c.kind === 'produto' ? (
-                  <span className="px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">
-                    {c.product_discounts?.length ?? 0} produto(s)
-                  </span>
-                ) : (
-                  discountLabel(c.discount_type, c.discount_value) && (
-                    <span className="px-2 py-0.5 rounded-full bg-son-pink/15 text-son-pink text-xs font-semibold">
-                      {discountLabel(c.discount_type, c.discount_value)}
-                    </span>
-                  )
-                )}
-                {discountLabel(c.shipping_discount_type, c.shipping_discount_value) && (
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-semibold">
-                    Frete: {discountLabel(c.shipping_discount_type, c.shipping_discount_value)}
-                  </span>
-                )}
-                {(c.grant_count ?? 0) > 0 ? (
-                  <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-xs font-semibold">
-                    Alvo · {c.grant_count} cliente(s)
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-xs">Público</span>
-                )}
-                {c.allow_promotion_checkout && (
-                  <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-xs">+ campanha</span>
-                )}
-              </div>
-              <p className="text-xs text-son-silver-dim">
-                {c.max_uses ? `${c.used_count}/${c.max_uses} usos` : `${c.used_count} usos · sem limite global`}
-                {c.expires_at ? ` · até ${new Date(c.expires_at).toLocaleDateString('pt-BR')}` : ' · sem validade'}
-              </p>
-              <div className="flex items-center justify-end gap-3 mt-2">
-                <button
-                  onClick={() => ((c.grant_count ?? 0) > 0 ? openEditTargetedCoupon(c) : openEditCoupon(c))}
-                  className="text-xs font-semibold text-son-silver-dim hover:text-white"
-                >
-                  Editar
-                </button>
-                <button onClick={() => removeCoupon(c.id)} className="text-son-silver-dim hover:text-son-pink">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {showCouponForm && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
-          onClick={() => {
-            setShowCouponForm(false)
-            setEditingCouponId(null)
-          }}
-        >
-          <div className="glass rounded-2xl p-6 max-w-lg w-full my-8" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white">{editingCouponId ? 'Editar cupom' : 'Novo cupom (público)'}</h3>
-              <button
-                onClick={() => {
-                  setShowCouponForm(false)
-                  setEditingCouponId(null)
-                }}
-                className="text-son-silver-dim hover:text-white"
+          {avulsoCoupons.map((c) => {
+            const isEditing = showCouponForm && editingCouponId === c.id
+            return (
+              <motion.div
+                layout
+                key={c.id}
+                transition={{ layout: { duration: 0.3, ease: 'easeInOut' } }}
+                className="rounded-2xl border border-blue-400/30 bg-blue-500/5 overflow-hidden"
               >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="label">Código</label>
-                <input
-                  className="input-field font-mono uppercase disabled:opacity-50"
-                  value={couponForm.code}
-                  onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value })}
-                  placeholder="SUNSET10"
-                  disabled={!!editingCouponId}
-                />
-              </div>
-              <div>
-                <label className="label">Tipo</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {(['desconto', 'frete', 'produto', 'aniversario'] as const).map((k) => (
-                    <button
-                      key={k}
-                      type="button"
-                      disabled={!!editingCouponId}
-                      onClick={() => setCouponForm({ ...couponForm, kind: k })}
-                      className={`py-2.5 rounded-xl border text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                        couponForm.kind === k ? 'sunset-bg text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
-                      }`}
+                <AnimatePresence mode="wait" initial={false}>
+                  {isEditing ? (
+                    <motion.div
+                      key="edit"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="p-4 space-y-3"
                     >
-                      {COUPON_KIND_LABEL[k]}
-                    </button>
-                  ))}
-                </div>
-                {couponForm.kind === 'frete' && (
-                  <p className="text-xs text-son-silver-dim mt-1.5">
-                    Desconta do frete que o cliente paga — o motoboy recebe o valor cheio do mesmo jeito, a loja absorve a diferença.
-                  </p>
-                )}
-                {couponForm.kind === 'aniversario' && (
-                  <p className="text-xs text-son-silver-dim mt-1.5">Só é aceito durante o mês de aniversário do cliente.</p>
-                )}
-                {couponForm.kind === 'produto' && (
-                  <p className="text-xs text-son-silver-dim mt-1.5">
-                    Os produtos escolhidos aparecem destacados em /catalogo na categoria "Promoção" com o desconto já visível, e o
-                    desconto se aplica sozinho assim que o produto entra no carrinho — sem precisar digitar código.
-                  </p>
-                )}
-              </div>
-              {couponForm.kind === 'produto' ? (
-                <div>
-                  <label className="label">Produtos em promoção</label>
-                  <ProductDiscountList
-                    products={products}
-                    discounts={couponForm.productDiscounts}
-                    onChange={(productDiscounts) => setCouponForm({ ...couponForm, productDiscounts })}
-                  />
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="label">Tipo de desconto</label>
-                    <select
-                      className="input-field"
-                      value={couponForm.discount_type}
-                      onChange={(e) => setCouponForm({ ...couponForm, discount_type: e.target.value as DiscountType })}
-                    >
-                      <option value="percent">Percentual</option>
-                      <option value="fixed">Valor fixo (R$)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">Valor</label>
-                    <input
-                      className="input-field"
-                      type="number"
-                      min="0"
-                      value={couponForm.discount_value}
-                      onChange={(e) => setCouponForm({ ...couponForm, discount_value: e.target.value })}
-                    />
-                  </div>
-                </div>
-              )}
-              <label className="flex items-center gap-2 text-sm text-son-silver">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 accent-son-pink"
-                  checked={couponForm.allow_promotion_checkout}
-                  onChange={(e) => setCouponForm({ ...couponForm, allow_promotion_checkout: e.target.checked })}
-                />
-                Pode ser usado também num checkout de promoção
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Validade (opcional)</label>
-                  <ExpiryInput value={couponForm.expires_at} onChange={(expires_at) => setCouponForm({ ...couponForm, expires_at })} />
-                </div>
-                <div>
-                  <label className="label">Limite de usos (opcional)</label>
-                  <input
-                    className="input-field"
-                    type="number"
-                    min="1"
-                    value={couponForm.max_uses}
-                    onChange={(e) => setCouponForm({ ...couponForm, max_uses: e.target.value })}
-                  />
-                </div>
-              </div>
-              {couponError && <p className="error-msg">{couponError}</p>}
-              <button onClick={saveCoupon} disabled={savingCoupon} className="btn-primary w-full mt-2">
-                {savingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {editingCouponId ? 'Salvar alterações' : 'Salvar cupom'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showTargetedForm && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
-          onClick={() => {
-            setShowTargetedForm(false)
-            setEditingTargetedCouponId(null)
-          }}
-        >
-          <div className="glass rounded-2xl p-6 max-w-lg w-full my-8" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white">{editingTargetedCouponId ? 'Editar cupom exclusivo' : 'Cupom exclusivo'}</h3>
-              <button
-                onClick={() => {
-                  setShowTargetedForm(false)
-                  setEditingTargetedCouponId(null)
-                }}
-                className="text-son-silver-dim hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            {!editingTargetedCouponId && (
-              <p className="text-xs text-son-silver-dim mb-3">
-                Vai valer só pra <strong className="text-white">{visible.length} cliente(s)</strong> da lista filtrada —
-                intransferível, nenhum outro cliente consegue usar mesmo digitando o código.
-              </p>
-            )}
-            <div className="space-y-3">
-              <div>
-                <label className="label">Código</label>
-                <input
-                  className="input-field font-mono uppercase disabled:opacity-50"
-                  value={targetedForm.code}
-                  onChange={(e) => setTargetedForm({ ...targetedForm, code: e.target.value })}
-                  placeholder="SUNSET15"
-                  disabled={!!editingTargetedCouponId}
-                />
-              </div>
-              <div>
-                <label className="label">Desconto no produto</label>
-                <div className="grid grid-cols-3 gap-1.5 mb-2">
-                  {(
-                    [
-                      { value: 'nenhum', label: 'Nenhum' },
-                      { value: 'flat', label: 'Valor total' },
-                      { value: 'produto', label: 'Por produto' },
-                    ] as const
-                  ).map(({ value, label }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setTargetedForm({ ...targetedForm, productMode: value })}
-                      className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
-                        targetedForm.productMode === value
-                          ? 'sunset-bg text-white border-transparent'
-                          : 'bg-son-surface border-white/10 text-son-silver'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {targetedForm.productMode === 'flat' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      className="input-field"
-                      value={targetedForm.discount_type}
-                      onChange={(e) => setTargetedForm({ ...targetedForm, discount_type: e.target.value as DiscountType })}
-                    >
-                      <option value="percent">Percentual</option>
-                      <option value="fixed">Valor fixo (R$)</option>
-                    </select>
-                    <input
-                      className="input-field"
-                      type="number"
-                      min="0"
-                      placeholder="Valor"
-                      value={targetedForm.discount_value}
-                      onChange={(e) => setTargetedForm({ ...targetedForm, discount_value: e.target.value })}
-                    />
-                  </div>
-                )}
-                {targetedForm.productMode === 'produto' && (
-                  <ProductDiscountList
-                    products={products}
-                    discounts={targetedForm.productDiscounts}
-                    onChange={(productDiscounts) => setTargetedForm({ ...targetedForm, productDiscounts })}
-                  />
-                )}
-              </div>
-
-              <label className="flex items-center gap-2 text-sm text-son-silver">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 accent-son-pink"
-                  checked={targetedForm.shippingEnabled}
-                  onChange={(e) => setTargetedForm({ ...targetedForm, shippingEnabled: e.target.checked })}
-                />
-                Também dar desconto no frete
-              </label>
-              {targetedForm.shippingEnabled && (
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    className="input-field"
-                    value={targetedForm.shipping_discount_type}
-                    onChange={(e) => setTargetedForm({ ...targetedForm, shipping_discount_type: e.target.value as DiscountType })}
-                  >
-                    <option value="percent">Percentual</option>
-                    <option value="fixed">Valor fixo (R$)</option>
-                  </select>
-                  <input
-                    className="input-field"
-                    type="number"
-                    min="0"
-                    placeholder="Valor"
-                    value={targetedForm.shipping_discount_value}
-                    onChange={(e) => setTargetedForm({ ...targetedForm, shipping_discount_value: e.target.value })}
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="label">Quantas vezes cada cliente pode usar</label>
-                <input
-                  className="input-field"
-                  type="number"
-                  min="1"
-                  value={targetedForm.uses_per_customer}
-                  onChange={(e) => setTargetedForm({ ...targetedForm, uses_per_customer: e.target.value })}
-                />
-              </div>
-              {!editingTargetedCouponId && (
-                <label className="flex items-center gap-2 text-sm text-son-silver">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 accent-son-pink"
-                    checked={targetedForm.dontNotify}
-                    onChange={(e) => setTargetedForm({ ...targetedForm, dontNotify: e.target.checked })}
-                  />
-                  Não notificar via WhatsApp
-                </label>
-              )}
-              {!editingTargetedCouponId && !targetedForm.dontNotify && (
-                <div>
-                  <label className="label">Mensagem pro cliente</label>
-                  <textarea
-                    className="input-field"
-                    rows={5}
-                    placeholder={
-                      'Olá, /nome! Você ganhou o cupom /cupom, exclusivo pra você 🎁\n\nBenefícios:\n- ...'
-                    }
-                    value={targetedForm.customMessage}
-                    onChange={(e) => setTargetedForm({ ...targetedForm, customMessage: e.target.value })}
-                  />
-                  <p className="text-xs text-son-silver-dim mt-1">
-                    Precisa citar <code>/nome</code> (vira o nome do cliente) e <code>/cupom</code> (vira o código do cupom). O link do
-                    site é adicionado automaticamente no fim.
-                  </p>
-                </div>
-              )}
-              <label className="flex items-center gap-2 text-sm text-son-silver">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 accent-son-pink"
-                  checked={targetedForm.combinable_with_public}
-                  onChange={(e) => setTargetedForm({ ...targetedForm, combinable_with_public: e.target.checked })}
-                />
-                Pode ser combinado com um cupom avulso no checkout de catálogo
-              </label>
-              <label className="flex items-center gap-2 text-sm text-son-silver">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 accent-son-pink"
-                  checked={targetedForm.allow_promotion_checkout}
-                  onChange={(e) => setTargetedForm({ ...targetedForm, allow_promotion_checkout: e.target.checked })}
-                />
-                Pode ser usado também num checkout de promoção
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Validade (opcional)</label>
-                  <ExpiryInput
-                    value={targetedForm.expires_at}
-                    onChange={(expires_at) => setTargetedForm({ ...targetedForm, expires_at })}
-                  />
-                </div>
-                <div>
-                  <label className="label">Limite global de usos (opcional)</label>
-                  <input
-                    className="input-field"
-                    type="number"
-                    min="1"
-                    value={targetedForm.max_uses}
-                    onChange={(e) => setTargetedForm({ ...targetedForm, max_uses: e.target.value })}
-                  />
-                </div>
-              </div>
-              {targetedError && <p className="error-msg">{targetedError}</p>}
-              <button onClick={saveTargetedCoupon} disabled={savingTargeted} className="btn-primary w-full mt-2">
-                {savingTargeted ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {editingTargetedCouponId ? 'Salvar alterações' : 'Criar cupom exclusivo'}
-              </button>
-            </div>
-          </div>
+                      {couponFormFields(true)}
+                    </motion.div>
+                  ) : (
+                    <motion.div key="view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                      <div className="flex items-stretch">
+                        <div className="flex-1 min-w-0 p-3">
+                          <p className="font-mono font-bold text-white">{c.code}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            <span className="px-2 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[10px]">
+                              {COUPON_KIND_LABEL[c.kind]}
+                            </span>
+                            {discountLabel(c.shipping_discount_type, c.shipping_discount_value) && (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold">
+                                Frete: {discountLabel(c.shipping_discount_type, c.shipping_discount_value)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-son-silver-dim mt-1">
+                            {c.max_uses ? `${c.used_count}/${c.max_uses} usos` : `${c.used_count} usos · sem limite`}
+                            {c.expires_at ? ` · até ${new Date(c.expires_at).toLocaleDateString('pt-BR')}` : ' · sem validade'}
+                          </p>
+                        </div>
+                        <div className="border-l-2 border-dashed border-blue-400/30 my-2" />
+                        <div className="flex-shrink-0 p-3 flex flex-col items-center justify-center min-w-[6.5rem]">
+                          <span className="text-sm font-black text-blue-300 text-center">
+                            {c.kind === 'produto'
+                              ? `${c.product_discounts?.length ?? 0} produto(s)`
+                              : discountLabel(c.discount_type, c.discount_value) ?? '—'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-blue-400/20">
+                        <div className="flex items-center gap-2">
+                          <button type="button" onClick={() => openEditCoupon(c)} className="text-[10px] font-semibold text-son-silver-dim hover:text-white">
+                            Editar
+                          </button>
+                          <button type="button" onClick={() => removeCoupon(c.id)} className="text-son-silver-dim hover:text-son-pink">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <ToggleSwitch checked={c.active} onClick={() => toggleCouponActive(c)} />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )
+          })}
         </div>
       )}
 

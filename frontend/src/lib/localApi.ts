@@ -1148,11 +1148,60 @@ async function deleteCampanhaCoupon(id: string): Promise<void> {
   saveDb(db)
 }
 
+// Liga/desliga a campanha inteira — junto com ela o cupom exclusivo por
+// trás (não existe on/off separado só do cupom de uma campanha).
 async function toggleCampanhaCoupon(id: string, active: boolean): Promise<import('./types').CrmCampanhaCoupon> {
   const db = loadDb()
   const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
   if (!row) throw new ApiError(404, 'campanha coupon not found')
   row.active = active
+  const coupon = (db.coupons ?? []).find((c) => c.id === row.coupon_id)
+  if (coupon) coupon.active = active
+  saveDb(db)
+  return row
+}
+
+async function updateCampanhaCoupon(
+  id: string,
+  payload: {
+    message_template: string
+    uses_per_customer?: number
+    combinable_with_public?: boolean
+    allow_promotion_checkout?: boolean
+    expires_at?: string
+    max_uses?: number
+    discount_type?: 'percent' | 'fixed'
+    discount_value?: number
+    shipping_discount_type?: 'percent' | 'fixed'
+    shipping_discount_value?: number
+    product_discounts?: import('./types').ProductDiscount[]
+  }
+): Promise<import('./types').CrmCampanhaCoupon> {
+  const db = loadDb()
+  const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
+  if (!row) throw new ApiError(404, 'campanha coupon not found')
+  if (!payload.message_template.trim() || !payload.message_template.includes('/nome') || !payload.message_template.includes('/cupom')) {
+    throw new ApiError(400, 'message_template must mention /nome and /cupom')
+  }
+  const coupon = (db.coupons ?? []).find((c) => c.id === row.coupon_id)
+  if (!coupon) throw new ApiError(404, 'coupon not found')
+  const hasProducts = payload.product_discounts && payload.product_discounts.length > 0
+  const kind: 'desconto' | 'frete' | 'produto' = hasProducts ? 'produto' : payload.discount_type ? 'desconto' : 'frete'
+  coupon.kind = kind
+  coupon.discount_type = kind === 'produto' ? null : payload.discount_type ?? null
+  coupon.discount_value = kind === 'produto' ? null : payload.discount_value ?? null
+  coupon.shipping_discount_type = payload.shipping_discount_type ?? null
+  coupon.shipping_discount_value = payload.shipping_discount_value ?? null
+  coupon.product_discounts = hasProducts ? payload.product_discounts! : []
+  coupon.combinable_with_public = payload.combinable_with_public ?? false
+  coupon.allow_promotion_checkout = payload.allow_promotion_checkout ?? false
+  coupon.expires_at = payload.expires_at || null
+  coupon.max_uses = payload.max_uses ?? null
+  for (const g of db.couponGrants ?? []) {
+    if (g.coupon_id === row.coupon_id) g.granted_uses = payload.uses_per_customer ?? 1
+  }
+  row.message_template = payload.message_template.trim()
+  row.uses_per_customer = payload.uses_per_customer ?? 1
   saveDb(db)
   return row
 }
@@ -1849,6 +1898,7 @@ export const localApi = {
       fireEvent: fireCampanhaEvent,
       delete: deleteCampanhaCoupon,
       toggleActive: toggleCampanhaCoupon,
+      update: updateCampanhaCoupon,
     },
     whatsapp: {
       status: async () => ({ instance: { state: 'close' } }),
