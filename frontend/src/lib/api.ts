@@ -655,6 +655,7 @@ const remoteApi = {
         campanhaId: string,
         payload: {
           code: string
+          message_template: string
           uses_per_customer?: number
           combinable_with_public?: boolean
           allow_promotion_checkout?: boolean
@@ -671,6 +672,7 @@ const remoteApi = {
           p_token: adminToken(),
           p_campanha_id: campanhaId,
           p_code: payload.code,
+          p_message_template: payload.message_template,
           p_uses_per_customer: payload.uses_per_customer ?? 1,
           p_combinable_with_public: payload.combinable_with_public ?? false,
           p_allow_promotion_checkout: payload.allow_promotion_checkout ?? false,

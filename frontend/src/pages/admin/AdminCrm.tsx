@@ -257,18 +257,42 @@ const FIELD_GROUPS: { key: FieldGroupKey; isFilled: (f: FilterState) => boolean 
   { key: 'recurring', isFilled: (f) => f.recurringProductIds.length > 0 || f.recurringCategoryIds.length > 0 },
 ]
 
-// Campo "novo" = o segmento usa, mas o trigger_criteria da campanha
-// 'evento' (calibrado antes da última edição do segmento) ainda não tem
-// valor-alvo pra ele. Campo removido do segmento não conta pra nada aqui
-// (fica ignorado de propósito — não precisa de ação do admin).
-function getNewTriggerFieldKeys(segmentCriteria: FilterState, triggerCriteria: FilterState | null): Set<FieldGroupKey> {
-  const trigger = triggerCriteria ?? EMPTY_FILTER
-  return new Set(FIELD_GROUPS.filter((g) => g.isFilled(segmentCriteria) && !g.isFilled(trigger)).map((g) => g.key))
+// Sub-campos de FilterState que cada grupo realmente usa — pra comparar
+// valor a valor (não só presença) entre o retrato antigo e o atual.
+const FIELD_GROUP_KEYS: Record<FieldGroupKey, (keyof FilterState)[]> = {
+  minOrders: ['minOrders', 'minOrdersDays'],
+  minItems: ['minItems', 'minItemsDays'],
+  spentBelow: ['spentBelowAmount', 'spentBelowDays'],
+  spentAbove: ['spentAboveAmount', 'spentAboveDays'],
+  frequencyDrop: ['frequencyDropPercent'],
+  newCustomer: ['newCustomerDays'],
+  maxDistance: ['maxDistanceKm'],
+  neighborhoods: ['neighborhoods'],
+  birthday: ['birthdayMonth'],
+  recurring: ['recurringProductIds', 'recurringCategoryIds', 'recurringDays'],
+}
+
+// Campo "mudou" = o segmento usa esse campo AGORA e o valor dele é
+// diferente do retrato tirado na última vez que o admin sincronizou o
+// evento (last_synced_segment_criteria) — cobre tanto campo novo (não
+// existia no retrato) quanto campo que já existia mas teve o valor
+// alterado. Campo removido do segmento (não usado mais agora) é ignorado
+// de propósito — não precisa de ação do admin.
+function getChangedFieldKeys(oldCriteria: FilterState, newCriteria: FilterState): Set<FieldGroupKey> {
+  const changed = new Set<FieldGroupKey>()
+  for (const group of FIELD_GROUPS) {
+    if (!group.isFilled(newCriteria)) continue
+    const fields = FIELD_GROUP_KEYS[group.key]
+    const differs = fields.some((f) => JSON.stringify(oldCriteria[f]) !== JSON.stringify(newCriteria[f]))
+    if (differs) changed.add(group.key)
+  }
+  return changed
 }
 
 function isCampanhaStale(cc: CrmCampanhaCoupon, segment: CrmSegment | undefined): boolean {
   if (cc.orientation !== 'evento' || !segment) return false
-  return getNewTriggerFieldKeys(segment.filter_criteria as unknown as FilterState, cc.trigger_criteria as unknown as FilterState).size > 0
+  const oldCriteria = (cc.last_synced_segment_criteria as unknown as FilterState) ?? EMPTY_FILTER
+  return getChangedFieldKeys(oldCriteria, segment.filter_criteria as unknown as FilterState).size > 0
 }
 
 // Chave-mestra de on/off do app — pill com bolinha deslizante, igual ao
@@ -913,9 +937,10 @@ export default function AdminCrm() {
       if (result.newly_granted.length > 0) {
         // Extras são concedidos junto com o principal na mesma chamada
         // (mesmo critério de "novo"), então avisa pra todos os cupons da
-        // campanha, cada um com seu próprio código na mensagem.
-        for (const couponId of [row.coupon_id, ...row.extra_coupons.map((ec) => ec.coupon.id)]) {
-          api.admin.whatsapp.notifyCouponGrant(couponId, row.message_template).catch(() => {})
+        // campanha — cada um com sua própria mensagem/código.
+        api.admin.whatsapp.notifyCouponGrant(row.coupon_id, row.message_template).catch(() => {})
+        for (const ec of row.extra_coupons) {
+          api.admin.whatsapp.notifyCouponGrant(ec.coupon.id, ec.message_template).catch(() => {})
         }
       }
       loadCampanhaCoupons(row.segment_id)
@@ -1008,13 +1033,20 @@ export default function AdminCrm() {
     setExtraCouponCampanha(cc)
   }
 
+  const extraCouponMessageValid = extraCouponForm.messageTemplate.includes('/nome') && extraCouponForm.messageTemplate.includes('/cupom')
+
   const saveExtraCoupon = async () => {
     if (!extraCouponCampanha) return
     setExtraCouponError(null)
+    if (!extraCouponMessageValid) {
+      setExtraCouponError('A mensagem precisa citar /nome e /cupom.')
+      return
+    }
     setSavingExtraCoupon(true)
     try {
       const created = await api.admin.campanhaCoupons.createExtra(extraCouponCampanha.id, {
         code: extraCouponForm.code,
+        message_template: extraCouponForm.messageTemplate,
         uses_per_customer: Number(extraCouponForm.uses_per_customer) || 1,
         combinable_with_public: extraCouponForm.combinable_with_public,
         allow_promotion_checkout: extraCouponForm.allow_promotion_checkout,
@@ -1028,9 +1060,10 @@ export default function AdminCrm() {
       })
       // Campanha já disparou pra alguém antes (segmento imediato ou evento
       // já concedido)? Esse cupom novo é concedido pra mesma turma na
-      // hora (regra do backend) — então também avisa por WhatsApp agora.
+      // hora (regra do backend) — então também avisa por WhatsApp agora,
+      // com a mensagem própria deste cupom extra.
       if (extraCouponCampanha.fired_at) {
-        api.admin.whatsapp.notifyCouponGrant(created.id, extraCouponCampanha.message_template).catch(() => {})
+        api.admin.whatsapp.notifyCouponGrant(created.id, extraCouponForm.messageTemplate).catch(() => {})
       }
       const segmentId = extraCouponCampanha.segment_id
       setExtraCouponCampanha(null)
@@ -1050,8 +1083,12 @@ export default function AdminCrm() {
       loadCoupons()
     })
 
+  // Só limpa o FILTRO — nome/descrição/editingSegmentId (o "isto é uma
+  // edição, não uma criação") ficam intactos. "Limpar filtros" != "trocar
+  // pra nova segmentação"; misturar os dois fazia salvar depois de limpar
+  // e refazer o filtro virar uma segmentação NOVA em vez de atualizar a
+  // que estava sendo editada.
   const clearFilters = () => {
-    resetSegmentForm()
     setFilter(EMPTY_FILTER)
     setAppliedFilter(null)
     setFilterFormError(null)
@@ -1939,28 +1976,31 @@ export default function AdminCrm() {
                 </button>
               </div>
 
-              {editingCampanhaRow.orientation === 'evento' && editingCampanhaSegment && (
-                <div className="space-y-2 mb-4">
-                  <label className="label">
-                    Critério do evento{' '}
-                    {getNewTriggerFieldKeys(
+              {editingCampanhaRow.orientation === 'evento' && editingCampanhaSegment && (() => {
+                const changedKeys = getChangedFieldKeys(
+                  (editingCampanhaRow.last_synced_segment_criteria as unknown as FilterState) ?? EMPTY_FILTER,
+                  editingCampanhaSegment.filter_criteria as unknown as FilterState
+                )
+                return (
+                  <div className="space-y-2 mb-4">
+                    <label className="label">
+                      Critério do evento{' '}
+                      {changedKeys.size > 0 && (
+                        <span className="text-red-400 font-normal">
+                          (o segmento mudou — ajuste o(s) campo(s) destacado(s) em vermelho abaixo)
+                        </span>
+                      )}
+                    </label>
+                    {renderTriggerFields(
                       editingCampanhaSegment.filter_criteria as unknown as FilterState,
-                      campanhaEditForm.triggerCriteria
-                    ).size > 0 && (
-                      <span className="text-red-400 font-normal">
-                        (o segmento ganhou campo(s) novo(s) — preencha o(s) destacado(s) em vermelho abaixo)
-                      </span>
+                      campanhaEditForm.triggerCriteria ?? EMPTY_FILTER,
+                      (patch) =>
+                        setCampanhaEditForm({ ...campanhaEditForm, triggerCriteria: { ...(campanhaEditForm.triggerCriteria ?? EMPTY_FILTER), ...patch } }),
+                      changedKeys
                     )}
-                  </label>
-                  {renderTriggerFields(
-                    editingCampanhaSegment.filter_criteria as unknown as FilterState,
-                    campanhaEditForm.triggerCriteria ?? EMPTY_FILTER,
-                    (patch) =>
-                      setCampanhaEditForm({ ...campanhaEditForm, triggerCriteria: { ...(campanhaEditForm.triggerCriteria ?? EMPTY_FILTER), ...patch } }),
-                    getNewTriggerFieldKeys(editingCampanhaSegment.filter_criteria as unknown as FilterState, campanhaEditForm.triggerCriteria)
-                  )}
-                </div>
-              )}
+                  </div>
+                )
+              })()}
 
               <div className="space-y-3">
                 <div>
@@ -2119,7 +2159,7 @@ export default function AdminCrm() {
                 </button>
               </div>
               <p className="text-xs text-son-silver-dim mb-3">
-                Entregue junto com o cupom principal desta campanha — mesma mensagem, mesmo gatilho, desconto e código próprios.
+                Entregue junto com o cupom principal desta campanha — mesmo gatilho, mas com mensagem, desconto e código próprios.
               </p>
               <div className="space-y-3">
                 <div>
@@ -2130,6 +2170,19 @@ export default function AdminCrm() {
                     onChange={(e) => setExtraCouponForm({ ...extraCouponForm, code: e.target.value })}
                     placeholder="SUNSET16"
                   />
+                </div>
+                <div>
+                  <label className="label">Mensagem pro cliente (WhatsApp)</label>
+                  <textarea
+                    className="input-field"
+                    rows={4}
+                    value={extraCouponForm.messageTemplate}
+                    onChange={(e) => setExtraCouponForm({ ...extraCouponForm, messageTemplate: e.target.value })}
+                    placeholder={'Olá, /nome! Você também ganhou o cupom /cupom 🎁'}
+                  />
+                  <p className="text-xs text-son-silver-dim mt-1">
+                    Precisa citar <code>/nome</code> e <code>/cupom</code>.
+                  </p>
                 </div>
                 <div>
                   <label className="label">Desconto no produto</label>
@@ -2257,7 +2310,7 @@ export default function AdminCrm() {
                   <ExpiryInput value={extraCouponForm.expires_at} onChange={(expires_at) => setExtraCouponForm({ ...extraCouponForm, expires_at })} />
                 </div>
                 {extraCouponError && <p className="error-msg">{extraCouponError}</p>}
-                <button onClick={saveExtraCoupon} disabled={savingExtraCoupon} className="btn-primary w-full mt-2">
+                <button onClick={saveExtraCoupon} disabled={savingExtraCoupon || !extraCouponMessageValid} className="btn-primary w-full mt-2">
                   {savingExtraCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Criar cupom
                 </button>

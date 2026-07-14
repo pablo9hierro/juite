@@ -55,6 +55,7 @@ export interface LocalCampanhaCoupon {
   active: boolean
   fired_at: string | null
   created_at: string
+  last_synced_segment_criteria: CrmFilterCriteria | null
 }
 
 // Cupom extra de uma campanha (além do principal em LocalCampanhaCoupon.coupon_id).
@@ -62,6 +63,7 @@ export interface LocalCampanhaExtraCoupon {
   id: string
   campanha_id: string
   coupon_id: string
+  message_template: string
   created_at: string
 }
 

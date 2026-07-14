@@ -99,6 +99,7 @@ export type CampanhaOrientation = 'segmento' | 'evento'
 export interface CrmCampanhaExtraCoupon {
   id: string
   coupon: Coupon
+  message_template: string
 }
 
 export interface CrmCampanhaCoupon {
@@ -113,6 +114,11 @@ export interface CrmCampanhaCoupon {
   fired_at: string | null
   created_at: string
   extra_coupons: CrmCampanhaExtraCoupon[]
+  // "Retrato" do filter_criteria do segmento no momento em que o
+  // trigger_criteria foi calibrado pela última vez (criação ou edição) —
+  // compara com o filter_criteria ATUAL do segmento pra saber exatamente
+  // quais campos mudaram desde então (campanha 'evento' desatualizada).
+  last_synced_segment_criteria: CrmFilterCriteria | null
 }
 
 export interface CouponGrant {

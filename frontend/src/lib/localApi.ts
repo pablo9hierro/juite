@@ -1060,7 +1060,7 @@ function campanhaExtraCoupons(db: LocalDb, campanhaId: string): import('./types'
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .map((ec) => {
       const coupon = (db.coupons ?? []).find((c) => c.id === ec.coupon_id)
-      return coupon ? { id: ec.id, coupon: withGrantCount(db, coupon) } : null
+      return coupon ? { id: ec.id, coupon: withGrantCount(db, coupon), message_template: ec.message_template } : null
     })
     .filter((x): x is import('./types').CrmCampanhaExtraCoupon => !!x)
 }
@@ -1133,6 +1133,7 @@ async function createCampanhaCoupon(payload: {
     active: true,
     fired_at: payload.orientation === 'segmento' ? nowIso() : null,
     created_at: nowIso(),
+    last_synced_segment_criteria: segment.filter_criteria,
   }
   db.campanhaCoupons.push(row)
   saveDb(db)
@@ -1228,7 +1229,11 @@ async function updateCampanhaCoupon(
   }
   row.message_template = payload.message_template.trim()
   row.uses_per_customer = payload.uses_per_customer ?? 1
-  if (row.orientation === 'evento' && payload.trigger_criteria) row.trigger_criteria = payload.trigger_criteria
+  if (row.orientation === 'evento' && payload.trigger_criteria) {
+    row.trigger_criteria = payload.trigger_criteria
+    const segment = (db.segments ?? []).find((s) => s.id === row.segment_id)
+    if (segment) row.last_synced_segment_criteria = segment.filter_criteria
+  }
   saveDb(db)
   return { ...row, extra_coupons: campanhaExtraCoupons(db, row.id) }
 }
@@ -1237,6 +1242,7 @@ async function createCampanhaExtraCoupon(
   campanhaId: string,
   payload: {
     code: string
+    message_template: string
     uses_per_customer?: number
     combinable_with_public?: boolean
     allow_promotion_checkout?: boolean
@@ -1251,6 +1257,9 @@ async function createCampanhaExtraCoupon(
 ): Promise<Coupon> {
   const campanhaCheck = (loadDb().campanhaCoupons ?? []).find((c) => c.id === campanhaId)
   if (!campanhaCheck) throw new ApiError(404, 'campanha not found')
+  if (!payload.message_template.trim() || !payload.message_template.includes('/nome') || !payload.message_template.includes('/cupom')) {
+    throw new ApiError(400, 'message_template must mention /nome and /cupom')
+  }
   const coupon = await createTargetedCoupon({ ...payload, customer_whatsapps: [] })
   // createTargetedCoupon já salvou o cupom novo — recarrega pra não
   // sobrescrever esse save com um snapshot antigo do db.
@@ -1262,7 +1271,13 @@ async function createCampanhaExtraCoupon(
     coupon.active = false
   }
   db.campanhaExtraCoupons = db.campanhaExtraCoupons ?? []
-  db.campanhaExtraCoupons.push({ id: uid(), campanha_id: campanhaId, coupon_id: coupon.id, created_at: nowIso() })
+  db.campanhaExtraCoupons.push({
+    id: uid(),
+    campanha_id: campanhaId,
+    coupon_id: coupon.id,
+    message_template: payload.message_template.trim(),
+    created_at: nowIso(),
+  })
   // A campanha já disparou antes (tem concessão do cupom principal)? Esse
   // cupom novo entra pra mesma turma na hora.
   db.couponGrants = db.couponGrants ?? []
