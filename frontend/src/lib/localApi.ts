@@ -1028,9 +1028,15 @@ async function updateSegment(
   const segment = (db.segments ?? []).find((s) => s.id === id)
   if (!segment) throw new ApiError(404, 'segment not found')
   if (!payload.name.trim()) throw new ApiError(400, 'name is required')
+  const criteriaChanged = JSON.stringify(segment.filter_criteria) !== JSON.stringify(payload.filter_criteria)
   segment.name = payload.name.trim()
   segment.description = payload.description?.trim() || null
   segment.filter_criteria = payload.filter_criteria
+  if (criteriaChanged) {
+    for (const cc of db.campanhaCoupons ?? []) {
+      if (cc.segment_id === id && cc.orientation === 'evento') cc.active = false
+    }
+  }
   saveDb(db)
   return segment
 }
@@ -1175,6 +1181,7 @@ async function updateCampanhaCoupon(
     shipping_discount_type?: 'percent' | 'fixed'
     shipping_discount_value?: number
     product_discounts?: import('./types').ProductDiscount[]
+    trigger_criteria?: import('./types').CrmFilterCriteria
   }
 ): Promise<import('./types').CrmCampanhaCoupon> {
   const db = loadDb()
@@ -1202,6 +1209,7 @@ async function updateCampanhaCoupon(
   }
   row.message_template = payload.message_template.trim()
   row.uses_per_customer = payload.uses_per_customer ?? 1
+  if (row.orientation === 'evento' && payload.trigger_criteria) row.trigger_criteria = payload.trigger_criteria
   saveDb(db)
   return row
 }

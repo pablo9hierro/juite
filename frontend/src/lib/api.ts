@@ -612,8 +612,10 @@ const remoteApi = {
       // por trás (não existe on/off separado só do cupom de uma campanha).
       toggleActive: (id: string, active: boolean) =>
         rpc<CrmCampanhaCoupon>('admin_toggle_campanha_coupon', { p_token: adminToken(), p_id: id, p_active: active }),
-      // Não dá pra editar orientation/trigger_criteria/código depois de
-      // criada — só mensagem, desconto e prazo (igual coupons.update).
+      // orientation/código continuam imutáveis depois de criada, mas
+      // trigger_criteria (só pra 'evento') pode ser reajustado — é
+      // exatamente isso que o admin faz quando o segmento muda e a
+      // campanha fica desatualizada.
       update: (
         id: string,
         payload: {
@@ -628,6 +630,7 @@ const remoteApi = {
           shipping_discount_type?: 'percent' | 'fixed'
           shipping_discount_value?: number
           product_discounts?: ProductDiscount[]
+          trigger_criteria?: CrmFilterCriteria
         }
       ) =>
         rpc<CrmCampanhaCoupon>('admin_update_campanha_coupon', {
@@ -644,6 +647,7 @@ const remoteApi = {
           p_shipping_discount_type: payload.shipping_discount_type ?? null,
           p_shipping_discount_value: payload.shipping_discount_value ?? null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
+          p_trigger_criteria: payload.trigger_criteria ?? null,
         }),
     },
     // Único pedaço do admin que ainda fala com o backend Rust (Railway) em

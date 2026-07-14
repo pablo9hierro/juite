@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Cake, Gift, Layers, Loader2, Plus, Search, Sparkles, Tag, Trash2, Users, X, Zap } from 'lucide-react'
+import { AlertTriangle, Cake, Gift, Layers, Loader2, Plus, Search, Sparkles, Tag, Trash2, Users, X, Zap } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import WhatsAppLink from '../../components/ui/WhatsAppLink'
 import ExpiryInput from '../../components/admin/ExpiryInput'
@@ -12,6 +12,7 @@ import type {
   Category,
   Coupon,
   CouponKind,
+  CouponGrant,
   CrmCampanhaCoupon,
   CrmCustomer,
   CrmFilterCriteria,
@@ -237,6 +238,38 @@ function describeFilter(f: FilterState, products: Product[], categories: Categor
   return out
 }
 
+// Um "campo" de filtro = um grupo de chaves de FilterState que descreve a
+// mesma condição (ex: minOrders+minOrdersDays). Usado pra achar quais
+// campos o segmento usa que a campanha 'evento' ainda não cobre — não pra
+// descrever texto (isso é describeFilter).
+type FieldGroupKey = 'minOrders' | 'minItems' | 'spentBelow' | 'spentAbove' | 'frequencyDrop' | 'newCustomer' | 'maxDistance' | 'neighborhoods' | 'birthday' | 'recurring'
+const FIELD_GROUPS: { key: FieldGroupKey; isFilled: (f: FilterState) => boolean }[] = [
+  { key: 'minOrders', isFilled: (f) => !!f.minOrders },
+  { key: 'minItems', isFilled: (f) => !!f.minItems },
+  { key: 'spentBelow', isFilled: (f) => !!f.spentBelowAmount },
+  { key: 'spentAbove', isFilled: (f) => !!f.spentAboveAmount },
+  { key: 'frequencyDrop', isFilled: (f) => !!f.frequencyDropPercent },
+  { key: 'newCustomer', isFilled: (f) => !!f.newCustomerDays },
+  { key: 'maxDistance', isFilled: (f) => !!f.maxDistanceKm },
+  { key: 'neighborhoods', isFilled: (f) => f.neighborhoods.length > 0 },
+  { key: 'birthday', isFilled: (f) => !!f.birthdayMonth },
+  { key: 'recurring', isFilled: (f) => f.recurringProductIds.length > 0 || f.recurringCategoryIds.length > 0 },
+]
+
+// Campo "novo" = o segmento usa, mas o trigger_criteria da campanha
+// 'evento' (calibrado antes da última edição do segmento) ainda não tem
+// valor-alvo pra ele. Campo removido do segmento não conta pra nada aqui
+// (fica ignorado de propósito — não precisa de ação do admin).
+function getNewTriggerFieldKeys(segmentCriteria: FilterState, triggerCriteria: FilterState | null): Set<FieldGroupKey> {
+  const trigger = triggerCriteria ?? EMPTY_FILTER
+  return new Set(FIELD_GROUPS.filter((g) => g.isFilled(segmentCriteria) && !g.isFilled(trigger)).map((g) => g.key))
+}
+
+function isCampanhaStale(cc: CrmCampanhaCoupon, segment: CrmSegment | undefined): boolean {
+  if (cc.orientation !== 'evento' || !segment) return false
+  return getNewTriggerFieldKeys(segment.filter_criteria as unknown as FilterState, cc.trigger_criteria as unknown as FilterState).size > 0
+}
+
 // Chave-mestra de on/off do app — pill com bolinha deslizante, igual ao
 // modelo que o admin desenhou (ON: texto + bolinha à direita; OFF:
 // bolinha + texto à esquerda), em vez de um badge de texto "Ativo/Inativo".
@@ -337,6 +370,20 @@ export default function AdminCrm() {
   // padrão de popup usado no resto da página.
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const askConfirm = (message: string, onConfirm: () => void) => setConfirmDialog({ message, onConfirm })
+
+  // Popup com a lista de clientes de um segmento (clicando em "N cliente(s)").
+  const [customerListSegment, setCustomerListSegment] = useState<CrmSegment | null>(null)
+  const [customerListQuery, setCustomerListQuery] = useState('')
+
+  // Explica que uma campanha 'evento' desatualizada (segmento mudou)
+  // precisa ser editada antes de poder ligar de novo.
+  const [staleDialogCampanha, setStaleDialogCampanha] = useState<CrmCampanhaCoupon | null>(null)
+
+  // Histórico de disparos (concessões) de uma campanha, mostrado ao
+  // clicar em "Verificar".
+  const [historyDialogCampanha, setHistoryDialogCampanha] = useState<CrmCampanhaCoupon | null>(null)
+  const [historyGrants, setHistoryGrants] = useState<CouponGrant[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const [filterOpen, setFilterOpen] = useState(false)
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
@@ -457,6 +504,7 @@ export default function AdminCrm() {
         .find((cc) => cc.id === editingCampanhaId)
     : null
   const campanhaFormSegment = segments.find((s) => s.id === campanhaForm.segmentId)
+  const editingCampanhaSegment = editingCampanhaRow ? segments.find((s) => s.id === editingCampanhaRow.segment_id) : null
 
   const filteredBase = appliedFilter ? applyFilters(customers, appliedFilter, products) : customers
   const searched = query.trim()
@@ -572,16 +620,26 @@ export default function AdminCrm() {
   // ao lado de cada um, a pill dourada mostra o valor ATUAL (do
   // segmento) e o campo ao lado é o valor-ALVO editável que, quando
   // atingido por um cliente, dispara a campanha 'evento'.
-  const renderTriggerFields = (segmentCriteria: FilterState, value: FilterState, onChange: (patch: Partial<FilterState>) => void) => {
+  const renderTriggerFields = (
+    segmentCriteria: FilterState,
+    value: FilterState,
+    onChange: (patch: Partial<FilterState>) => void,
+    staleKeys?: Set<FieldGroupKey>
+  ) => {
     const gold = (partial: Partial<FilterState>) => (
       <span className="px-2.5 py-1 rounded-full bg-son-gold/15 text-son-gold text-[11px] font-medium w-fit">
         {describeFilter({ ...EMPTY_FILTER, ...partial }, products, categories)[0]}
       </span>
     )
+    // Campo novo (staleKeys) fica com borda vermelha até o admin editar —
+    // sinaliza que esse valor-alvo ainda não foi definido pra esse campo
+    // que passou a existir no segmento depois que a campanha foi criada.
+    const fieldBorder = (key: FieldGroupKey) =>
+      staleKeys?.has(key) ? 'border-2 border-red-500 rounded-xl p-3 space-y-2 bg-red-500/5' : 'border border-white/10 rounded-xl p-3 space-y-2'
     const blocks: React.ReactNode[] = []
     if (segmentCriteria.minOrders) {
       blocks.push(
-        <div key="minOrders" className="border border-white/10 rounded-xl p-3 space-y-2">
+        <div key="minOrders" className={fieldBorder('minOrders')}>
           {gold({ minOrders: segmentCriteria.minOrders, minOrdersDays: segmentCriteria.minOrdersDays })}
           <div className="flex items-center gap-2">
             <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="1" placeholder="N° Vezes" value={value.minOrders} onChange={(e) => onChange({ minOrders: e.target.value })} />
@@ -594,7 +652,7 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.minItems) {
       blocks.push(
-        <div key="minItems" className="border border-white/10 rounded-xl p-3 space-y-2">
+        <div key="minItems" className={fieldBorder('minItems')}>
           {gold({ minItems: segmentCriteria.minItems, minItemsDays: segmentCriteria.minItemsDays })}
           <div className="flex items-center gap-2">
             <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="1" placeholder="N° Produtos" value={value.minItems} onChange={(e) => onChange({ minItems: e.target.value })} />
@@ -607,7 +665,7 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.spentBelowAmount) {
       blocks.push(
-        <div key="spentBelow" className="border border-white/10 rounded-xl p-3 space-y-2">
+        <div key="spentBelow" className={fieldBorder('spentBelow')}>
           {gold({ spentBelowAmount: segmentCriteria.spentBelowAmount, spentBelowDays: segmentCriteria.spentBelowDays })}
           <div className="flex items-center gap-2">
             <span className="text-son-silver-dim text-xs">R$</span>
@@ -621,7 +679,7 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.spentAboveAmount) {
       blocks.push(
-        <div key="spentAbove" className="border border-white/10 rounded-xl p-3 space-y-2">
+        <div key="spentAbove" className={fieldBorder('spentAbove')}>
           {gold({ spentAboveAmount: segmentCriteria.spentAboveAmount, spentAboveDays: segmentCriteria.spentAboveDays })}
           <div className="flex items-center gap-2">
             <span className="text-son-silver-dim text-xs">R$</span>
@@ -635,7 +693,7 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.frequencyDropPercent) {
       blocks.push(
-        <div key="frequencyDrop" className="border border-white/10 rounded-xl p-3 space-y-2">
+        <div key="frequencyDrop" className={fieldBorder('frequencyDrop')}>
           {gold({ frequencyDropPercent: segmentCriteria.frequencyDropPercent })}
           <input
             className={`input-field w-24 ${NO_SPINNER}`}
@@ -650,7 +708,7 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.newCustomerDays) {
       blocks.push(
-        <div key="newCustomer" className="border border-white/10 rounded-xl p-3 space-y-2">
+        <div key="newCustomer" className={fieldBorder('newCustomer')}>
           {gold({ newCustomerDays: segmentCriteria.newCustomerDays })}
           <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="1" value={value.newCustomerDays} onChange={(e) => onChange({ newCustomerDays: e.target.value })} />
         </div>
@@ -658,7 +716,7 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.maxDistanceKm) {
       blocks.push(
-        <div key="maxDistance" className="border border-white/10 rounded-xl p-3 space-y-2">
+        <div key="maxDistance" className={fieldBorder('maxDistance')}>
           {gold({ maxDistanceKm: segmentCriteria.maxDistanceKm })}
           <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="0" value={value.maxDistanceKm} onChange={(e) => onChange({ maxDistanceKm: e.target.value })} />
         </div>
@@ -666,7 +724,7 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.neighborhoods.length > 0) {
       blocks.push(
-        <div key="neighborhoods" className="border border-white/10 rounded-xl p-3 space-y-2">
+        <div key="neighborhoods" className={fieldBorder('neighborhoods')}>
           {gold({ neighborhoods: segmentCriteria.neighborhoods })}
           <select
             className="input-field appearance-none cursor-pointer"
@@ -702,7 +760,7 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.birthdayMonth) {
       blocks.push(
-        <div key="birthday" className="border border-white/10 rounded-xl p-3 space-y-2">
+        <div key="birthday" className={fieldBorder('birthday')}>
           {gold({ birthdayMonth: segmentCriteria.birthdayMonth })}
           <select className="input-field appearance-none cursor-pointer" value={value.birthdayMonth} onChange={(e) => onChange({ birthdayMonth: e.target.value })}>
             <option value="">Qualquer mês</option>
@@ -717,7 +775,7 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.recurringProductIds.length > 0 || segmentCriteria.recurringCategoryIds.length > 0) {
       blocks.push(
-        <div key="recurring" className="border border-white/10 rounded-xl p-3 space-y-2">
+        <div key="recurring" className={fieldBorder('recurring')}>
           {gold({
             recurringProductIds: segmentCriteria.recurringProductIds,
             recurringCategoryIds: segmentCriteria.recurringCategoryIds,
@@ -810,16 +868,24 @@ export default function AdminCrm() {
 
   // Reavalia uma campanha 'evento': recalcula quem casa com o critério
   // agora e concede+notifica só quem ainda não tinha o cupom.
-  const fireCampanha = async (row: CrmCampanhaCoupon) => {
-    const matching = applyFilters(customers, row.trigger_criteria as unknown as FilterState, products).map((c) => c.whatsapp)
-    const result = await api.admin.campanhaCoupons.fireEvent(row.id, matching)
-    if (result.newly_granted.length > 0) {
-      api.admin.whatsapp.notifyCouponGrant(row.coupon_id, row.message_template).catch(() => {})
-      alert(`${result.newly_granted.length} cliente(s) novo(s) atingiram o evento e ganharam o cupom.`)
-    } else {
-      alert('Nenhum cliente novo atingiu o critério do evento ainda.')
+  // Reavalia o evento (concede pra quem bateu o critério agora) e ABRE o
+  // histórico de disparos — a lista completa de quem já recebeu o cupom
+  // dessa campanha, não só os novos desta checagem.
+  const openHistoryDialog = async (row: CrmCampanhaCoupon) => {
+    setHistoryDialogCampanha(row)
+    setHistoryLoading(true)
+    try {
+      const matching = applyFilters(customers, row.trigger_criteria as unknown as FilterState, products).map((c) => c.whatsapp)
+      const result = await api.admin.campanhaCoupons.fireEvent(row.id, matching)
+      if (result.newly_granted.length > 0) {
+        api.admin.whatsapp.notifyCouponGrant(row.coupon_id, row.message_template).catch(() => {})
+      }
+      loadCampanhaCoupons(row.segment_id)
+      const grants = await api.admin.coupons.listGrants(row.coupon_id)
+      setHistoryGrants(grants)
+    } finally {
+      setHistoryLoading(false)
     }
-    loadCampanhaCoupons(row.segment_id)
   }
 
   const removeCampanha = (row: CrmCampanhaCoupon) =>
@@ -844,6 +910,8 @@ export default function AdminCrm() {
     setCampanhaEditError(null)
     setCampanhaEditForm({
       ...EMPTY_CAMPANHA_FORM,
+      orientation: cc.orientation,
+      triggerCriteria: cc.orientation === 'evento' ? (cc.trigger_criteria as unknown as FilterState) : null,
       messageTemplate: cc.message_template,
       productMode: coupon?.kind === 'produto' ? 'produto' : coupon?.discount_type ? 'flat' : 'nenhum',
       discount_type: coupon?.discount_type ?? 'percent',
@@ -884,6 +952,7 @@ export default function AdminCrm() {
         shipping_discount_type: campanhaEditForm.shippingEnabled ? campanhaEditForm.shipping_discount_type : undefined,
         shipping_discount_value: campanhaEditForm.shippingEnabled ? Number(campanhaEditForm.shipping_discount_value) : undefined,
         product_discounts: campanhaEditForm.productMode === 'produto' ? campanhaEditForm.productDiscounts : undefined,
+        trigger_criteria: campanhaEditForm.orientation === 'evento' ? (campanhaEditForm.triggerCriteria as unknown as CrmFilterCriteria) : undefined,
       })
       setEditingCampanhaId(null)
       loadCampanhaCoupons(row.segment_id)
@@ -1112,8 +1181,8 @@ export default function AdminCrm() {
         </Card>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2 mb-3">
-        <div className="relative flex-1">
+      <div className="mb-3">
+        <div className="relative">
           <Search className="w-4 h-4 text-son-silver-dim absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             className="input-field pl-9"
@@ -1122,18 +1191,6 @@ export default function AdminCrm() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <button
-          onClick={() => {
-            if (!filterOpen) resetSegmentForm()
-            setFilterOpen((v) => !v)
-          }}
-          className={`flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all flex-shrink-0 ${
-            appliedFilter || filterOpen ? 'sunset-bg text-white shadow-lg shadow-son-pink/20' : 'sunset-bg text-white hover:brightness-110 hover:scale-[1.02]'
-          }`}
-          title="Nova segmentação"
-        >
-          <Sparkles className="w-4 h-4" /> Nova segmentação
-        </button>
       </div>
 
       <AnimatePresence>
@@ -1474,9 +1531,21 @@ export default function AdminCrm() {
           </div>
         ))}
 
-      <div className="flex items-center gap-2 mb-4">
-        <Layers className="w-5 h-5 text-son-gold" />
-        <h2 className="text-xl font-black">Segmentações salvas</h2>
+      <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Layers className="w-5 h-5 text-son-gold" />
+          <h2 className="text-xl font-black">Segmentações salvas</h2>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (!filterOpen) resetSegmentForm()
+            setFilterOpen(true)
+          }}
+          className="btn-primary text-sm py-2.5 px-5"
+        >
+          <Sparkles className="w-4 h-4" /> Nova segmentação
+        </button>
       </div>
       {segmentsLoading ? (
         <div className="flex justify-center py-10">
@@ -1496,10 +1565,19 @@ export default function AdminCrm() {
             return (
               <Card key={s.id} className="p-4">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <button type="button" onClick={() => openSegment(s)} className="text-left min-w-[160px]">
+                  <div className="text-left min-w-[160px]">
                     <p className="font-semibold text-white">{s.name}</p>
                     {s.description && <p className="text-xs text-son-silver-dim mt-0.5">{s.description}</p>}
-                    <p className="text-xs font-bold sunset-text mt-1 mb-1.5">{count} cliente(s)</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomerListSegment(s)
+                        setCustomerListQuery('')
+                      }}
+                      className="text-xs font-bold sunset-text mt-1 mb-1.5 hover:underline"
+                    >
+                      {count} cliente(s)
+                    </button>
                     <div className="flex flex-wrap gap-1">
                       {describeFilter(s.filter_criteria as unknown as FilterState, products, categories).map((line, i) => (
                         <span key={i} className="px-2.5 py-1 rounded-full bg-son-gold/15 text-son-gold text-[10px] font-medium">
@@ -1507,10 +1585,10 @@ export default function AdminCrm() {
                         </span>
                       ))}
                     </div>
-                  </button>
+                  </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button type="button" onClick={() => openSegment(s)} className="text-xs font-semibold text-son-silver-dim hover:text-white">
-                      Editar
+                      Editar segmentação
                     </button>
                     <button onClick={() => removeSegment(s.id)} className="text-son-silver-dim hover:text-son-pink">
                       <Trash2 className="w-4 h-4" />
@@ -1520,23 +1598,32 @@ export default function AdminCrm() {
 
                 <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
                   {campanhas.length === 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => openNewCampanha(s)}
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed border-son-gold/40 text-son-gold text-sm font-semibold hover:bg-son-gold/10"
-                    >
+                    <button type="button" onClick={() => openNewCampanha(s)} className="btn-primary text-sm py-2.5 px-5">
                       <Plus className="w-4 h-4" /> Campanha
                     </button>
                   ) : (
                     <>
+                      <button type="button" onClick={() => openNewCampanha(s)} className="btn-primary text-sm py-2.5 px-5">
+                        <Plus className="w-4 h-4" /> Campanha
+                      </button>
                       {campanhas.map((cc) => {
                         const cCoupon = coupons.find((c) => c.id === cc.coupon_id)
+                        const stale = isCampanhaStale(cc, s)
                       return (
                         <div key={cc.id} className="flex items-center gap-2 flex-wrap">
                           {/* subcard: orientada a segmento/evento */}
-                          <div className="flex-shrink-0 w-56 rounded-xl border border-purple-400/30 bg-purple-500/5 px-3 py-2">
+                          <div
+                            title={stale ? 'Clique em "Editar" e atualize os campos dos eventos alvos desta campanha, pois você editou a segmentação original.' : undefined}
+                            className={`flex-shrink-0 w-56 rounded-xl px-3 py-2 ${
+                              stale
+                                ? 'border-2 border-red-500 bg-red-500/5 shadow-[0_0_10px_2px_rgba(239,68,68,0.5)]'
+                                : 'border border-purple-400/30 bg-purple-500/5'
+                            }`}
+                          >
                             <div className="flex items-center gap-2">
-                              {cc.orientation === 'evento' ? (
+                              {stale ? (
+                                <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                              ) : cc.orientation === 'evento' ? (
                                 <Zap className="w-4 h-4 text-amber-400 flex-shrink-0" />
                               ) : (
                                 <Gift className="w-4 h-4 text-purple-300 flex-shrink-0" />
@@ -1558,7 +1645,7 @@ export default function AdminCrm() {
                               {cc.orientation === 'evento' && (
                                 <button
                                   type="button"
-                                  onClick={() => fireCampanha(cc)}
+                                  onClick={() => openHistoryDialog(cc)}
                                   className="text-[10px] font-semibold text-son-gold hover:text-white"
                                 >
                                   Verificar
@@ -1600,17 +1687,10 @@ export default function AdminCrm() {
                             </>
                           )}
 
-                          <ToggleSwitch checked={cc.active} onClick={() => toggleCampanhaActive(cc)} />
+                          <ToggleSwitch checked={cc.active} onClick={() => (stale ? setStaleDialogCampanha(cc) : toggleCampanhaActive(cc))} />
                         </div>
                         )
                       })}
-                      <button
-                        type="button"
-                        onClick={() => openNewCampanha(s)}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-son-gold/40 text-son-gold text-xs font-semibold hover:bg-son-gold/10"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Campanha
-                      </button>
                     </>
                   )}
                 </div>
@@ -1622,7 +1702,7 @@ export default function AdminCrm() {
 
       <h2 className="text-xl font-black mb-4">Cupons avulsos</h2>
 
-      <div className="max-w-md mx-auto mb-6">
+      <div className="mb-6">
         <button
           type="button"
           onClick={() => {
@@ -1631,9 +1711,9 @@ export default function AdminCrm() {
             setCouponError(null)
             setShowCouponForm(true)
           }}
-          className="btn-primary w-full py-4 text-base rounded-2xl"
+          className="btn-primary text-sm py-2.5 px-5"
         >
-          <Plus className="w-5 h-5" /> Novo cupom
+          <Plus className="w-4 h-4" /> Novo cupom
         </button>
       </div>
 
@@ -1744,6 +1824,30 @@ export default function AdminCrm() {
                   <X className="w-5 h-5" />
                 </button>
               </div>
+
+              {editingCampanhaRow.orientation === 'evento' && editingCampanhaSegment && (
+                <div className="space-y-2 mb-4">
+                  <label className="label">
+                    Critério do evento{' '}
+                    {getNewTriggerFieldKeys(
+                      editingCampanhaSegment.filter_criteria as unknown as FilterState,
+                      campanhaEditForm.triggerCriteria
+                    ).size > 0 && (
+                      <span className="text-red-400 font-normal">
+                        (o segmento ganhou campo(s) novo(s) — preencha o(s) destacado(s) em vermelho abaixo)
+                      </span>
+                    )}
+                  </label>
+                  {renderTriggerFields(
+                    editingCampanhaSegment.filter_criteria as unknown as FilterState,
+                    campanhaEditForm.triggerCriteria ?? EMPTY_FILTER,
+                    (patch) =>
+                      setCampanhaEditForm({ ...campanhaEditForm, triggerCriteria: { ...(campanhaEditForm.triggerCriteria ?? EMPTY_FILTER), ...patch } }),
+                    getNewTriggerFieldKeys(editingCampanhaSegment.filter_criteria as unknown as FilterState, campanhaEditForm.triggerCriteria)
+                  )}
+                </div>
+              )}
+
               <div className="space-y-3">
                 <div>
                   <label className="label">Mensagem pro cliente (WhatsApp)</label>
@@ -2142,6 +2246,162 @@ export default function AdminCrm() {
                   Remover
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {customerListSegment && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-start justify-center p-4 overflow-y-auto"
+            onClick={() => setCustomerListSegment(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="glass rounded-2xl p-6 max-w-lg w-full my-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-white">Clientes de "{customerListSegment.name}"</h3>
+                <button type="button" onClick={() => setCustomerListSegment(null)} className="text-son-silver-dim hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="relative mb-3">
+                <Search className="w-4 h-4 text-son-silver-dim absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  className="input-field pl-9"
+                  placeholder="Buscar por nome ou WhatsApp..."
+                  value={customerListQuery}
+                  onChange={(e) => setCustomerListQuery(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              {(() => {
+                const matched = applyFilters(customers, customerListSegment.filter_criteria as unknown as FilterState, products)
+                const q = customerListQuery.trim().toLowerCase()
+                const shown = q ? matched.filter((c) => c.name.toLowerCase().includes(q) || c.whatsapp.includes(q)) : matched
+                return shown.length === 0 ? (
+                  <p className="text-center text-son-silver-dim py-8 text-sm">Nenhum cliente encontrado.</p>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {shown.map((c) => (
+                      <div key={c.id} className="flex items-center justify-between gap-3 bg-son-surface border border-white/10 rounded-xl px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{c.name}</p>
+                          <WhatsAppLink phone={c.whatsapp} />
+                        </div>
+                        <span className="text-xs font-bold sunset-text flex-shrink-0">{currency(c.total_spent)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {staleDialogCampanha && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+            onClick={() => setStaleDialogCampanha(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="glass rounded-2xl p-6 max-w-sm w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                <h3 className="font-bold text-white">Campanha desatualizada</h3>
+              </div>
+              <p className="text-sm text-son-silver-dim mb-5">
+                Você editou a segmentação original desta campanha. Clique em "Editar" e atualize os campos-alvo do evento antes de
+                ligar essa campanha de novo.
+              </p>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setStaleDialogCampanha(null)} className="btn-secondary flex-1">
+                  Fechar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cc = staleDialogCampanha
+                    setStaleDialogCampanha(null)
+                    openEditCampanha(cc)
+                  }}
+                  className="btn-primary flex-1"
+                >
+                  Editar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {historyDialogCampanha && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-start justify-center p-4 overflow-y-auto"
+            onClick={() => setHistoryDialogCampanha(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="glass rounded-2xl p-6 max-w-lg w-full my-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-white">Histórico de disparos</h3>
+                <button type="button" onClick={() => setHistoryDialogCampanha(null)} className="text-son-silver-dim hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              {historyLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
+                </div>
+              ) : historyGrants.length === 0 ? (
+                <p className="text-center text-son-silver-dim py-8 text-sm">Nenhum cliente atingiu o evento ainda.</p>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {historyGrants.map((g) => (
+                    <div key={g.id} className="flex items-center justify-between gap-3 bg-son-surface border border-white/10 rounded-xl px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{g.customer_name ?? 'Sem nome'}</p>
+                        <WhatsAppLink phone={g.customer_whatsapp} />
+                      </div>
+                      <span className="text-xs font-bold sunset-text flex-shrink-0">
+                        {g.used_count}/{g.granted_uses} usos
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}
