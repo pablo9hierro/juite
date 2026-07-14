@@ -277,14 +277,15 @@ const FIELD_GROUP_KEYS: Record<FieldGroupKey, (keyof FilterState)[]> = {
 // evento (last_synced_segment_criteria) — cobre tanto campo novo (não
 // existia no retrato) quanto campo que já existia mas teve o valor
 // alterado. Campo removido do segmento (não usado mais agora) é ignorado
-// de propósito — não precisa de ação do admin.
-function getChangedFieldKeys(oldCriteria: FilterState, newCriteria: FilterState): Set<FieldGroupKey> {
-  const changed = new Set<FieldGroupKey>()
+// de propósito — não precisa de ação do admin. Granularidade de INPUT
+// individual (ex: só "R$" mudou, "Dias" continua igual → só "R$" marca).
+function getChangedFields(oldCriteria: FilterState, newCriteria: FilterState): Set<keyof FilterState> {
+  const changed = new Set<keyof FilterState>()
   for (const group of FIELD_GROUPS) {
     if (!group.isFilled(newCriteria)) continue
-    const fields = FIELD_GROUP_KEYS[group.key]
-    const differs = fields.some((f) => JSON.stringify(oldCriteria[f]) !== JSON.stringify(newCriteria[f]))
-    if (differs) changed.add(group.key)
+    for (const f of FIELD_GROUP_KEYS[group.key]) {
+      if (JSON.stringify(oldCriteria[f]) !== JSON.stringify(newCriteria[f])) changed.add(f)
+    }
   }
   return changed
 }
@@ -292,7 +293,7 @@ function getChangedFieldKeys(oldCriteria: FilterState, newCriteria: FilterState)
 function isCampanhaStale(cc: CrmCampanhaCoupon, segment: CrmSegment | undefined): boolean {
   if (cc.orientation !== 'evento' || !segment) return false
   const oldCriteria = (cc.last_synced_segment_criteria as unknown as FilterState) ?? EMPTY_FILTER
-  return getChangedFieldKeys(oldCriteria, segment.filter_criteria as unknown as FilterState).size > 0
+  return getChangedFields(oldCriteria, segment.filter_criteria as unknown as FilterState).size > 0
 }
 
 // Chave-mestra de on/off do app — pill com bolinha deslizante, igual ao
@@ -425,6 +426,10 @@ export default function AdminCrm() {
   const [segmentDescription, setSegmentDescription] = useState('')
   const [savingSegment, setSavingSegment] = useState(false)
   const [segmentError, setSegmentError] = useState<string | null>(null)
+  // Retrato do que estava salvo quando abriu pra editar — o botão de
+  // salvar só acende quando algo realmente difere disso (criação nova
+  // acende assim que o nome é preenchido, não precisa de "antes").
+  const [originalSegment, setOriginalSegment] = useState<{ name: string; description: string; filter: FilterState } | null>(null)
 
   // "Campanha": cupom(s) exclusivo(s) vinculado(s) a um segmento — cada
   // segmento pode ter várias. Mapa por segmento (não só o que está sendo
@@ -442,6 +447,7 @@ export default function AdminCrm() {
   const [campanhaEditForm, setCampanhaEditForm] = useState<CampanhaForm>(EMPTY_CAMPANHA_FORM)
   const [savingCampanhaEdit, setSavingCampanhaEdit] = useState(false)
   const [campanhaEditError, setCampanhaEditError] = useState<string | null>(null)
+  const [originalCampanhaEditForm, setOriginalCampanhaEditForm] = useState<CampanhaForm | null>(null)
 
   // Cupom extra — mais um cupom entregue junto com o principal da mesma
   // campanha (reaproveita o shape de CampanhaForm, ignorando os campos
@@ -459,6 +465,7 @@ export default function AdminCrm() {
   const [editingCouponId, setEditingCouponId] = useState<string | null>(null)
   const [savingCoupon, setSavingCoupon] = useState(false)
   const [couponError, setCouponError] = useState<string | null>(null)
+  const [originalCouponForm, setOriginalCouponForm] = useState<CouponForm | null>(null)
 
   const loadCustomers = () => {
     setLoading(true)
@@ -569,6 +576,15 @@ export default function AdminCrm() {
 
   const isSegmented = !!appliedFilter
 
+  // Criação: acende assim que tem nome. Edição: só acende quando algo
+  // difere do que estava salvo (nome, descrição ou o filtro em si).
+  const segmentHasChanged = !editingSegmentId
+    ? segmentName.trim().length > 0
+    : !originalSegment ||
+      segmentName !== originalSegment.name ||
+      segmentDescription !== originalSegment.description ||
+      JSON.stringify(filter) !== JSON.stringify(originalSegment.filter)
+
   const totalCustomers = customers.length
   const totalRevenue = customers.reduce((sum, c) => sum + c.total_spent, 0)
   const birthdayCount = customers.filter((c) => isBirthdayMonth(c.birthdate)).length
@@ -578,6 +594,7 @@ export default function AdminCrm() {
     setSegmentName('')
     setSegmentDescription('')
     setSegmentError(null)
+    setOriginalSegment(null)
   }
 
   const applyFilterPanel = () => {
@@ -604,6 +621,7 @@ export default function AdminCrm() {
     setSegmentName(segment.name)
     setSegmentDescription(segment.description ?? '')
     setSegmentError(null)
+    setOriginalSegment({ name: segment.name, description: segment.description ?? '', filter: criteria })
     loadCampanhaCoupons(segment.id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -613,8 +631,14 @@ export default function AdminCrm() {
       setSegmentError('Dê um nome pra essa segmentação.')
       return
     }
-    if (!appliedFilter) {
-      setSegmentError('Rode o filtro antes de salvar a segmentação.')
+    const pairIssues = validatePairErrors(filter)
+    if (Object.keys(pairIssues).length > 0) {
+      setPairErrors(pairIssues)
+      setSegmentError('Corrija os campos de filtro destacados abaixo.')
+      return
+    }
+    if (filterIsEmpty(filter)) {
+      setSegmentError('Preencha pelo menos um campo de filtro.')
       return
     }
     setSavingSegment(true)
@@ -622,7 +646,7 @@ export default function AdminCrm() {
       const payload = {
         name: segmentName,
         description: segmentDescription || undefined,
-        filter_criteria: appliedFilter,
+        filter_criteria: filter,
       }
       if (editingSegmentId) {
         await api.admin.segments.update(editingSegmentId, payload)
@@ -679,27 +703,27 @@ export default function AdminCrm() {
     segmentCriteria: FilterState,
     value: FilterState,
     onChange: (patch: Partial<FilterState>) => void,
-    staleKeys?: Set<FieldGroupKey>
+    staleFields?: Set<keyof FilterState>
   ) => {
     const gold = (partial: Partial<FilterState>) => (
       <span className="px-2.5 py-1 rounded-full bg-son-gold/15 text-son-gold text-[11px] font-medium w-fit">
         {describeFilter({ ...EMPTY_FILTER, ...partial }, products, categories)[0]}
       </span>
     )
-    // Campo novo (staleKeys) fica com borda vermelha até o admin editar —
-    // sinaliza que esse valor-alvo ainda não foi definido pra esse campo
-    // que passou a existir no segmento depois que a campanha foi criada.
-    const fieldBorder = (key: FieldGroupKey) =>
-      staleKeys?.has(key) ? 'border-2 border-red-500 rounded-xl p-3 space-y-2 bg-red-500/5' : 'border border-white/10 rounded-xl p-3 space-y-2'
+    // Cada INPUT individual fica vermelho se o valor dele mudou desde a
+    // última sincronização — não o bloco inteiro (ex: se só o "R$" mudou
+    // e os "Dias" continuam iguais, só o campo "R$" fica marcado).
+    const ring = (field: keyof FilterState) => (staleFields?.has(field) ? ' !border-2 !border-red-500' : '')
+    const groupBorder = 'border border-white/10 rounded-xl p-3 space-y-2'
     const blocks: React.ReactNode[] = []
     if (segmentCriteria.minOrders) {
       blocks.push(
-        <div key="minOrders" className={fieldBorder('minOrders')}>
+        <div key="minOrders" className={groupBorder}>
           {gold({ minOrders: segmentCriteria.minOrders, minOrdersDays: segmentCriteria.minOrdersDays })}
           <div className="flex items-center gap-2">
-            <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="1" placeholder="N° Vezes" value={value.minOrders} onChange={(e) => onChange({ minOrders: e.target.value })} />
+            <input className={`input-field w-24 ${NO_SPINNER}${ring('minOrders')}`} type="number" min="1" placeholder="N° Vezes" value={value.minOrders} onChange={(e) => onChange({ minOrders: e.target.value })} />
             <span className="text-son-silver-dim text-xs whitespace-nowrap">no período de</span>
-            <input className={`input-field w-20 ${NO_SPINNER}`} type="number" min="1" placeholder="Opcional" value={value.minOrdersDays} onChange={(e) => onChange({ minOrdersDays: e.target.value })} />
+            <input className={`input-field w-20 ${NO_SPINNER}${ring('minOrdersDays')}`} type="number" min="1" placeholder="Opcional" value={value.minOrdersDays} onChange={(e) => onChange({ minOrdersDays: e.target.value })} />
             <span className="text-son-silver-dim text-xs whitespace-nowrap">Dias</span>
           </div>
         </div>
@@ -707,12 +731,12 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.minItems) {
       blocks.push(
-        <div key="minItems" className={fieldBorder('minItems')}>
+        <div key="minItems" className={groupBorder}>
           {gold({ minItems: segmentCriteria.minItems, minItemsDays: segmentCriteria.minItemsDays })}
           <div className="flex items-center gap-2">
-            <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="1" placeholder="N° Produtos" value={value.minItems} onChange={(e) => onChange({ minItems: e.target.value })} />
+            <input className={`input-field w-24 ${NO_SPINNER}${ring('minItems')}`} type="number" min="1" placeholder="N° Produtos" value={value.minItems} onChange={(e) => onChange({ minItems: e.target.value })} />
             <span className="text-son-silver-dim text-xs whitespace-nowrap">no período de</span>
-            <input className={`input-field w-20 ${NO_SPINNER}`} type="number" min="1" placeholder="Opcional" value={value.minItemsDays} onChange={(e) => onChange({ minItemsDays: e.target.value })} />
+            <input className={`input-field w-20 ${NO_SPINNER}${ring('minItemsDays')}`} type="number" min="1" placeholder="Opcional" value={value.minItemsDays} onChange={(e) => onChange({ minItemsDays: e.target.value })} />
             <span className="text-son-silver-dim text-xs whitespace-nowrap">Dias</span>
           </div>
         </div>
@@ -720,13 +744,13 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.spentBelowAmount) {
       blocks.push(
-        <div key="spentBelow" className={fieldBorder('spentBelow')}>
+        <div key="spentBelow" className={groupBorder}>
           {gold({ spentBelowAmount: segmentCriteria.spentBelowAmount, spentBelowDays: segmentCriteria.spentBelowDays })}
           <div className="flex items-center gap-2">
             <span className="text-son-silver-dim text-xs">R$</span>
-            <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="0" value={value.spentBelowAmount} onChange={(e) => onChange({ spentBelowAmount: e.target.value })} />
+            <input className={`input-field w-24 ${NO_SPINNER}${ring('spentBelowAmount')}`} type="number" min="0" value={value.spentBelowAmount} onChange={(e) => onChange({ spentBelowAmount: e.target.value })} />
             <span className="text-son-silver-dim text-xs whitespace-nowrap">em</span>
-            <input className={`input-field w-20 ${NO_SPINNER}`} type="number" min="1" placeholder="Opcional" value={value.spentBelowDays} onChange={(e) => onChange({ spentBelowDays: e.target.value })} />
+            <input className={`input-field w-20 ${NO_SPINNER}${ring('spentBelowDays')}`} type="number" min="1" placeholder="Opcional" value={value.spentBelowDays} onChange={(e) => onChange({ spentBelowDays: e.target.value })} />
             <span className="text-son-silver-dim text-xs whitespace-nowrap">dias</span>
           </div>
         </div>
@@ -734,13 +758,13 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.spentAboveAmount) {
       blocks.push(
-        <div key="spentAbove" className={fieldBorder('spentAbove')}>
+        <div key="spentAbove" className={groupBorder}>
           {gold({ spentAboveAmount: segmentCriteria.spentAboveAmount, spentAboveDays: segmentCriteria.spentAboveDays })}
           <div className="flex items-center gap-2">
             <span className="text-son-silver-dim text-xs">R$</span>
-            <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="0" value={value.spentAboveAmount} onChange={(e) => onChange({ spentAboveAmount: e.target.value })} />
+            <input className={`input-field w-24 ${NO_SPINNER}${ring('spentAboveAmount')}`} type="number" min="0" value={value.spentAboveAmount} onChange={(e) => onChange({ spentAboveAmount: e.target.value })} />
             <span className="text-son-silver-dim text-xs whitespace-nowrap">em</span>
-            <input className={`input-field w-20 ${NO_SPINNER}`} type="number" min="1" placeholder="Opcional" value={value.spentAboveDays} onChange={(e) => onChange({ spentAboveDays: e.target.value })} />
+            <input className={`input-field w-20 ${NO_SPINNER}${ring('spentAboveDays')}`} type="number" min="1" placeholder="Opcional" value={value.spentAboveDays} onChange={(e) => onChange({ spentAboveDays: e.target.value })} />
             <span className="text-son-silver-dim text-xs whitespace-nowrap">dias</span>
           </div>
         </div>
@@ -748,10 +772,10 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.frequencyDropPercent) {
       blocks.push(
-        <div key="frequencyDrop" className={fieldBorder('frequencyDrop')}>
+        <div key="frequencyDrop" className={groupBorder}>
           {gold({ frequencyDropPercent: segmentCriteria.frequencyDropPercent })}
           <input
-            className={`input-field w-24 ${NO_SPINNER}`}
+            className={`input-field w-24 ${NO_SPINNER}${ring('frequencyDropPercent')}`}
             type="number"
             min="1"
             max="100"
@@ -763,26 +787,26 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.newCustomerDays) {
       blocks.push(
-        <div key="newCustomer" className={fieldBorder('newCustomer')}>
+        <div key="newCustomer" className={groupBorder}>
           {gold({ newCustomerDays: segmentCriteria.newCustomerDays })}
-          <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="1" value={value.newCustomerDays} onChange={(e) => onChange({ newCustomerDays: e.target.value })} />
+          <input className={`input-field w-24 ${NO_SPINNER}${ring('newCustomerDays')}`} type="number" min="1" value={value.newCustomerDays} onChange={(e) => onChange({ newCustomerDays: e.target.value })} />
         </div>
       )
     }
     if (segmentCriteria.maxDistanceKm) {
       blocks.push(
-        <div key="maxDistance" className={fieldBorder('maxDistance')}>
+        <div key="maxDistance" className={groupBorder}>
           {gold({ maxDistanceKm: segmentCriteria.maxDistanceKm })}
-          <input className={`input-field w-24 ${NO_SPINNER}`} type="number" min="0" value={value.maxDistanceKm} onChange={(e) => onChange({ maxDistanceKm: e.target.value })} />
+          <input className={`input-field w-24 ${NO_SPINNER}${ring('maxDistanceKm')}`} type="number" min="0" value={value.maxDistanceKm} onChange={(e) => onChange({ maxDistanceKm: e.target.value })} />
         </div>
       )
     }
     if (segmentCriteria.neighborhoods.length > 0) {
       blocks.push(
-        <div key="neighborhoods" className={fieldBorder('neighborhoods')}>
+        <div key="neighborhoods" className={groupBorder}>
           {gold({ neighborhoods: segmentCriteria.neighborhoods })}
           <select
-            className="input-field appearance-none cursor-pointer"
+            className={`input-field appearance-none cursor-pointer${ring('neighborhoods')}`}
             value=""
             onChange={(e) => {
               if (!e.target.value || value.neighborhoods.includes(e.target.value)) return
@@ -815,9 +839,13 @@ export default function AdminCrm() {
     }
     if (segmentCriteria.birthdayMonth) {
       blocks.push(
-        <div key="birthday" className={fieldBorder('birthday')}>
+        <div key="birthday" className={groupBorder}>
           {gold({ birthdayMonth: segmentCriteria.birthdayMonth })}
-          <select className="input-field appearance-none cursor-pointer" value={value.birthdayMonth} onChange={(e) => onChange({ birthdayMonth: e.target.value })}>
+          <select
+            className={`input-field appearance-none cursor-pointer${ring('birthdayMonth')}`}
+            value={value.birthdayMonth}
+            onChange={(e) => onChange({ birthdayMonth: e.target.value })}
+          >
             <option value="">Qualquer mês</option>
             {MONTH_NAMES.map((m, i) => (
               <option key={m} value={i}>
@@ -829,23 +857,26 @@ export default function AdminCrm() {
       )
     }
     if (segmentCriteria.recurringProductIds.length > 0 || segmentCriteria.recurringCategoryIds.length > 0) {
+      const recurringSelectionChanged = staleFields?.has('recurringProductIds') || staleFields?.has('recurringCategoryIds')
       blocks.push(
-        <div key="recurring" className={fieldBorder('recurring')}>
+        <div key="recurring" className={groupBorder}>
           {gold({
             recurringProductIds: segmentCriteria.recurringProductIds,
             recurringCategoryIds: segmentCriteria.recurringCategoryIds,
             recurringDays: segmentCriteria.recurringDays,
           })}
-          <ProductCategoryMultiSelect
-            products={products}
-            categories={categories}
-            selectedProductIds={value.recurringProductIds}
-            selectedCategoryIds={value.recurringCategoryIds}
-            onChangeProducts={(recurringProductIds) => onChange({ recurringProductIds })}
-            onChangeCategories={(recurringCategoryIds) => onChange({ recurringCategoryIds })}
-          />
+          <div className={recurringSelectionChanged ? 'rounded-xl !border-2 !border-red-500' : ''}>
+            <ProductCategoryMultiSelect
+              products={products}
+              categories={categories}
+              selectedProductIds={value.recurringProductIds}
+              selectedCategoryIds={value.recurringCategoryIds}
+              onChangeProducts={(recurringProductIds) => onChange({ recurringProductIds })}
+              onChangeCategories={(recurringCategoryIds) => onChange({ recurringCategoryIds })}
+            />
+          </div>
           <input
-            className={`input-field w-44 ${NO_SPINNER}`}
+            className={`input-field w-44 ${NO_SPINNER}${ring('recurringDays')}`}
             type="number"
             min="1"
             placeholder="N° Dias (Opcional)"
@@ -971,7 +1002,7 @@ export default function AdminCrm() {
   const openEditCampanha = (cc: CrmCampanhaCoupon) => {
     const coupon = coupons.find((c) => c.id === cc.coupon_id)
     setCampanhaEditError(null)
-    setCampanhaEditForm({
+    const form: CampanhaForm = {
       ...EMPTY_CAMPANHA_FORM,
       orientation: cc.orientation,
       triggerCriteria: cc.orientation === 'evento' ? (cc.trigger_criteria as unknown as FilterState) : null,
@@ -988,11 +1019,21 @@ export default function AdminCrm() {
       allow_promotion_checkout: coupon?.allow_promotion_checkout ?? false,
       expires_at: coupon?.expires_at ?? '',
       max_uses: coupon?.max_uses != null ? String(coupon.max_uses) : '',
-    })
+    }
+    setCampanhaEditForm(form)
+    setOriginalCampanhaEditForm(form)
     setEditingCampanhaId(cc.id)
   }
 
   const campanhaEditMessageValid = campanhaEditForm.messageTemplate.includes('/nome') && campanhaEditForm.messageTemplate.includes('/cupom')
+  // Campanha desatualizada: aceita salvar mesmo SEM diferença nenhuma —
+  // o admin pode revisar o campo marcado e decidir que o valor atual já
+  // está bom, e isso sozinho já conta como "resolvido" (sincroniza o
+  // retrato do critério). Fora desse caso, exige diferença de verdade.
+  const campanhaEditHasChanged =
+    !originalCampanhaEditForm ||
+    JSON.stringify(campanhaEditForm) !== JSON.stringify(originalCampanhaEditForm) ||
+    (!!editingCampanhaRow && isCampanhaStale(editingCampanhaRow, editingCampanhaSegment ?? undefined))
 
   const saveCampanhaEdit = async () => {
     if (!editingCampanhaId) return
@@ -1097,7 +1138,7 @@ export default function AdminCrm() {
 
   const openEditCoupon = (c: Coupon) => {
     setEditingCouponId(c.id)
-    setCouponForm({
+    const form: CouponForm = {
       code: c.code,
       kind: c.kind,
       discount_type: c.discount_type ?? 'percent',
@@ -1106,7 +1147,9 @@ export default function AdminCrm() {
       allow_promotion_checkout: c.allow_promotion_checkout,
       expires_at: c.expires_at ?? '',
       max_uses: c.max_uses != null ? String(c.max_uses) : '',
-    })
+    }
+    setCouponForm(form)
+    setOriginalCouponForm(form)
     setCouponError(null)
     setShowCouponForm(true)
   }
@@ -1163,6 +1206,7 @@ export default function AdminCrm() {
   const closeCouponForm = () => {
     setShowCouponForm(false)
     setEditingCouponId(null)
+    setOriginalCouponForm(null)
   }
 
   // Compartilhado entre o slot de criação (acima da lista) e o morph de
@@ -1277,7 +1321,13 @@ export default function AdminCrm() {
         </div>
       </div>
       {couponError && <p className="error-msg">{couponError}</p>}
-      <button onClick={saveCoupon} disabled={savingCoupon} className="btn-primary w-full mt-2">
+      <button
+        onClick={saveCoupon}
+        disabled={
+          savingCoupon || (isEdit ? JSON.stringify(couponForm) === JSON.stringify(originalCouponForm) : !couponForm.code.trim())
+        }
+        className="btn-primary w-full mt-2"
+      >
         {savingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
         {isEdit ? 'Salvar alterações' : 'Salvar cupom'}
       </button>
@@ -1559,49 +1609,55 @@ export default function AdminCrm() {
             </button>
           </div>
 
-          {appliedFilter && (
-            <div className="border border-son-pink/30 rounded-xl p-3 space-y-3 bg-son-pink/5">
-              <p className="text-xs text-son-silver-dim">
-                {visible.length} cliente(s) nessa segmentação — dê um nome e salve pra reabrir/reutilizar depois.
-              </p>
-              <div className="flex flex-col gap-1">
-                {describeFilter(appliedFilter, products, categories).map((line, i) => (
-                  <span key={i} className="px-3 py-1.5 rounded-full bg-son-gold/15 text-son-gold text-xs font-medium w-fit">
-                    {line}
-                  </span>
-                ))}
-              </div>
-              <div>
-                <label className="label">Nome da segmentação</label>
-                <input
-                  className="input-field"
-                  placeholder="Ex: Clientes VIP João Pessoa"
-                  value={segmentName}
-                  onChange={(e) => setSegmentName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label">Descrição</label>
-                <textarea
-                  className="input-field"
-                  rows={2}
-                  placeholder="O que caracteriza esse grupo de clientes..."
-                  value={segmentDescription}
-                  onChange={(e) => setSegmentDescription(e.target.value)}
-                />
-              </div>
-              {segmentError && <p className="error-msg">{segmentError}</p>}
-              <button onClick={saveSegment} disabled={savingSegment} className="btn-primary w-full">
-                {savingSegment ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {editingSegmentId ? 'Atualizar segmentação' : 'Salvar segmentação'}
-              </button>
-              {editingSegmentId && (
-                <p className="text-xs text-son-silver-dim text-center">
-                  Campanhas se criam pelo botão "+ Campanha" no card desta segmentação, na lista abaixo.
-                </p>
-              )}
+          <div className="border border-son-pink/30 rounded-xl p-3 space-y-3 bg-son-pink/5">
+            <button
+              type="button"
+              onClick={() =>
+                setCustomerListSegment({
+                  id: editingSegmentId ?? 'draft',
+                  name: segmentName || 'Segmentação',
+                  description: segmentDescription || null,
+                  filter_criteria: filter as unknown as CrmFilterCriteria,
+                  created_at: '',
+                })
+              }
+              className="text-xs text-son-silver-dim hover:text-white hover:underline"
+            >
+              <span className="font-bold sunset-text">{applyFilters(customers, filter, products).length}</span> cliente(s) nessa
+              segmentação
+            </button>
+            <div className="flex flex-col gap-1">
+              {describeFilter(filter, products, categories).map((line, i) => (
+                <span key={i} className="px-3 py-1.5 rounded-full bg-son-gold/15 text-son-gold text-xs font-medium w-fit">
+                  {line}
+                </span>
+              ))}
             </div>
-          )}
+            <div>
+              <label className="label">Nome da segmentação</label>
+              <input
+                className="input-field"
+                placeholder="Ex: Clientes VIP João Pessoa"
+                value={segmentName}
+                onChange={(e) => setSegmentName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="label">Descrição</label>
+              <textarea
+                className="input-field"
+                rows={2}
+                placeholder="O que caracteriza esse grupo de clientes..."
+                value={segmentDescription}
+                onChange={(e) => setSegmentDescription(e.target.value)}
+              />
+            </div>
+            {segmentError && <p className="error-msg">{segmentError}</p>}
+            <button onClick={saveSegment} disabled={savingSegment || !segmentHasChanged} className="btn-primary w-full">
+              {savingSegment ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {editingSegmentId ? 'Atualizar segmentação' : 'Salvar segmentação'}
+            </button>
+          </div>
             </motion.div>
           </motion.div>
         )}
@@ -1977,7 +2033,7 @@ export default function AdminCrm() {
               </div>
 
               {editingCampanhaRow.orientation === 'evento' && editingCampanhaSegment && (() => {
-                const changedKeys = getChangedFieldKeys(
+                const changedKeys = getChangedFields(
                   (editingCampanhaRow.last_synced_segment_criteria as unknown as FilterState) ?? EMPTY_FILTER,
                   editingCampanhaSegment.filter_criteria as unknown as FilterState
                 )
@@ -1987,7 +2043,7 @@ export default function AdminCrm() {
                       Critério do evento{' '}
                       {changedKeys.size > 0 && (
                         <span className="text-red-400 font-normal">
-                          (o segmento mudou — ajuste o(s) campo(s) destacado(s) em vermelho abaixo)
+                          (o segmento mudou — ajuste ou confirme o(s) campo(s) destacado(s) em vermelho abaixo)
                         </span>
                       )}
                     </label>
@@ -2123,7 +2179,11 @@ export default function AdminCrm() {
                   <ExpiryInput value={campanhaEditForm.expires_at} onChange={(expires_at) => setCampanhaEditForm({ ...campanhaEditForm, expires_at })} />
                 </div>
                 {campanhaEditError && <p className="error-msg">{campanhaEditError}</p>}
-                <button onClick={saveCampanhaEdit} disabled={savingCampanhaEdit || !campanhaEditMessageValid} className="btn-primary w-full mt-2">
+                <button
+                  onClick={saveCampanhaEdit}
+                  disabled={savingCampanhaEdit || !campanhaEditMessageValid || !campanhaEditHasChanged}
+                  className="btn-primary w-full mt-2"
+                >
                   {savingCampanhaEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Salvar alterações
                 </button>
