@@ -47,8 +47,12 @@ export interface LocalCouponGrant {
 export interface LocalCampanhaCoupon {
   id: string
   segment_id: string
-  coupon_id: string
+  coupon_id: string | null
   orientation: CampanhaOrientation
+  name: string
+  description: string | null
+  starts_at: string | null
+  ends_at: string | null
   trigger_criteria: CrmFilterCriteria | null
   message_template: string
   uses_per_customer: number

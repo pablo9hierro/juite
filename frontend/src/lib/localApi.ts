@@ -1073,71 +1073,61 @@ async function adminListCampanhaCoupons(segmentId: string): Promise<import('./ty
     .map((c) => ({ ...c, extra_coupons: campanhaExtraCoupons(db, c.id) }))
 }
 
-async function createCampanhaCoupon(payload: {
+// Cria só o cadastro da campanha — sem gatilho, sem cupom nenhum. Gatilho
+// (setCampanhaGatilho) e cupom(s) (createCampanhaExtraCoupon) são passos
+// separados depois, cada um pelo próprio subcard.
+async function createCampanha(payload: {
   segment_id: string
   orientation: import('./types').CampanhaOrientation
-  trigger_criteria?: import('./types').CrmFilterCriteria
-  message_template: string
-  code: string
-  uses_per_customer?: number
-  combinable_with_public?: boolean
-  allow_promotion_checkout?: boolean
-  expires_at?: string
-  max_uses?: number
-  discount_type?: 'percent' | 'fixed'
-  discount_value?: number
-  shipping_discount_type?: 'percent' | 'fixed'
-  shipping_discount_value?: number
-  product_discounts?: import('./types').ProductDiscount[]
-  customer_whatsapps: string[]
+  name: string
+  description?: string
+  starts_at?: string
+  ends_at?: string
 }): Promise<import('./types').CrmCampanhaCoupon> {
   const db = loadDb()
   db.segments = db.segments ?? []
   db.campanhaCoupons = db.campanhaCoupons ?? []
   const segment = db.segments.find((s) => s.id === payload.segment_id)
   if (!segment) throw new ApiError(404, 'segment not found')
-  if (!payload.message_template.trim() || !payload.message_template.includes('/nome') || !payload.message_template.includes('/cupom')) {
-    throw new ApiError(400, 'message_template must mention /nome and /cupom')
-  }
-  if (payload.orientation === 'evento') {
-    if (!payload.trigger_criteria) throw new ApiError(400, 'trigger_criteria is required for orientation=evento')
-    if (JSON.stringify(payload.trigger_criteria) === JSON.stringify(segment.filter_criteria)) {
-      throw new ApiError(400, "trigger_criteria must differ from the segment's current filter in at least one field")
-    }
-  }
-
-  const coupon = await createTargetedCoupon({
-    code: payload.code,
-    customer_whatsapps: payload.orientation === 'segmento' ? payload.customer_whatsapps : [],
-    uses_per_customer: payload.uses_per_customer,
-    notify_customers: false,
-    combinable_with_public: payload.combinable_with_public,
-    allow_promotion_checkout: payload.allow_promotion_checkout,
-    expires_at: payload.expires_at,
-    max_uses: payload.max_uses,
-    discount_type: payload.discount_type,
-    discount_value: payload.discount_value,
-    shipping_discount_type: payload.shipping_discount_type,
-    shipping_discount_value: payload.shipping_discount_value,
-    product_discounts: payload.product_discounts,
-  })
+  if (!payload.name.trim()) throw new ApiError(400, 'name is required')
 
   const row: LocalCampanhaCoupon = {
     id: uid(),
     segment_id: payload.segment_id,
-    coupon_id: coupon.id,
+    coupon_id: null,
     orientation: payload.orientation,
-    trigger_criteria: payload.trigger_criteria ?? null,
-    message_template: payload.message_template.trim(),
-    uses_per_customer: payload.uses_per_customer ?? 1,
+    name: payload.name.trim(),
+    description: payload.description?.trim() || null,
+    starts_at: payload.starts_at || null,
+    ends_at: payload.ends_at || null,
+    trigger_criteria: null,
+    message_template: '',
+    uses_per_customer: 1,
     active: true,
-    fired_at: payload.orientation === 'segmento' ? nowIso() : null,
+    fired_at: null,
     created_at: nowIso(),
     last_synced_segment_criteria: segment.filter_criteria,
   }
   db.campanhaCoupons.push(row)
   saveDb(db)
   return { ...row, extra_coupons: [] }
+}
+
+// Define/edita o gatilho (trigger_criteria) de uma campanha 'evento' —
+// decoupled do cadastro e de qualquer cupom.
+async function setCampanhaGatilho(id: string, triggerCriteria: import('./types').CrmFilterCriteria): Promise<import('./types').CrmCampanhaCoupon> {
+  const db = loadDb()
+  const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
+  if (!row) throw new ApiError(404, 'campanha not found')
+  if (row.orientation !== 'evento') throw new ApiError(400, 'only orientation=evento campanhas have a gatilho')
+  const segment = (db.segments ?? []).find((s) => s.id === row.segment_id)
+  if (segment && JSON.stringify(triggerCriteria) === JSON.stringify(segment.filter_criteria)) {
+    throw new ApiError(400, "trigger_criteria must differ from the segment's current filter in at least one field")
+  }
+  row.trigger_criteria = triggerCriteria
+  if (segment) row.last_synced_segment_criteria = segment.filter_criteria
+  saveDb(db)
+  return { ...row, extra_coupons: campanhaExtraCoupons(db, row.id) }
 }
 
 async function fireCampanhaEvent(id: string, customerWhatsapps: string[]): Promise<{ newly_granted: string[] }> {
@@ -1147,7 +1137,9 @@ async function fireCampanhaEvent(id: string, customerWhatsapps: string[]): Promi
   if (row.orientation !== 'evento') throw new ApiError(400, 'only orientation=evento campanhas can be re-fired')
   if (!row.active) throw new ApiError(400, 'this campanha is paused')
   db.couponGrants = db.couponGrants ?? []
-  const couponIds = [row.coupon_id, ...campanhaExtraCoupons(db, row.id).map((ec) => ec.coupon.id)]
+  const couponIds = [row.coupon_id, ...campanhaExtraCoupons(db, row.id).map((ec) => ec.coupon.id)].filter(
+    (cid): cid is string => !!cid
+  )
   const newlyGranted: string[] = []
   for (const couponId of couponIds) {
     for (const whatsapp of customerWhatsapps) {
@@ -1201,7 +1193,6 @@ async function updateCampanhaCoupon(
     shipping_discount_type?: 'percent' | 'fixed'
     shipping_discount_value?: number
     product_discounts?: import('./types').ProductDiscount[]
-    trigger_criteria?: import('./types').CrmFilterCriteria
   }
 ): Promise<import('./types').CrmCampanhaCoupon> {
   const db = loadDb()
@@ -1229,15 +1220,14 @@ async function updateCampanhaCoupon(
   }
   row.message_template = payload.message_template.trim()
   row.uses_per_customer = payload.uses_per_customer ?? 1
-  if (row.orientation === 'evento' && payload.trigger_criteria) {
-    row.trigger_criteria = payload.trigger_criteria
-    const segment = (db.segments ?? []).find((s) => s.id === row.segment_id)
-    if (segment) row.last_synced_segment_criteria = segment.filter_criteria
-  }
   saveDb(db)
   return { ...row, extra_coupons: campanhaExtraCoupons(db, row.id) }
 }
 
+// Se a campanha ainda não tem cupom nenhum (coupon_id null), este vira o
+// PRINCIPAL — e se for 'segmento', dispara na hora pra quem já bate o
+// critério (customer_whatsapps). Senão entra como mais um extra, igual
+// já funcionava.
 async function createCampanhaExtraCoupon(
   campanhaId: string,
   payload: {
@@ -1253,6 +1243,7 @@ async function createCampanhaExtraCoupon(
     shipping_discount_type?: 'percent' | 'fixed'
     shipping_discount_value?: number
     product_discounts?: import('./types').ProductDiscount[]
+    customer_whatsapps?: string[]
   }
 ): Promise<Coupon> {
   const campanhaCheck = (loadDb().campanhaCoupons ?? []).find((c) => c.id === campanhaId)
@@ -1260,6 +1251,7 @@ async function createCampanhaExtraCoupon(
   if (!payload.message_template.trim() || !payload.message_template.includes('/nome') || !payload.message_template.includes('/cupom')) {
     throw new ApiError(400, 'message_template must mention /nome and /cupom')
   }
+  const isPrimary = !campanhaCheck.coupon_id
   const coupon = await createTargetedCoupon({ ...payload, customer_whatsapps: [] })
   // createTargetedCoupon já salvou o cupom novo — recarrega pra não
   // sobrescrever esse save com um snapshot antigo do db.
@@ -1270,27 +1262,47 @@ async function createCampanhaExtraCoupon(
     if (savedCoupon) savedCoupon.active = false
     coupon.active = false
   }
-  db.campanhaExtraCoupons = db.campanhaExtraCoupons ?? []
-  db.campanhaExtraCoupons.push({
-    id: uid(),
-    campanha_id: campanhaId,
-    coupon_id: coupon.id,
-    message_template: payload.message_template.trim(),
-    created_at: nowIso(),
-  })
-  // A campanha já disparou antes (tem concessão do cupom principal)? Esse
-  // cupom novo entra pra mesma turma na hora.
   db.couponGrants = db.couponGrants ?? []
-  const existingGrants = db.couponGrants.filter((g) => g.coupon_id === campanha.coupon_id)
-  for (const g of existingGrants) {
-    db.couponGrants.push({
+
+  if (isPrimary) {
+    campanha.coupon_id = coupon.id
+    campanha.message_template = payload.message_template.trim()
+    campanha.uses_per_customer = payload.uses_per_customer ?? 1
+    if (campanha.orientation === 'segmento') {
+      campanha.fired_at = nowIso()
+      for (const whatsapp of payload.customer_whatsapps ?? []) {
+        if (!whatsapp?.trim()) continue
+        const exists = db.couponGrants.some((g) => g.coupon_id === coupon.id && g.customer_whatsapp === whatsapp)
+        if (!exists) {
+          db.couponGrants.push({
+            id: uid(), coupon_id: coupon.id, customer_whatsapp: whatsapp,
+            granted_uses: payload.uses_per_customer ?? 1, used_count: 0, created_at: nowIso(),
+          })
+        }
+      }
+    }
+  } else {
+    db.campanhaExtraCoupons = db.campanhaExtraCoupons ?? []
+    db.campanhaExtraCoupons.push({
       id: uid(),
+      campanha_id: campanhaId,
       coupon_id: coupon.id,
-      customer_whatsapp: g.customer_whatsapp,
-      granted_uses: payload.uses_per_customer ?? 1,
-      used_count: 0,
+      message_template: payload.message_template.trim(),
       created_at: nowIso(),
     })
+    // A campanha já disparou antes (tem concessão do cupom principal)?
+    // Esse cupom novo entra pra mesma turma na hora.
+    const existingGrants = db.couponGrants.filter((g) => g.coupon_id === campanha.coupon_id)
+    for (const g of existingGrants) {
+      db.couponGrants.push({
+        id: uid(),
+        coupon_id: coupon.id,
+        customer_whatsapp: g.customer_whatsapp,
+        granted_uses: payload.uses_per_customer ?? 1,
+        used_count: 0,
+        created_at: nowIso(),
+      })
+    }
   }
   saveDb(db)
   return withGrantCount(db, coupon)
@@ -1992,7 +2004,8 @@ export const localApi = {
     segments: { list: adminListSegments, create: createSegment, update: updateSegment, delete: deleteSegment },
     campanhaCoupons: {
       list: adminListCampanhaCoupons,
-      create: createCampanhaCoupon,
+      create: createCampanha,
+      setGatilho: setCampanhaGatilho,
       fireEvent: fireCampanhaEvent,
       delete: deleteCampanhaCoupon,
       toggleActive: toggleCampanhaCoupon,

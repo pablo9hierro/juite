@@ -105,8 +105,15 @@ export interface CrmCampanhaExtraCoupon {
 export interface CrmCampanhaCoupon {
   id: string
   segment_id: string
-  coupon_id: string
+  // NULL até o primeiro cupom ser criado — campanha nasce só com
+  // cadastro (nome/descrição/duração), gatilho e cupom(s) são passos
+  // separados depois.
+  coupon_id: string | null
   orientation: CampanhaOrientation
+  name: string
+  description: string | null
+  starts_at: string | null
+  ends_at: string | null
   trigger_criteria: CrmFilterCriteria | null
   message_template: string
   uses_per_customer: number

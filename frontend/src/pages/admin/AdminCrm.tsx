@@ -436,10 +436,6 @@ export default function AdminCrm() {
   // editado) pra poder desenhar a cadeia Segmento->Campanha->Cupom na
   // lista principal, igual ao wireframe.
   const [campanhaCouponsBySegment, setCampanhaCouponsBySegment] = useState<Record<string, CrmCampanhaCoupon[]>>({})
-  const [showCampanhaForm, setShowCampanhaForm] = useState(false)
-  const [campanhaForm, setCampanhaForm] = useState<CampanhaForm>(EMPTY_CAMPANHA_FORM)
-  const [savingCampanha, setSavingCampanha] = useState(false)
-  const [campanhaError, setCampanhaError] = useState<string | null>(null)
 
   // Edição inline de uma campanha já criada — o card em si morfa num
   // formulário (motion), não navega pra outro lugar.
@@ -454,6 +450,14 @@ export default function AdminCrm() {
   const [campanhaEditError, setCampanhaEditError] = useState<string | null>(null)
   const [originalCampanhaEditForm, setOriginalCampanhaEditForm] = useState<CampanhaForm | null>(null)
 
+  // Gatilho é um formulário PRÓPRIO (não faz parte de CampanhaForm) — só
+  // o trigger_criteria, salvo via admin_set_campanha_gatilho, decoupled
+  // de tudo que é cupom (mensagem/desconto/prazo).
+  const [gatilhoForm, setGatilhoForm] = useState<FilterState>(EMPTY_FILTER)
+  const [originalGatilhoForm, setOriginalGatilhoForm] = useState<FilterState | null>(null)
+  const [savingGatilho, setSavingGatilho] = useState(false)
+  const [gatilhoSaveError, setGatilhoSaveError] = useState<string | null>(null)
+
   // "Novos Alvos (Opcional)" — dentro da edição do gatilho, abre o
   // formulário de filtro completo numa cópia isolada; ao confirmar, os
   // campos preenchidos aqui são só MESCLADOS no critério do gatilho, sem
@@ -461,6 +465,16 @@ export default function AdminCrm() {
   const [gatilhoExtraOpen, setGatilhoExtraOpen] = useState(false)
   const [gatilhoExtraFilter, setGatilhoExtraFilter] = useState<FilterState>(EMPTY_FILTER)
   const [gatilhoExtraError, setGatilhoExtraError] = useState<string | null>(null)
+
+  // Chooser "+ Campanha": escolhe orientação (evento/segmento) antes de
+  // abrir o formulário simples de cadastro (nome/descrição/duração) —
+  // gatilho e cupom(s) entram DEPOIS, cada um pelo próprio subcard.
+  const [newCampanhaSegment, setNewCampanhaSegment] = useState<CrmSegment | null>(null)
+  const [showCampanhaBasicForm, setShowCampanhaBasicForm] = useState(false)
+  const [campanhaBasicOrientation, setCampanhaBasicOrientation] = useState<CampanhaOrientation>('segmento')
+  const [campanhaBasicForm, setCampanhaBasicForm] = useState({ name: '', description: '', starts_at: '', ends_at: '' })
+  const [savingCampanhaBasic, setSavingCampanhaBasic] = useState(false)
+  const [campanhaBasicError, setCampanhaBasicError] = useState<string | null>(null)
 
   // Botão "Novo" da cadeia da campanha — escolhe entre editar o gatilho
   // (critério do evento) ou criar mais um cupom exclusivo pra ele.
@@ -528,7 +542,7 @@ export default function AdminCrm() {
         const rows = await api.admin.campanhaCoupons.list(seg.id).catch(() => [])
         let changed = false
         for (const row of rows) {
-          if (row.orientation !== 'evento' || !row.trigger_criteria || !row.active) continue
+          if (row.orientation !== 'evento' || !row.trigger_criteria || !row.active || !row.coupon_id) continue
           const matching = applyFilters(customers, row.trigger_criteria as unknown as FilterState, products).map((c) => c.whatsapp)
           if (matching.length === 0) continue
           const result = await api.admin.campanhaCoupons.fireEvent(row.id, matching).catch(() => null)
@@ -582,7 +596,6 @@ export default function AdminCrm() {
         .flat()
         .find((cc) => cc.id === editingCampanhaId)
     : null
-  const campanhaFormSegment = segments.find((s) => s.id === campanhaForm.segmentId)
   const editingCampanhaSegment = editingCampanhaRow ? segments.find((s) => s.id === editingCampanhaRow.segment_id) : null
 
   const filteredBase = appliedFilter ? applyFilters(customers, appliedFilter, products) : customers
@@ -694,22 +707,58 @@ export default function AdminCrm() {
     })
 
   // Um segmento só pode ter UMA campanha 'segmento' (dispara uma vez, não
-  // faz sentido duplicar), mas pode ter várias 'evento'. O botão "+
-  // Campanha" já abre no modo que ainda cabe pro segmento; a escolha de
-  // orientação dentro do popup (switchCampanhaOrientation) respeita o
-  // mesmo limite.
+  // faz sentido duplicar), mas pode ter várias 'evento'.
   const hasSegmentoCampanha = (segmentId: string) => (campanhaCouponsBySegment[segmentId] ?? []).some((cc) => cc.orientation === 'segmento')
 
-  const openNewCampanha = (segment: CrmSegment) => {
-    setCampanhaError(null)
-    const orientation: CampanhaOrientation = hasSegmentoCampanha(segment.id) ? 'evento' : 'segmento'
-    setCampanhaForm({
-      ...EMPTY_CAMPANHA_FORM,
-      segmentId: segment.id,
-      orientation,
-      triggerCriteria: orientation === 'evento' ? (segment.filter_criteria as unknown as FilterState) : null,
-    })
-    setShowCampanhaForm(true)
+  // "+ Campanha": primeiro escolhe a orientação (chooser), depois abre o
+  // formulário simples de cadastro (nome/descrição/duração) — gatilho e
+  // cupom(s) entram DEPOIS, cada um pelo próprio subcard/popup.
+  // newCampanhaSegment fica setado do clique em "+ Campanha" até a
+  // criação terminar (ou ser cancelada) — vale tanto pro chooser quanto
+  // pro formulário simples que vem em seguida.
+  const openCampanhaChooser = (segment: CrmSegment) => {
+    setNewCampanhaSegment(segment)
+    setShowCampanhaBasicForm(false)
+  }
+
+  const pickCampanhaOrientation = (orientation: CampanhaOrientation) => {
+    setCampanhaBasicOrientation(orientation)
+    setCampanhaBasicForm({ name: '', description: '', starts_at: '', ends_at: '' })
+    setCampanhaBasicError(null)
+    setShowCampanhaBasicForm(true)
+  }
+
+  const closeCampanhaBasicForm = () => {
+    setShowCampanhaBasicForm(false)
+    setNewCampanhaSegment(null)
+  }
+
+  const saveCampanhaBasic = async () => {
+    if (!newCampanhaSegment) return
+    setCampanhaBasicError(null)
+    if (!campanhaBasicForm.name.trim()) {
+      setCampanhaBasicError('Dê um nome pra essa campanha.')
+      return
+    }
+    setSavingCampanhaBasic(true)
+    try {
+      const segmentId = newCampanhaSegment.id
+      await api.admin.campanhaCoupons.create({
+        segment_id: segmentId,
+        orientation: campanhaBasicOrientation,
+        name: campanhaBasicForm.name.trim(),
+        description: campanhaBasicForm.description.trim() || undefined,
+        starts_at: campanhaBasicForm.starts_at || undefined,
+        ends_at: campanhaBasicForm.ends_at || undefined,
+      })
+      setShowCampanhaBasicForm(false)
+      setNewCampanhaSegment(null)
+      loadCampanhaCoupons(segmentId)
+    } catch (err) {
+      setCampanhaBasicError(err instanceof ApiError ? err.message : 'Não foi possível criar a campanha.')
+    } finally {
+      setSavingCampanhaBasic(false)
+    }
   }
 
   // Só renderiza os campos que o segmento realmente usa no filtro dele —
@@ -1140,75 +1189,14 @@ export default function AdminCrm() {
     </>
   )
 
-  const switchCampanhaOrientation = (orientation: CampanhaOrientation) => {
-    const segment = segments.find((s) => s.id === campanhaForm.segmentId)
-    setCampanhaForm({
-      ...campanhaForm,
-      orientation,
-      triggerCriteria: orientation === 'evento' ? ((segment?.filter_criteria as unknown as FilterState) ?? EMPTY_FILTER) : null,
-    })
-  }
-
-  const campanhaMessageValid = campanhaForm.messageTemplate.includes('/nome') && campanhaForm.messageTemplate.includes('/cupom')
-
-  const saveCampanha = async () => {
-    setCampanhaError(null)
-    if (!campanhaMessageValid) {
-      setCampanhaError('A mensagem precisa citar /nome e /cupom.')
-      return
-    }
-    const segment = segments.find((s) => s.id === campanhaForm.segmentId)
-    if (campanhaForm.orientation === 'evento' && segment && JSON.stringify(segment.filter_criteria) === JSON.stringify(campanhaForm.triggerCriteria)) {
-      setCampanhaError(
-        'O critério do evento precisa ser diferente do critério atual do segmento — altere pelo menos 1 valor abaixo antes de criar a campanha orientada a evento.'
-      )
-      return
-    }
-    setSavingCampanha(true)
-    try {
-      const criteria = campanhaForm.orientation === 'segmento' ? segment?.filter_criteria ?? EMPTY_FILTER : campanhaForm.triggerCriteria!
-      const matchingWhatsapps =
-        campanhaForm.orientation === 'segmento'
-          ? applyFilters(customers, criteria as unknown as FilterState, products).map((c) => c.whatsapp)
-          : []
-      const created = await api.admin.campanhaCoupons.create({
-        segment_id: campanhaForm.segmentId,
-        orientation: campanhaForm.orientation,
-        trigger_criteria: campanhaForm.orientation === 'evento' ? (campanhaForm.triggerCriteria as unknown as CrmFilterCriteria) : undefined,
-        message_template: campanhaForm.messageTemplate,
-        code: campanhaForm.code,
-        uses_per_customer: Number(campanhaForm.uses_per_customer) || 1,
-        combinable_with_public: campanhaForm.combinable_with_public,
-        allow_promotion_checkout: campanhaForm.allow_promotion_checkout,
-        expires_at: campanhaForm.expires_at || undefined,
-        max_uses: campanhaForm.max_uses ? Number(campanhaForm.max_uses) : undefined,
-        discount_type: campanhaForm.productMode === 'flat' ? campanhaForm.discount_type : undefined,
-        discount_value: campanhaForm.productMode === 'flat' ? Number(campanhaForm.discount_value) : undefined,
-        shipping_discount_type: campanhaForm.shippingEnabled ? campanhaForm.shipping_discount_type : undefined,
-        shipping_discount_value: campanhaForm.shippingEnabled ? Number(campanhaForm.shipping_discount_value) : undefined,
-        product_discounts: campanhaForm.productMode === 'produto' ? campanhaForm.productDiscounts : undefined,
-        customer_whatsapps: matchingWhatsapps,
-      })
-      if (campanhaForm.orientation === 'segmento' && matchingWhatsapps.length > 0) {
-        api.admin.whatsapp.notifyCouponGrant(created.coupon_id, campanhaForm.messageTemplate).catch(() => {})
-      }
-      setShowCampanhaForm(false)
-      setCampanhaForm(EMPTY_CAMPANHA_FORM)
-      loadCampanhaCoupons(campanhaForm.segmentId)
-      loadCoupons()
-    } catch (err) {
-      setCampanhaError(err instanceof ApiError ? err.message : 'Não foi possível criar a campanha.')
-    } finally {
-      setSavingCampanha(false)
-    }
-  }
-
   // Reavalia uma campanha 'evento': recalcula quem casa com o critério
   // agora e concede+notifica só quem ainda não tinha o cupom.
   // Reavalia o evento (concede pra quem bateu o critério agora) e ABRE o
   // histórico de disparos — a lista completa de quem já recebeu o cupom
   // dessa campanha, não só os novos desta checagem.
   const openHistoryDialog = async (row: CrmCampanhaCoupon) => {
+    if (!row.coupon_id) return
+    const couponId = row.coupon_id
     setHistoryDialogCampanha(row)
     setHistoryTab('resultados')
     setHistoryCustomerQuery('')
@@ -1220,13 +1208,13 @@ export default function AdminCrm() {
         // Extras são concedidos junto com o principal na mesma chamada
         // (mesmo critério de "novo"), então avisa pra todos os cupons da
         // campanha — cada um com sua própria mensagem/código.
-        api.admin.whatsapp.notifyCouponGrant(row.coupon_id, row.message_template).catch(() => {})
+        api.admin.whatsapp.notifyCouponGrant(couponId, row.message_template).catch(() => {})
         for (const ec of row.extra_coupons) {
           api.admin.whatsapp.notifyCouponGrant(ec.coupon.id, ec.message_template).catch(() => {})
         }
       }
       loadCampanhaCoupons(row.segment_id)
-      const grants = await api.admin.coupons.listGrants(row.coupon_id)
+      const grants = await api.admin.coupons.listGrants(couponId)
       setHistoryGrants(grants)
     } finally {
       setHistoryLoading(false)
@@ -1248,8 +1236,9 @@ export default function AdminCrm() {
     }
   }
 
-  // Não dá pra editar orientation/trigger_criteria/código de uma campanha
-  // já criada (identidade fixa) — só mensagem, desconto e prazo.
+  // Não dá pra editar orientation/código de uma campanha já criada
+  // (identidade fixa) — gatilho tem popup próprio (ver saveGatilho), este
+  // aqui cobre só mensagem/desconto/prazo do cupom.
   const openEditCampanha = (cc: CrmCampanhaCoupon, mode: 'gatilho' | 'cupom' = 'cupom') => {
     const coupon = coupons.find((c) => c.id === cc.coupon_id)
     setCampanhaEditError(null)
@@ -1257,6 +1246,14 @@ export default function AdminCrm() {
     setGatilhoExtraOpen(false)
     setGatilhoExtraFilter(EMPTY_FILTER)
     setGatilhoExtraError(null)
+    if (mode === 'gatilho') {
+      const criteria = (cc.trigger_criteria as unknown as FilterState) ?? EMPTY_FILTER
+      setGatilhoForm(criteria)
+      setOriginalGatilhoForm(criteria)
+      setGatilhoSaveError(null)
+      setEditingCampanhaId(cc.id)
+      return
+    }
     const form: CampanhaForm = {
       ...EMPTY_CAMPANHA_FORM,
       orientation: cc.orientation,
@@ -1282,7 +1279,7 @@ export default function AdminCrm() {
 
   // Mescla os campos preenchidos no formulário-cópia "Novos Alvos" dentro
   // do critério do gatilho que já está sendo editado — não mexe no filtro
-  // do segmento, só no rascunho local (campanhaEditForm.triggerCriteria).
+  // do segmento, só no rascunho local (gatilhoForm).
   const addGatilhoExtraTargets = () => {
     const errors = validatePairErrors(gatilhoExtraFilter)
     if (Object.keys(errors).length > 0) {
@@ -1293,7 +1290,7 @@ export default function AdminCrm() {
       setGatilhoExtraError('Preencha pelo menos um campo pra adicionar como alvo.')
       return
     }
-    const merged: FilterState = { ...(campanhaEditForm.triggerCriteria ?? EMPTY_FILTER) }
+    const merged: FilterState = { ...gatilhoForm }
     for (const group of FIELD_GROUPS) {
       if (!group.isFilled(gatilhoExtraFilter)) continue
       for (const key of FIELD_GROUP_KEYS[group.key]) {
@@ -1302,7 +1299,7 @@ export default function AdminCrm() {
         ;(merged as Record<string, unknown>)[key] = gatilhoExtraFilter[key]
       }
     }
-    setCampanhaEditForm({ ...campanhaEditForm, triggerCriteria: merged })
+    setGatilhoForm(merged)
     setGatilhoExtraFilter(EMPTY_FILTER)
     setGatilhoExtraError(null)
     setGatilhoExtraOpen(false)
@@ -1311,18 +1308,36 @@ export default function AdminCrm() {
   const removeGatilhoField = (keys: (keyof FilterState)[]) => {
     const patch: Partial<FilterState> = {}
     for (const key of keys) (patch as Record<string, unknown>)[key] = EMPTY_FILTER[key]
-    setCampanhaEditForm({ ...campanhaEditForm, triggerCriteria: { ...(campanhaEditForm.triggerCriteria ?? EMPTY_FILTER), ...patch } })
+    setGatilhoForm({ ...gatilhoForm, ...patch })
+  }
+
+  // Gatilho desatualizado: aceita salvar mesmo SEM diferença nenhuma — o
+  // admin pode revisar o campo marcado e decidir que o valor atual já
+  // está bom, e isso sozinho já conta como "resolvido" (sincroniza o
+  // retrato do critério). Fora desse caso, exige diferença de verdade.
+  const gatilhoHasChanged =
+    !originalGatilhoForm ||
+    JSON.stringify(gatilhoForm) !== JSON.stringify(originalGatilhoForm) ||
+    (!!editingCampanhaRow && isCampanhaStale(editingCampanhaRow, editingCampanhaSegment ?? undefined))
+
+  const saveGatilho = async () => {
+    if (!editingCampanhaId) return
+    setGatilhoSaveError(null)
+    setSavingGatilho(true)
+    try {
+      const row = await api.admin.campanhaCoupons.setGatilho(editingCampanhaId, gatilhoForm as unknown as CrmFilterCriteria)
+      setEditingCampanhaId(null)
+      loadCampanhaCoupons(row.segment_id)
+    } catch (err) {
+      setGatilhoSaveError(err instanceof ApiError ? err.message : 'Não foi possível salvar o gatilho.')
+    } finally {
+      setSavingGatilho(false)
+    }
   }
 
   const campanhaEditMessageValid = campanhaEditForm.messageTemplate.includes('/nome') && campanhaEditForm.messageTemplate.includes('/cupom')
-  // Campanha desatualizada: aceita salvar mesmo SEM diferença nenhuma —
-  // o admin pode revisar o campo marcado e decidir que o valor atual já
-  // está bom, e isso sozinho já conta como "resolvido" (sincroniza o
-  // retrato do critério). Fora desse caso, exige diferença de verdade.
   const campanhaEditHasChanged =
-    !originalCampanhaEditForm ||
-    JSON.stringify(campanhaEditForm) !== JSON.stringify(originalCampanhaEditForm) ||
-    (!!editingCampanhaRow && isCampanhaStale(editingCampanhaRow, editingCampanhaSegment ?? undefined))
+    !originalCampanhaEditForm || JSON.stringify(campanhaEditForm) !== JSON.stringify(originalCampanhaEditForm)
 
   const saveCampanhaEdit = async () => {
     if (!editingCampanhaId) return
@@ -1345,7 +1360,6 @@ export default function AdminCrm() {
         shipping_discount_type: campanhaEditForm.shippingEnabled ? campanhaEditForm.shipping_discount_type : undefined,
         shipping_discount_value: campanhaEditForm.shippingEnabled ? Number(campanhaEditForm.shipping_discount_value) : undefined,
         product_discounts: campanhaEditForm.productMode === 'produto' ? campanhaEditForm.productDiscounts : undefined,
-        trigger_criteria: campanhaEditForm.orientation === 'evento' ? (campanhaEditForm.triggerCriteria as unknown as CrmFilterCriteria) : undefined,
       })
       setEditingCampanhaId(null)
       loadCampanhaCoupons(row.segment_id)
@@ -1372,6 +1386,16 @@ export default function AdminCrm() {
       setExtraCouponError('A mensagem precisa citar /nome e /cupom.')
       return
     }
+    // Campanha 'segmento' ainda sem cupom nenhum: este é o cupom
+    // PRINCIPAL e já dispara na hora pra quem casa com o segmento agora
+    // — precisa mandar a lista de whatsapps junto (mesma lógica que a
+    // criação tudo-de-uma-vez fazia antes).
+    const isBootstrapPrimary = !extraCouponCampanha.coupon_id
+    const segment = segments.find((s) => s.id === extraCouponCampanha.segment_id)
+    const matchingWhatsapps =
+      isBootstrapPrimary && extraCouponCampanha.orientation === 'segmento' && segment
+        ? applyFilters(customers, segment.filter_criteria as unknown as FilterState, products).map((c) => c.whatsapp)
+        : []
     setSavingExtraCoupon(true)
     try {
       const created = await api.admin.campanhaCoupons.createExtra(extraCouponCampanha.id, {
@@ -1387,12 +1411,14 @@ export default function AdminCrm() {
         shipping_discount_type: extraCouponForm.shippingEnabled ? extraCouponForm.shipping_discount_type : undefined,
         shipping_discount_value: extraCouponForm.shippingEnabled ? Number(extraCouponForm.shipping_discount_value) : undefined,
         product_discounts: extraCouponForm.productMode === 'produto' ? extraCouponForm.productDiscounts : undefined,
+        customer_whatsapps: matchingWhatsapps,
       })
       // Campanha já disparou pra alguém antes (segmento imediato ou evento
       // já concedido)? Esse cupom novo é concedido pra mesma turma na
       // hora (regra do backend) — então também avisa por WhatsApp agora,
-      // com a mensagem própria deste cupom extra.
-      if (extraCouponCampanha.fired_at) {
+      // com a mensagem própria deste cupom extra. Mesma coisa se este
+      // cupom acabou de virar o principal e já dispara na hora.
+      if (extraCouponCampanha.fired_at || matchingWhatsapps.length > 0) {
         api.admin.whatsapp.notifyCouponGrant(created.id, extraCouponForm.messageTemplate).catch(() => {})
       }
       const segmentId = extraCouponCampanha.segment_id
@@ -1855,36 +1881,24 @@ export default function AdminCrm() {
 
                 <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
                   {campanhas.length === 0 ? (
-                    <button type="button" onClick={() => openNewCampanha(s)} className="btn-primary text-sm py-2.5 px-3">
+                    <button type="button" onClick={() => openCampanhaChooser(s)} className="btn-primary text-sm py-2.5 px-3">
                       <Plus className="w-4 h-4" /> Campanha
                     </button>
                   ) : (
                     <>
-                      <button type="button" onClick={() => openNewCampanha(s)} className="btn-primary text-sm py-2.5 px-3">
+                      <button type="button" onClick={() => openCampanhaChooser(s)} className="btn-primary text-sm py-2.5 px-3">
                         <Plus className="w-4 h-4" /> Campanha
                       </button>
                       {campanhas.map((cc) => {
                         const cCoupon = coupons.find((c) => c.id === cc.coupon_id)
                         const stale = isCampanhaStale(cc, s)
-                        // Cadeia estilo n8n: cada subcard é arrastável dentro de um
-                        // raio curto só pra reposicionar visualmente (não persiste,
-                        // não afeta nenhuma lógica) — o container tracejado ao redor
-                        // delimita que aqueles subcards pertencem a esta campanha.
-                        const dragProps = {
-                          drag: true,
-                          dragMomentum: false,
-                          dragElastic: 0.15,
-                          dragConstraints: { left: -50, right: 50, top: -30, bottom: 30 },
-                          whileDrag: { zIndex: 30, scale: 1.03 },
-                        } as const
                         return (
                         <div key={cc.id} className="relative rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-3">
                         <div className="flex items-center gap-2 flex-wrap">
                           {/* subcard: cadastro da campanha (só identificação, sem gatilho nem cupom) */}
-                          <motion.div
-                            {...dragProps}
+                          <div
                             title={stale ? 'Clique em "Editar" no gatilho e atualize os campos alvo desta campanha, pois você editou a segmentação original.' : undefined}
-                            className={`flex-shrink-0 w-56 rounded-xl px-3 py-2 cursor-grab active:cursor-grabbing ${
+                            className={`flex-shrink-0 w-56 rounded-xl px-3 py-2 ${
                               stale
                                 ? 'border-2 border-red-500 bg-red-500/5 shadow-[0_0_10px_2px_rgba(239,68,68,0.5)]'
                                 : 'border border-purple-400/30 bg-purple-500/5'
@@ -1899,11 +1913,11 @@ export default function AdminCrm() {
                                 <Gift className="w-4 h-4 text-purple-300 flex-shrink-0" />
                               )}
                               <div className="min-w-0">
-                                <p className="text-xs font-semibold text-white">
-                                  {cc.orientation === 'evento' ? 'Orientada a evento' : 'Orientada a segmento'}
-                                </p>
+                                <p className="text-xs font-semibold text-white truncate">{cc.name || (cc.orientation === 'evento' ? 'Orientada a evento' : 'Orientada a segmento')}</p>
                                 <p className="text-[10px] text-son-silver-dim">
-                                  {cc.orientation === 'evento'
+                                  {!cc.coupon_id
+                                    ? 'Aguardando cupom'
+                                    : cc.orientation === 'evento'
                                     ? cc.fired_at
                                       ? `Disparado em ${formatDate(cc.fired_at)}`
                                       : 'Aguardando evento'
@@ -1912,7 +1926,7 @@ export default function AdminCrm() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2 mt-1.5">
-                              {cc.orientation === 'evento' && (
+                              {cc.orientation === 'evento' && cc.coupon_id && (
                                 <button
                                   type="button"
                                   onClick={() => openHistoryDialog(cc)}
@@ -1921,13 +1935,15 @@ export default function AdminCrm() {
                                   Verificar
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                onClick={() => openEditCampanha(cc, 'cupom')}
-                                className="text-[10px] font-semibold text-son-silver-dim hover:text-white"
-                              >
-                                Editar
-                              </button>
+                              {cc.coupon_id && (
+                                <button
+                                  type="button"
+                                  onClick={() => openEditCampanha(cc, 'cupom')}
+                                  className="text-[10px] font-semibold text-son-silver-dim hover:text-white"
+                                >
+                                  Editar
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => setCampanhaNovoChooser(cc)}
@@ -1939,16 +1955,15 @@ export default function AdminCrm() {
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                          </motion.div>
+                          </div>
 
                           {cc.orientation === 'evento' && (
                             <>
                               <div className="w-5 border-t-2 border-dashed border-cyan-400/40 flex-shrink-0" />
                               {/* subcard: gatilho do evento — só o critério que dispara, decoupled do segmento */}
-                              <motion.div
-                                {...dragProps}
+                              <div
                                 title={stale ? 'O segmento mudou — edite este gatilho pra revisar ou confirmar os alvos.' : undefined}
-                                className={`flex-shrink-0 w-56 rounded-xl px-3 py-2 cursor-grab active:cursor-grabbing ${
+                                className={`flex-shrink-0 w-56 rounded-xl px-3 py-2 ${
                                   stale
                                     ? 'border-2 border-red-500 bg-red-500/5 shadow-[0_0_10px_2px_rgba(239,68,68,0.5)]'
                                     : 'border border-cyan-400/30 bg-cyan-500/5'
@@ -1959,7 +1974,7 @@ export default function AdminCrm() {
                                   <div className="min-w-0">
                                     <p className="text-xs font-semibold text-white">Gatilho do evento</p>
                                     <p className="text-[10px] text-son-silver-dim truncate">
-                                      {describeFilter(cc.trigger_criteria as unknown as FilterState, products, categories).join(' · ') || 'Sem critério'}
+                                      {describeFilter((cc.trigger_criteria as unknown as FilterState) ?? EMPTY_FILTER, products, categories).join(' · ') || 'Sem critério ainda'}
                                     </p>
                                   </div>
                                 </div>
@@ -1979,7 +1994,7 @@ export default function AdminCrm() {
                                     + Novo cupom
                                   </button>
                                 </div>
-                              </motion.div>
+                              </div>
                             </>
                           )}
 
@@ -1987,7 +2002,7 @@ export default function AdminCrm() {
                             <>
                               <div className="w-5 border-t-2 border-dashed border-purple-400/40 flex-shrink-0" />
                               {/* subcard: cupom exclusivo — mesmo desenho de bilhete do cupom avulso, só que pequeno e ligado */}
-                              <motion.div {...dragProps} className="flex-shrink-0 w-40 rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch cursor-grab active:cursor-grabbing">
+                              <div className="flex-shrink-0 w-40 rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch">
                                 <div className="min-w-0 flex-1 p-2.5">
                                   <p className="font-mono text-xs font-bold text-white truncate">{cCoupon.code}</p>
                                   <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
@@ -2002,14 +2017,14 @@ export default function AdminCrm() {
                                       `${cCoupon.product_discounts?.length ?? 0} prod.`}
                                   </span>
                                 </div>
-                              </motion.div>
+                              </div>
                             </>
                           )}
 
                           {cc.extra_coupons.map((ec) => (
                             <div key={ec.id} className="flex items-center gap-2">
                               <div className="w-5 border-t-2 border-dashed border-purple-400/40 flex-shrink-0" />
-                              <motion.div {...dragProps} className="flex-shrink-0 w-40 rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch cursor-grab active:cursor-grabbing">
+                              <div className="flex-shrink-0 w-40 rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch">
                                 <div className="min-w-0 flex-1 p-2.5">
                                   <p className="font-mono text-xs font-bold text-white truncate">{ec.coupon.code}</p>
                                   <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
@@ -2027,7 +2042,7 @@ export default function AdminCrm() {
                                     <Trash2 className="w-3 h-3" />
                                   </button>
                                 </div>
-                              </motion.div>
+                              </div>
                             </div>
                           ))}
 
@@ -2197,9 +2212,8 @@ export default function AdminCrm() {
                         </label>
                         {renderTriggerFields(
                           editingCampanhaSegment.filter_criteria as unknown as FilterState,
-                          campanhaEditForm.triggerCriteria ?? EMPTY_FILTER,
-                          (patch) =>
-                            setCampanhaEditForm({ ...campanhaEditForm, triggerCriteria: { ...(campanhaEditForm.triggerCriteria ?? EMPTY_FILTER), ...patch } }),
+                          gatilhoForm,
+                          (patch) => setGatilhoForm({ ...gatilhoForm, ...patch }),
                           changedKeys,
                           removeGatilhoField
                         )}
@@ -2217,13 +2231,13 @@ export default function AdminCrm() {
                   >
                     <Plus className="w-3.5 h-3.5" /> Novos Alvos (Opcional)
                   </button>
-                  {campanhaEditError && <p className="error-msg">{campanhaEditError}</p>}
+                  {gatilhoSaveError && <p className="error-msg">{gatilhoSaveError}</p>}
                   <button
-                    onClick={saveCampanhaEdit}
-                    disabled={savingCampanhaEdit || !campanhaEditMessageValid || !campanhaEditHasChanged}
+                    onClick={saveGatilho}
+                    disabled={savingGatilho || !gatilhoHasChanged}
                     className="btn-primary w-full mt-2"
                   >
-                    {savingCampanhaEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    {savingGatilho ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                     Salvar alterações
                   </button>
                 </div>
@@ -2426,18 +2440,20 @@ export default function AdminCrm() {
                 </button>
               </div>
               <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const cc = campanhaNovoChooser
-                    setCampanhaNovoChooser(null)
-                    if (cc) openEditCampanha(cc, 'gatilho')
-                  }}
-                  className="w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border border-cyan-400/30 bg-cyan-500/5 text-left hover:bg-cyan-500/10"
-                >
-                  <Crosshair className="w-4 h-4 text-cyan-300 flex-shrink-0" />
-                  <span className="text-sm font-semibold text-white">Gatilho de evento alvo</span>
-                </button>
+                {campanhaNovoChooser.orientation === 'evento' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cc = campanhaNovoChooser
+                      setCampanhaNovoChooser(null)
+                      if (cc) openEditCampanha(cc, 'gatilho')
+                    }}
+                    className="w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border border-cyan-400/30 bg-cyan-500/5 text-left hover:bg-cyan-500/10"
+                  >
+                    <Crosshair className="w-4 h-4 text-cyan-300 flex-shrink-0" />
+                    <span className="text-sm font-semibold text-white">Gatilho de evento alvo</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -2643,235 +2659,140 @@ export default function AdminCrm() {
         )}
       </AnimatePresence>
 
-      {showCampanhaForm && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
-        >
-          <div className="glass rounded-2xl p-6 max-w-lg w-full my-8" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white flex items-center gap-2">
-                {campanhaForm.orientation === 'evento' ? <Zap className="w-4 h-4 text-amber-400" /> : <Gift className="w-4 h-4 text-son-pink" />}
-                {campanhaForm.orientation === 'evento' ? 'Cupom orientado a evento' : 'Cupom exclusivo do segmento'}
-              </h3>
-              <button onClick={() => setShowCampanhaForm(false)} className="text-son-silver-dim hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-1.5 mb-3">
-              <button
-                type="button"
-                disabled={campanhaForm.orientation !== 'segmento' && hasSegmentoCampanha(campanhaForm.segmentId)}
-                onClick={() => switchCampanhaOrientation('segmento')}
-                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-                  campanhaForm.orientation === 'segmento' ? 'bg-son-pink text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
-                }`}
-              >
-                <Gift className="w-3.5 h-3.5" /> Orientada a segmento
-              </button>
-              <button
-                type="button"
-                onClick={() => switchCampanhaOrientation('evento')}
-                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-semibold transition-all ${
-                  campanhaForm.orientation === 'evento' ? 'bg-amber-500 text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
-                }`}
-              >
-                <Zap className="w-3.5 h-3.5" /> Orientada a evento
-              </button>
-            </div>
-            {campanhaForm.orientation === 'segmento' && hasSegmentoCampanha(campanhaForm.segmentId) && (
-              <p className="text-xs text-amber-400 mb-3">Este segmento já tem uma campanha orientada a segmento — só uma é permitida.</p>
-            )}
-
-            {campanhaForm.orientation === 'segmento' ? (
-              <p className="text-xs text-son-silver-dim mb-3">
-                Dispara agora pra{' '}
-                <strong className="text-white">
-                  {campanhaFormSegment ? applyFilters(customers, campanhaFormSegment.filter_criteria as unknown as FilterState, products).length : 0}{' '}
-                  cliente(s)
-                </strong>{' '}
-                que casam com o critério salvo do segmento — cupom exclusivo, intransferível.
-              </p>
-            ) : (
-              <p className="text-xs text-son-silver-dim mb-3">
-                Não dispara agora. Fica "armado" com o critério que você definir abaixo — quando algum cliente passar a bater esse
-                critério (checado ao abrir o CRM, ou no botão <strong className="text-white">Verificar</strong>), ele recebe o cupom via
-                WhatsApp automaticamente. Só concede pra quem ainda não recebeu.
-              </p>
-            )}
-
-            {campanhaForm.orientation === 'evento' && campanhaFormSegment && (
-              <div className="space-y-2 mb-3">
-                <label className="label">
-                  Critério do evento <span className="text-son-silver-dim font-normal">(altere pelo menos 1 valor abaixo)</span>
-                </label>
-                {renderTriggerFields(
-                  campanhaFormSegment.filter_criteria as unknown as FilterState,
-                  campanhaForm.triggerCriteria ?? EMPTY_FILTER,
-                  (patch) => setCampanhaForm({ ...campanhaForm, triggerCriteria: { ...(campanhaForm.triggerCriteria ?? EMPTY_FILTER), ...patch } })
+      <AnimatePresence>
+        {newCampanhaSegment && !showCampanhaBasicForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="glass rounded-2xl p-6 max-w-sm w-full my-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-white">Nova campanha</h3>
+                <button type="button" onClick={() => setNewCampanhaSegment(null)} className="text-son-silver-dim hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => pickCampanhaOrientation('evento')}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border border-amber-400/30 bg-amber-500/5 text-left hover:bg-amber-500/10"
+                >
+                  <Zap className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span className="text-sm font-semibold text-white">Campanha orientada a evento</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={hasSegmentoCampanha(newCampanhaSegment.id)}
+                  onClick={() => pickCampanhaOrientation('segmento')}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border border-son-pink/30 bg-son-pink/5 text-left hover:bg-son-pink/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Gift className="w-4 h-4 text-son-pink flex-shrink-0" />
+                  <span className="text-sm font-semibold text-white">Campanha orientada a segmento</span>
+                </button>
+                {hasSegmentoCampanha(newCampanhaSegment.id) && (
+                  <p className="text-xs text-amber-400">Este segmento já tem uma campanha orientada a segmento — só uma é permitida.</p>
                 )}
               </div>
-            )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            <div className="space-y-3">
-              <div>
-                <label className="label">Código</label>
-                <input
-                  className="input-field font-mono uppercase"
-                  value={campanhaForm.code}
-                  onChange={(e) => setCampanhaForm({ ...campanhaForm, code: e.target.value })}
-                  placeholder="SUNSET15"
-                />
+      <AnimatePresence>
+        {showCampanhaBasicForm && newCampanhaSegment && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="glass rounded-2xl p-6 max-w-lg w-full my-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-white flex items-center gap-2">
+                  {campanhaBasicOrientation === 'evento' ? <Zap className="w-4 h-4 text-amber-400" /> : <Gift className="w-4 h-4 text-son-pink" />}
+                  {campanhaBasicOrientation === 'evento' ? 'Campanha orientada a evento' : 'Campanha orientada a segmento'}
+                </h3>
+                <button type="button" onClick={closeCampanhaBasicForm} className="text-son-silver-dim hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <div>
-                <label className="label">Desconto no produto</label>
-                <div className="grid grid-cols-2 gap-1.5 mb-2">
-                  {(
-                    [
-                      { value: 'flat', label: 'Valor total' },
-                      { value: 'produto', label: 'Produto/Categoria' },
-                    ] as const
-                  ).map(({ value, label }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setCampanhaForm({ ...campanhaForm, productMode: value })}
-                      className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
-                        campanhaForm.productMode === value
-                          ? 'sunset-bg text-white border-transparent'
-                          : 'bg-son-surface border-white/10 text-son-silver'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
+              <p className="text-xs text-son-silver-dim mb-3">
+                {campanhaBasicOrientation === 'evento'
+                  ? 'Depois de criada, configure o gatilho (critério do evento) e o(s) cupom(s) pelos próprios cards da cadeia.'
+                  : 'Depois de criada, adicione o(s) cupom(s) pelo próprio card da cadeia — o primeiro cupom já dispara pra quem casa com o segmento agora.'}
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="label">Nome da campanha</label>
+                  <input
+                    className="input-field"
+                    value={campanhaBasicForm.name}
+                    onChange={(e) => setCampanhaBasicForm({ ...campanhaBasicForm, name: e.target.value })}
+                    placeholder="Ex.: Verão 2026"
+                  />
                 </div>
-                {campanhaForm.productMode === 'flat' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      className="input-field"
-                      value={campanhaForm.discount_type}
-                      onChange={(e) => setCampanhaForm({ ...campanhaForm, discount_type: e.target.value as DiscountType })}
-                    >
-                      <option value="percent">Percentual</option>
-                      <option value="fixed">Valor fixo (R$)</option>
-                    </select>
+                <div>
+                  <label className="label">Descrição (opcional)</label>
+                  <textarea
+                    className="input-field"
+                    rows={3}
+                    value={campanhaBasicForm.description}
+                    onChange={(e) => setCampanhaBasicForm({ ...campanhaBasicForm, description: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Data de início (opcional)</label>
                     <input
                       className="input-field"
-                      type="number"
-                      min="0"
-                      placeholder="Valor"
-                      value={campanhaForm.discount_value}
-                      onChange={(e) => setCampanhaForm({ ...campanhaForm, discount_value: e.target.value })}
+                      type="date"
+                      value={campanhaBasicForm.starts_at}
+                      onChange={(e) => setCampanhaBasicForm({ ...campanhaBasicForm, starts_at: e.target.value })}
                     />
                   </div>
-                )}
-                {campanhaForm.productMode === 'produto' && (
-                  <ProductDiscountList
-                    products={products}
-                    categories={categories}
-                    discounts={campanhaForm.productDiscounts}
-                    onChange={(productDiscounts) => setCampanhaForm({ ...campanhaForm, productDiscounts })}
-                  />
-                )}
-              </div>
-
-              <label className="flex items-center gap-2 text-sm text-son-silver">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 accent-son-pink"
-                  checked={campanhaForm.shippingEnabled}
-                  onChange={(e) => setCampanhaForm({ ...campanhaForm, shippingEnabled: e.target.checked })}
-                />
-                Também dar desconto no frete
-              </label>
-              {campanhaForm.shippingEnabled && (
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    className="input-field"
-                    value={campanhaForm.shipping_discount_type}
-                    onChange={(e) => setCampanhaForm({ ...campanhaForm, shipping_discount_type: e.target.value as DiscountType })}
-                  >
-                    <option value="percent">Percentual</option>
-                    <option value="fixed">Valor fixo (R$)</option>
-                  </select>
-                  <input
-                    className="input-field"
-                    type="number"
-                    min="0"
-                    placeholder="Valor"
-                    value={campanhaForm.shipping_discount_value}
-                    onChange={(e) => setCampanhaForm({ ...campanhaForm, shipping_discount_value: e.target.value })}
-                  />
+                  <div>
+                    <label className="label">Data de encerramento (opcional)</label>
+                    <input
+                      className="input-field"
+                      type="date"
+                      value={campanhaBasicForm.ends_at}
+                      onChange={(e) => setCampanhaBasicForm({ ...campanhaBasicForm, ends_at: e.target.value })}
+                    />
+                  </div>
                 </div>
-              )}
-
-              <div>
-                <label className="label">Quantas vezes cada cliente pode usar</label>
-                <input
-                  className="input-field"
-                  type="number"
-                  min="1"
-                  value={campanhaForm.uses_per_customer}
-                  onChange={(e) => setCampanhaForm({ ...campanhaForm, uses_per_customer: e.target.value })}
-                />
+                {campanhaBasicError && <p className="error-msg">{campanhaBasicError}</p>}
+                <button
+                  onClick={saveCampanhaBasic}
+                  disabled={savingCampanhaBasic || !campanhaBasicForm.name.trim()}
+                  className="btn-primary w-full mt-2"
+                >
+                  {savingCampanhaBasic ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Criar campanha
+                </button>
               </div>
-              <div>
-                <label className="label">Mensagem pro cliente (WhatsApp)</label>
-                <textarea
-                  className="input-field"
-                  rows={5}
-                  placeholder={'Olá, /nome! Você ganhou o cupom /cupom, exclusivo pra você 🎁\n\nBenefícios:\n- ...'}
-                  value={campanhaForm.messageTemplate}
-                  onChange={(e) => setCampanhaForm({ ...campanhaForm, messageTemplate: e.target.value })}
-                />
-                <p className="text-xs text-son-silver-dim mt-1">
-                  Precisa citar <code>/nome</code> e <code>/cupom</code>. O link do site é adicionado automaticamente no fim.
-                </p>
-              </div>
-              <label className="flex items-center gap-2 text-sm text-son-silver">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 accent-son-pink"
-                  checked={campanhaForm.combinable_with_public}
-                  onChange={(e) => setCampanhaForm({ ...campanhaForm, combinable_with_public: e.target.checked })}
-                />
-                Pode ser combinado com um cupom avulso no checkout de catálogo
-              </label>
-              <label className="flex items-center gap-2 text-sm text-son-silver">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 accent-son-pink"
-                  checked={campanhaForm.allow_promotion_checkout}
-                  onChange={(e) => setCampanhaForm({ ...campanhaForm, allow_promotion_checkout: e.target.checked })}
-                />
-                Pode ser usado também num checkout de promoção
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Validade (opcional)</label>
-                  <ExpiryInput value={campanhaForm.expires_at} onChange={(expires_at) => setCampanhaForm({ ...campanhaForm, expires_at })} />
-                </div>
-                <div>
-                  <label className="label">Limite global de usos (opcional)</label>
-                  <input
-                    className="input-field"
-                    type="number"
-                    min="1"
-                    value={campanhaForm.max_uses}
-                    onChange={(e) => setCampanhaForm({ ...campanhaForm, max_uses: e.target.value })}
-                  />
-                </div>
-              </div>
-              {campanhaError && <p className="error-msg">{campanhaError}</p>}
-              <button onClick={saveCampanha} disabled={savingCampanha || !campanhaMessageValid} className="btn-primary w-full mt-2">
-                {savingCampanha ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Criar campanha
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {confirmDialog && (

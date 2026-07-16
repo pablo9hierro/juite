@@ -561,42 +561,33 @@ const remoteApi = {
     campanhaCoupons: {
       list: (segmentId: string) =>
         rpc<CrmCampanhaCoupon[]>('admin_list_campanha_coupons', { p_token: adminToken(), p_segment_id: segmentId }),
+      // Cria só o "cadastro" da campanha — sem gatilho, sem cupom nenhum.
+      // Gatilho (setGatilho, só pra 'evento') e cupom(s) (createExtra) são
+      // passos separados, cada um pelo próprio subcard.
       create: (payload: {
         segment_id: string
         orientation: CampanhaOrientation
-        trigger_criteria?: CrmFilterCriteria
-        message_template: string
-        code: string
-        uses_per_customer?: number
-        combinable_with_public?: boolean
-        allow_promotion_checkout?: boolean
-        expires_at?: string
-        max_uses?: number
-        discount_type?: 'percent' | 'fixed'
-        discount_value?: number
-        shipping_discount_type?: 'percent' | 'fixed'
-        shipping_discount_value?: number
-        product_discounts?: ProductDiscount[]
-        customer_whatsapps: string[]
+        name: string
+        description?: string
+        starts_at?: string
+        ends_at?: string
       }) =>
-        rpc<CrmCampanhaCoupon>('admin_create_campanha_coupon', {
+        rpc<CrmCampanhaCoupon>('admin_create_campanha', {
           p_token: adminToken(),
           p_segment_id: payload.segment_id,
           p_orientation: payload.orientation,
-          p_trigger_criteria: payload.trigger_criteria ?? null,
-          p_message_template: payload.message_template,
-          p_code: payload.code,
-          p_uses_per_customer: payload.uses_per_customer ?? 1,
-          p_combinable_with_public: payload.combinable_with_public ?? false,
-          p_allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
-          p_expires_at: payload.expires_at || null,
-          p_max_uses: payload.max_uses ?? null,
-          p_discount_type: payload.discount_type ?? null,
-          p_discount_value: payload.discount_value ?? null,
-          p_shipping_discount_type: payload.shipping_discount_type ?? null,
-          p_shipping_discount_value: payload.shipping_discount_value ?? null,
-          p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
-          p_customer_whatsapps: payload.customer_whatsapps,
+          p_name: payload.name,
+          p_description: payload.description || null,
+          p_starts_at: payload.starts_at || null,
+          p_ends_at: payload.ends_at || null,
+        }),
+      // Define/edita o gatilho (trigger_criteria) de uma campanha 'evento'
+      // — decoupled do cadastro e de qualquer cupom.
+      setGatilho: (id: string, triggerCriteria: CrmFilterCriteria) =>
+        rpc<CrmCampanhaCoupon>('admin_set_campanha_gatilho', {
+          p_token: adminToken(),
+          p_id: id,
+          p_trigger_criteria: triggerCriteria,
         }),
       // Reavalia o trigger_criteria de uma campanha 'evento' contra a lista
       // atual de whatsapps que casam com ele (calculada no front) — grants
@@ -612,10 +603,8 @@ const remoteApi = {
       // por trás (não existe on/off separado só do cupom de uma campanha).
       toggleActive: (id: string, active: boolean) =>
         rpc<CrmCampanhaCoupon>('admin_toggle_campanha_coupon', { p_token: adminToken(), p_id: id, p_active: active }),
-      // orientation/código continuam imutáveis depois de criada, mas
-      // trigger_criteria (só pra 'evento') pode ser reajustado — é
-      // exatamente isso que o admin faz quando o segmento muda e a
-      // campanha fica desatualizada.
+      // Só mensagem/desconto/prazo do cupom já existente — orientation e
+      // gatilho não moram mais aqui (ver setGatilho).
       update: (
         id: string,
         payload: {
@@ -630,7 +619,6 @@ const remoteApi = {
           shipping_discount_type?: 'percent' | 'fixed'
           shipping_discount_value?: number
           product_discounts?: ProductDiscount[]
-          trigger_criteria?: CrmFilterCriteria
         }
       ) =>
         rpc<CrmCampanhaCoupon>('admin_update_campanha_coupon', {
@@ -647,10 +635,11 @@ const remoteApi = {
           p_shipping_discount_type: payload.shipping_discount_type ?? null,
           p_shipping_discount_value: payload.shipping_discount_value ?? null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
-          p_trigger_criteria: payload.trigger_criteria ?? null,
         }),
-      // Cupom extra — mais um cupom entregue junto com o principal da
-      // mesma campanha (mesma orientação/mensagem, desconto próprio).
+      // Cupom exclusivo — se a campanha ainda não tem nenhum, este vira o
+      // PRINCIPAL (preenche coupon_id) e, se for 'segmento', dispara na
+      // hora pra quem já bate o critério (customer_whatsapps); senão
+      // entra como mais um extra, igual já funcionava.
       createExtra: (
         campanhaId: string,
         payload: {
@@ -666,6 +655,7 @@ const remoteApi = {
           shipping_discount_type?: 'percent' | 'fixed'
           shipping_discount_value?: number
           product_discounts?: ProductDiscount[]
+          customer_whatsapps?: string[]
         }
       ) =>
         rpc<Coupon>('admin_create_campanha_extra_coupon', {
@@ -683,6 +673,7 @@ const remoteApi = {
           p_shipping_discount_type: payload.shipping_discount_type ?? null,
           p_shipping_discount_value: payload.shipping_discount_value ?? null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
+          p_customer_whatsapps: payload.customer_whatsapps ?? [],
         }),
       deleteExtra: (id: string) => rpc<void>('admin_delete_campanha_extra_coupon', { p_token: adminToken(), p_id: id }),
     },
