@@ -313,7 +313,7 @@ function getChangedFields(oldCriteria: FilterState, newCriteria: FilterState): S
 }
 
 function isCampanhaStale(cc: CrmCampanhaCoupon, segment: CrmSegment | undefined): boolean {
-  if (cc.orientation !== 'evento' || !segment) return false
+  if (cc.orientation !== 'evento' || !segment || !cc.trigger_criteria) return false
   const oldCriteria = (cc.last_synced_segment_criteria as unknown as FilterState) ?? EMPTY_FILTER
   return getChangedFields(oldCriteria, segment.filter_criteria as unknown as FilterState).size > 0
 }
@@ -500,6 +500,13 @@ export default function AdminCrm() {
   // (reflete a cadeia visual de subcards separados: cadastro / gatilho /
   // cupom(s)).
   const [campanhaEditMode, setCampanhaEditMode] = useState<'cadastro' | 'gatilho' | 'cupom'>('cupom')
+  // Toggle "+ Novo" no final da cadeia de uma campanha: escolhe entre criar
+  // um novo cupom exclusivo ou um novo gatilho — cada opção habilitada ou
+  // não dependendo de qual nó está no fim da cadeia daquela campanha
+  // (regra: gatilho só pode ser sucedido de cupom; cupom pode ser sucedido
+  // de cupom ou gatilho; campanha evento sem gatilho ainda só pode criar
+  // gatilho primeiro).
+  const [campanhaNovoChooserId, setCampanhaNovoChooserId] = useState<string | null>(null)
   const [campanhaEditForm, setCampanhaEditForm] = useState<CampanhaForm>(EMPTY_CAMPANHA_FORM)
   const [savingCampanhaEdit, setSavingCampanhaEdit] = useState(false)
   const [campanhaEditError, setCampanhaEditError] = useState<string | null>(null)
@@ -519,6 +526,12 @@ export default function AdminCrm() {
   const [campanhaEndCriteria, setCampanhaEndCriteria] = useState<FilterState>(EMPTY_FILTER)
   const [originalCampanhaEndEnabled, setOriginalCampanhaEndEnabled] = useState(false)
   const [originalCampanhaEndCriteria, setOriginalCampanhaEndCriteria] = useState<FilterState>(EMPTY_FILTER)
+  // "Novos Alvos (Opcional)" do encerrar-por-evento da campanha — mesma
+  // dinâmica do gatilhoExtraOpen: formulário-cópia completo (estilo
+  // segmentação) que só MESCLA os campos preenchidos no campanhaEndCriteria.
+  const [campanhaEndExtraOpen, setCampanhaEndExtraOpen] = useState(false)
+  const [campanhaEndExtraFilter, setCampanhaEndExtraFilter] = useState<FilterState>(EMPTY_FILTER)
+  const [campanhaEndExtraError, setCampanhaEndExtraError] = useState<string | null>(null)
 
   // Gatilho é um formulário PRÓPRIO (não faz parte de CampanhaForm) — só
   // o trigger_criteria, salvo via admin_set_campanha_gatilho, decoupled
@@ -568,6 +581,11 @@ export default function AdminCrm() {
   const [extraCouponEndCriteria, setExtraCouponEndCriteria] = useState<FilterState>(EMPTY_FILTER)
   const [originalExtraCouponEndEnabled, setOriginalExtraCouponEndEnabled] = useState(false)
   const [originalExtraCouponEndCriteria, setOriginalExtraCouponEndCriteria] = useState<FilterState>(EMPTY_FILTER)
+  // "Novos Alvos (Opcional)" do encerrar-por-evento deste cupom extra —
+  // mesma dinâmica do gatilhoExtraOpen/campanhaEndExtraOpen.
+  const [extraCouponEndExtraOpen, setExtraCouponEndExtraOpen] = useState(false)
+  const [extraCouponEndExtraFilter, setExtraCouponEndExtraFilter] = useState<FilterState>(EMPTY_FILTER)
+  const [extraCouponEndExtraError, setExtraCouponEndExtraError] = useState<string | null>(null)
 
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [couponsLoading, setCouponsLoading] = useState(true)
@@ -1477,6 +1495,55 @@ export default function AdminCrm() {
     setGatilhoExtraOpen(false)
   }
 
+  // Mesma dinâmica de addGatilhoExtraTargets, só que mescla no critério de
+  // "encerrar por evento" da campanha inteira.
+  const addCampanhaEndExtraTargets = () => {
+    const errors = validatePairErrors(campanhaEndExtraFilter)
+    if (Object.keys(errors).length > 0) {
+      setCampanhaEndExtraError(PAIR_ERROR_MESSAGE)
+      return
+    }
+    if (filterIsEmpty(campanhaEndExtraFilter)) {
+      setCampanhaEndExtraError('Preencha pelo menos um campo pra adicionar como alvo.')
+      return
+    }
+    const merged: FilterState = { ...campanhaEndCriteria }
+    for (const group of FIELD_GROUPS) {
+      if (!group.isFilled(campanhaEndExtraFilter)) continue
+      for (const key of FIELD_GROUP_KEYS[group.key]) {
+        ;(merged as Record<string, unknown>)[key] = campanhaEndExtraFilter[key]
+      }
+    }
+    setCampanhaEndCriteria(merged)
+    setCampanhaEndExtraFilter(EMPTY_FILTER)
+    setCampanhaEndExtraError(null)
+    setCampanhaEndExtraOpen(false)
+  }
+
+  // Mesma dinâmica, pro critério de "encerrar por evento" de um cupom extra.
+  const addExtraCouponEndExtraTargets = () => {
+    const errors = validatePairErrors(extraCouponEndExtraFilter)
+    if (Object.keys(errors).length > 0) {
+      setExtraCouponEndExtraError(PAIR_ERROR_MESSAGE)
+      return
+    }
+    if (filterIsEmpty(extraCouponEndExtraFilter)) {
+      setExtraCouponEndExtraError('Preencha pelo menos um campo pra adicionar como alvo.')
+      return
+    }
+    const merged: FilterState = { ...extraCouponEndCriteria }
+    for (const group of FIELD_GROUPS) {
+      if (!group.isFilled(extraCouponEndExtraFilter)) continue
+      for (const key of FIELD_GROUP_KEYS[group.key]) {
+        ;(merged as Record<string, unknown>)[key] = extraCouponEndExtraFilter[key]
+      }
+    }
+    setExtraCouponEndCriteria(merged)
+    setExtraCouponEndExtraFilter(EMPTY_FILTER)
+    setExtraCouponEndExtraError(null)
+    setExtraCouponEndExtraOpen(false)
+  }
+
   const removeGatilhoField = (keys: (keyof FilterState)[]) => {
     const patch: Partial<FilterState> = {}
     for (const key of keys) (patch as Record<string, unknown>)[key] = EMPTY_FILTER[key]
@@ -2376,6 +2443,16 @@ export default function AdminCrm() {
                       {campanhas.map((cc) => {
                         const cCoupon = coupons.find((c) => c.id === cc.coupon_id)
                         const stale = isCampanhaStale(cc, s)
+                        // Nó no fim da cadeia desta campanha — decide o que o
+                        // toggle "+ Novo" pode oferecer (ver campanhaNovoChooserId).
+                        const lastNodeType: 'campanha' | 'gatilho' | 'cupom' =
+                          cc.coupon_id || cc.extra_coupons.length > 0
+                            ? 'cupom'
+                            : cc.orientation === 'evento' && cc.trigger_criteria
+                            ? 'gatilho'
+                            : 'campanha'
+                        const novoCupomEnabled = !(cc.orientation === 'evento' && lastNodeType === 'campanha')
+                        const novoGatilhoEnabled = cc.orientation === 'evento' && lastNodeType !== 'gatilho'
                         return (
                         <div key={cc.id} className="relative rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-3">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -2432,7 +2509,7 @@ export default function AdminCrm() {
                             </div>
                           </div>
 
-                          {cc.orientation === 'evento' && (
+                          {cc.orientation === 'evento' && cc.trigger_criteria && (
                             <>
                               <div className="w-5 border-t-2 border-dashed border-cyan-400/40 flex-shrink-0" />
                               {/* subcard: gatilho do evento — só o critério que dispara, decoupled do segmento */}
@@ -2536,13 +2613,45 @@ export default function AdminCrm() {
                             </div>
                           ))}
 
-                          <button
-                            type="button"
-                            onClick={() => openNewCampanhaExtraCoupon(cc)}
-                            className="flex items-center gap-1 px-2.5 py-2 rounded-xl border border-dashed border-son-gold/40 text-son-gold text-[10px] font-semibold hover:bg-son-gold/10 flex-shrink-0"
-                          >
-                            <Plus className="w-3 h-3" /> Novo cupom
-                          </button>
+                          {campanhaNovoChooserId === cc.id ? (
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <button
+                                type="button"
+                                disabled={!novoCupomEnabled}
+                                onClick={() => {
+                                  setCampanhaNovoChooserId(null)
+                                  openNewCampanhaExtraCoupon(cc)
+                                }}
+                                title={!novoCupomEnabled ? 'Defina o gatilho do evento primeiro' : undefined}
+                                className="px-2.5 py-2 rounded-xl border border-dashed border-purple-400/40 text-purple-300 text-[10px] font-semibold hover:bg-purple-500/10 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                              >
+                                Cupom exclusivo
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!novoGatilhoEnabled}
+                                onClick={() => {
+                                  setCampanhaNovoChooserId(null)
+                                  openEditCampanha(cc, 'gatilho')
+                                }}
+                                title={!novoGatilhoEnabled ? 'O gatilho só pode ser seguido de cupom' : undefined}
+                                className="px-2.5 py-2 rounded-xl border border-dashed border-cyan-400/40 text-cyan-300 text-[10px] font-semibold hover:bg-cyan-500/10 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                              >
+                                Gatilho de evento
+                              </button>
+                              <button type="button" onClick={() => setCampanhaNovoChooserId(null)} className="text-son-silver-dim hover:text-white">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setCampanhaNovoChooserId(cc.id)}
+                              className="flex items-center gap-1 px-2.5 py-2 rounded-xl border border-dashed border-son-gold/40 text-son-gold text-[10px] font-semibold hover:bg-son-gold/10 flex-shrink-0"
+                            >
+                              <Plus className="w-3 h-3" /> Novo
+                            </button>
+                          )}
 
                           <ToggleSwitch checked={!stale && cc.active} onClick={() => (stale ? setStaleDialogCampanha(cc) : toggleCampanhaActive(cc))} />
                         </div>
@@ -2759,6 +2868,17 @@ export default function AdminCrm() {
                               setCampanhaEndCriteria({ ...campanhaEndCriteria, ...patch })
                             }
                           )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCampanhaEndExtraFilter(EMPTY_FILTER)
+                              setCampanhaEndExtraError(null)
+                              setCampanhaEndExtraOpen(true)
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-amber-400/40 text-amber-300 text-xs font-semibold hover:bg-amber-500/10 w-full justify-center"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Novos Alvos (Opcional)
+                          </button>
                         </div>
                       )}
                     </div>
@@ -3028,6 +3148,82 @@ export default function AdminCrm() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {editingCampanhaId && campanhaEditMode === 'cadastro' && campanhaEndExtraOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-start justify-center p-4 overflow-y-auto"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="glass rounded-2xl p-5 max-w-lg w-full my-8 space-y-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-400" /> Novos Alvos (Opcional)
+                </h3>
+                <button type="button" onClick={() => setCampanhaEndExtraOpen(false)} className="text-son-silver-dim hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-xs text-son-silver-dim">
+                Adiciona campo(s) ao critério de encerrar esta campanha por evento — não altera o filtro salvo da segmentação.
+              </p>
+              {renderFilterFields(campanhaEndExtraFilter, (patch) => setCampanhaEndExtraFilter({ ...campanhaEndExtraFilter, ...patch }), {})}
+              {campanhaEndExtraError && <p className="error-msg">{campanhaEndExtraError}</p>}
+              <button onClick={addCampanhaEndExtraTargets} className="btn-primary w-full">
+                Adicionar alvos
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {editingExtraCouponId && extraCouponEndExtraOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-start justify-center p-4 overflow-y-auto"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="glass rounded-2xl p-5 max-w-lg w-full my-8 space-y-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-400" /> Novos Alvos (Opcional)
+                </h3>
+                <button type="button" onClick={() => setExtraCouponEndExtraOpen(false)} className="text-son-silver-dim hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-xs text-son-silver-dim">
+                Adiciona campo(s) ao critério de encerrar este cupom por evento — não altera o filtro salvo da segmentação.
+              </p>
+              {renderFilterFields(extraCouponEndExtraFilter, (patch) => setExtraCouponEndExtraFilter({ ...extraCouponEndExtraFilter, ...patch }), {})}
+              {extraCouponEndExtraError && <p className="error-msg">{extraCouponEndExtraError}</p>}
+              <button onClick={addExtraCouponEndExtraTargets} className="btn-primary w-full">
+                Adicionar alvos
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {extraCouponCampanha && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -3261,6 +3457,17 @@ export default function AdminCrm() {
                               setExtraCouponEndCriteria({ ...extraCouponEndCriteria, ...patch })
                             }
                           )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExtraCouponEndExtraFilter(EMPTY_FILTER)
+                              setExtraCouponEndExtraError(null)
+                              setExtraCouponEndExtraOpen(true)
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-amber-400/40 text-amber-300 text-xs font-semibold hover:bg-amber-500/10 w-full justify-center"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Novos Alvos (Opcional)
+                          </button>
                         </div>
                       )}
                     </div>
