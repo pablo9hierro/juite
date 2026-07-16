@@ -1316,6 +1316,71 @@ async function deleteCampanhaExtraCoupon(id: string): Promise<void> {
   saveDb(db)
 }
 
+// Edita nome/descrição/duração do cadastro — não mexe em gatilho nem em
+// cupom nenhum.
+async function updateCampanhaCadastro(
+  id: string,
+  payload: { name: string; description?: string; starts_at?: string; ends_at?: string }
+): Promise<import('./types').CrmCampanhaCoupon> {
+  const db = loadDb()
+  const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
+  if (!row) throw new ApiError(404, 'campanha not found')
+  if (!payload.name.trim()) throw new ApiError(400, 'name is required')
+  row.name = payload.name.trim()
+  row.description = payload.description?.trim() || null
+  row.starts_at = payload.starts_at || null
+  row.ends_at = payload.ends_at || null
+  saveDb(db)
+  return { ...row, extra_coupons: campanhaExtraCoupons(db, row.id) }
+}
+
+// Edita mensagem/desconto/prazo de um cupom extra já existente.
+async function updateCampanhaExtraCoupon(
+  id: string,
+  payload: {
+    message_template: string
+    uses_per_customer?: number
+    combinable_with_public?: boolean
+    allow_promotion_checkout?: boolean
+    expires_at?: string
+    max_uses?: number
+    discount_type?: 'percent' | 'fixed'
+    discount_value?: number
+    shipping_discount_type?: 'percent' | 'fixed'
+    shipping_discount_value?: number
+    product_discounts?: import('./types').ProductDiscount[]
+  }
+): Promise<import('./types').CrmCampanhaCoupon> {
+  const db = loadDb()
+  const ec = (db.campanhaExtraCoupons ?? []).find((x) => x.id === id)
+  if (!ec) throw new ApiError(404, 'extra coupon not found')
+  if (!payload.message_template.trim() || !payload.message_template.includes('/nome') || !payload.message_template.includes('/cupom')) {
+    throw new ApiError(400, 'message_template must mention /nome and /cupom')
+  }
+  const coupon = (db.coupons ?? []).find((c) => c.id === ec.coupon_id)
+  if (!coupon) throw new ApiError(404, 'coupon not found')
+  const hasProducts = payload.product_discounts && payload.product_discounts.length > 0
+  const kind: 'desconto' | 'frete' | 'produto' = hasProducts ? 'produto' : payload.discount_type ? 'desconto' : 'frete'
+  coupon.kind = kind
+  coupon.discount_type = kind === 'produto' ? null : payload.discount_type ?? null
+  coupon.discount_value = kind === 'produto' ? null : payload.discount_value ?? null
+  coupon.shipping_discount_type = payload.shipping_discount_type ?? null
+  coupon.shipping_discount_value = payload.shipping_discount_value ?? null
+  coupon.product_discounts = hasProducts ? payload.product_discounts! : []
+  coupon.combinable_with_public = payload.combinable_with_public ?? false
+  coupon.allow_promotion_checkout = payload.allow_promotion_checkout ?? false
+  coupon.expires_at = payload.expires_at || null
+  coupon.max_uses = payload.max_uses ?? null
+  for (const g of db.couponGrants ?? []) {
+    if (g.coupon_id === ec.coupon_id) g.granted_uses = payload.uses_per_customer ?? 1
+  }
+  ec.message_template = payload.message_template.trim()
+  saveDb(db)
+  const campanha = (db.campanhaCoupons ?? []).find((c) => c.id === ec.campanha_id)
+  if (!campanha) throw new ApiError(404, 'campanha not found')
+  return { ...campanha, extra_coupons: campanhaExtraCoupons(db, campanha.id) }
+}
+
 // ---------- campanhas (admin) ----------
 
 async function adminListPromotions(): Promise<Promotion[]> {
@@ -2006,11 +2071,13 @@ export const localApi = {
       list: adminListCampanhaCoupons,
       create: createCampanha,
       setGatilho: setCampanhaGatilho,
+      updateCadastro: updateCampanhaCadastro,
       fireEvent: fireCampanhaEvent,
       delete: deleteCampanhaCoupon,
       toggleActive: toggleCampanhaCoupon,
       update: updateCampanhaCoupon,
       createExtra: createCampanhaExtraCoupon,
+      updateExtra: updateCampanhaExtraCoupon,
       deleteExtra: deleteCampanhaExtraCoupon,
     },
     whatsapp: {
