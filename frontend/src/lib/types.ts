@@ -53,8 +53,9 @@ export interface Coupon {
   // discount_type/value ficam null, o desconto mora em product_discounts.
   discount_type: DiscountType | null
   discount_value: number | null
-  // Desconto de frete ADICIONAL, independente do kind — só cupom exclusivo
-  // (CRM) pode combinar frete com desconto/produto no mesmo cupom.
+  // Desconto de frete ADICIONAL, independente do kind — antes só cupom
+  // exclusivo (CRM) combinava frete com desconto/produto; agora cupom
+  // avulso também usa isso pro checkbox "Também dar desconto no frete".
   shipping_discount_type: DiscountType | null
   shipping_discount_value: number | null
   product_discounts?: ProductDiscount[]
@@ -63,6 +64,9 @@ export interface Coupon {
   // com um cupom avulso digitado manualmente no checkout.
   combinable_with_public?: boolean
   active: boolean
+  // Vale pra QUALQUER cupom avulso (não só aniversário) — antes do
+  // cadastro, não é aceito no checkout.
+  starts_at: string | null
   expires_at: string | null
   max_uses: number | null
   used_count: number
@@ -70,6 +74,16 @@ export interface Coupon {
   // > 0 quando o cupom nasceu de um filtro no CRM (cupom alvo,
   // intransferível) — 0 é cupom avulso, qualquer um pode digitar o código.
   grant_count?: number
+  // Mensagem de WhatsApp — só usada quando algum dos campos de
+  // aniversário abaixo está preenchido (cupom vira "alvo", concedido
+  // automaticamente em vez de digitado manualmente).
+  message_template?: string | null
+  // Concede automaticamente N dias antes do aniversário de CADA cliente.
+  bday_customer_days_before?: number | null
+  // Concede automaticamente pra TODOS os clientes, N dias antes de uma
+  // data fixa da loja (formato 'MM-DD').
+  bday_store_date?: string | null
+  bday_store_days_before?: number | null
 }
 
 // Critério salvo do filtro avançado do CRM — mesmo shape do FilterState

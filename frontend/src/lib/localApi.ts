@@ -799,40 +799,56 @@ async function adminListCoupons(): Promise<Coupon[]> {
 
 async function createCoupon(payload: {
   code: string
-  kind: 'desconto' | 'frete' | 'aniversario' | 'produto'
   discount_type?: 'percent' | 'fixed'
   discount_value?: number
+  shipping_discount_type?: 'percent' | 'fixed'
+  shipping_discount_value?: number
   allow_promotion_checkout?: boolean
+  combinable_with_public?: boolean
+  starts_at?: string
   expires_at?: string
   max_uses?: number
   product_discounts?: import('./types').ProductDiscount[]
+  message_template?: string
+  bday_customer_days_before?: number
+  bday_store_date?: string
+  bday_store_days_before?: number
 }): Promise<Coupon> {
   const db = loadDb()
   db.coupons = db.coupons ?? []
   const code = payload.code.trim().toUpperCase()
   if (!code) throw new ApiError(400, 'code is required')
   if (db.coupons.some((c) => c.code === code)) throw new ApiError(400, 'a coupon with this code already exists')
-  const hasProducts = payload.kind === 'produto' && payload.product_discounts && payload.product_discounts.length > 0
-  if (payload.kind === 'produto') {
-    if (!hasProducts) throw new ApiError(400, 'at least one product is required for kind=produto')
-  } else if (!payload.discount_type || payload.discount_value == null) {
-    throw new ApiError(400, 'discount_type and discount_value are required')
+  const hasProducts = payload.product_discounts && payload.product_discounts.length > 0
+  if (!hasProducts && !payload.discount_type && !payload.shipping_discount_type) {
+    throw new ApiError(400, 'a coupon needs at least one discount (produto, desconto and/or frete)')
   }
+  const hasBday = payload.bday_customer_days_before != null || !!payload.bday_store_date
+  if (hasBday && (!payload.message_template?.trim() || !payload.message_template.includes('/nome') || !payload.message_template.includes('/cupom'))) {
+    throw new ApiError(400, 'message_template must mention /nome and /cupom')
+  }
+  const kind: 'desconto' | 'produto' = hasProducts ? 'produto' : 'desconto'
   const coupon: Coupon = {
     id: uid(),
     code,
-    kind: payload.kind,
-    discount_type: payload.kind === 'produto' ? null : payload.discount_type ?? null,
-    discount_value: payload.kind === 'produto' ? null : payload.discount_value ?? null,
-    shipping_discount_type: null,
-    shipping_discount_value: null,
+    kind,
+    discount_type: kind === 'produto' ? null : payload.discount_type ?? null,
+    discount_value: kind === 'produto' ? null : payload.discount_value ?? null,
+    shipping_discount_type: payload.shipping_discount_type ?? null,
+    shipping_discount_value: payload.shipping_discount_value ?? null,
     product_discounts: hasProducts ? payload.product_discounts! : [],
     allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
+    combinable_with_public: payload.combinable_with_public ?? false,
     active: true,
+    starts_at: payload.starts_at || null,
     expires_at: payload.expires_at || null,
     max_uses: payload.max_uses ?? null,
     used_count: 0,
     created_at: nowIso(),
+    message_template: payload.message_template?.trim() || null,
+    bday_customer_days_before: payload.bday_customer_days_before ?? null,
+    bday_store_date: payload.bday_store_date || null,
+    bday_store_days_before: payload.bday_store_days_before ?? null,
   }
   db.coupons.push(coupon)
   saveDb(db)
@@ -844,28 +860,60 @@ async function updateCoupon(
   payload: {
     active: boolean
     allow_promotion_checkout: boolean
+    combinable_with_public?: boolean
+    starts_at?: string
     expires_at?: string
     max_uses?: number
     discount_type?: 'percent' | 'fixed'
     discount_value?: number
+    shipping_discount_type?: 'percent' | 'fixed'
+    shipping_discount_value?: number
     product_discounts?: import('./types').ProductDiscount[]
+    message_template?: string
+    bday_customer_days_before?: number
+    bday_store_date?: string
+    bday_store_days_before?: number
   }
 ): Promise<Coupon> {
   const db = loadDb()
   const coupon = (db.coupons ?? []).find((c) => c.id === id)
   if (!coupon) throw new ApiError(404, 'coupon not found')
+  const hasProducts = payload.product_discounts && payload.product_discounts.length > 0
+  if (!hasProducts && !payload.discount_type && !payload.shipping_discount_type) {
+    throw new ApiError(400, 'a coupon needs at least one discount (produto, desconto and/or frete)')
+  }
+  const hasBday = payload.bday_customer_days_before != null || !!payload.bday_store_date
+  if (hasBday && (!payload.message_template?.trim() || !payload.message_template.includes('/nome') || !payload.message_template.includes('/cupom'))) {
+    throw new ApiError(400, 'message_template must mention /nome and /cupom')
+  }
+  const kind: 'desconto' | 'produto' = hasProducts ? 'produto' : 'desconto'
+  coupon.kind = kind
   coupon.active = payload.active
+  coupon.discount_type = kind === 'produto' ? null : payload.discount_type ?? null
+  coupon.discount_value = kind === 'produto' ? null : payload.discount_value ?? null
+  coupon.shipping_discount_type = payload.shipping_discount_type ?? null
+  coupon.shipping_discount_value = payload.shipping_discount_value ?? null
+  coupon.product_discounts = hasProducts ? payload.product_discounts! : []
   coupon.allow_promotion_checkout = payload.allow_promotion_checkout
+  coupon.combinable_with_public = payload.combinable_with_public ?? false
+  coupon.starts_at = payload.starts_at || null
   coupon.expires_at = payload.expires_at || null
   coupon.max_uses = payload.max_uses ?? null
-  if (coupon.kind === 'produto') {
-    if (payload.product_discounts) coupon.product_discounts = payload.product_discounts
-  } else {
-    if (payload.discount_type) coupon.discount_type = payload.discount_type
-    if (payload.discount_value != null) coupon.discount_value = payload.discount_value
-  }
+  coupon.message_template = payload.message_template?.trim() || null
+  coupon.bday_customer_days_before = payload.bday_customer_days_before ?? null
+  coupon.bday_store_date = payload.bday_store_date || null
+  coupon.bday_store_days_before = payload.bday_store_days_before ?? null
   saveDb(db)
   return withGrantCount(db, coupon)
+}
+
+// Concede (idempotente) os cupons de aniversário cujo dia de disparo é
+// HOJE — espelha admin_check_birthday_coupons. Modo demonstração não tem
+// uma tabela de clientes com data de nascimento (só pedidos), então não
+// há como calcular aniversário aqui — fica de fora só no modo local; a
+// versão de produção (Supabase) usa sunset.customers.birthdate de verdade.
+async function checkBirthdayCoupons(): Promise<{ coupon_id: string; message_template: string; newly_granted: string[] }[]> {
+  return []
 }
 
 async function updateTargetedCoupon(
@@ -957,6 +1005,7 @@ async function createTargetedCoupon(payload: {
     allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
     combinable_with_public: payload.combinable_with_public ?? false,
     active: true,
+    starts_at: null,
     expires_at: payload.expires_at || null,
     max_uses: payload.max_uses ?? null,
     used_count: 0,
@@ -2054,6 +2103,7 @@ export const localApi = {
       createTargeted: createTargetedCoupon,
       updateTargeted: updateTargetedCoupon,
       listGrants: adminListCouponGrants,
+      checkBirthdays: checkBirthdayCoupons,
     },
     promotions: {
       list: adminListPromotions,

@@ -316,37 +316,62 @@ const remoteApi = {
     },
     coupons: {
       list: () => rpc<Coupon[]>('admin_list_coupons', { p_token: adminToken() }),
+      // Tipo deixou de ser exclusivo — desconto (flat OU por produto),
+      // frete e os dois modos de aniversário combinam livremente no
+      // mesmo cupom.
       create: (payload: {
         code: string
-        kind: 'desconto' | 'frete' | 'aniversario' | 'produto'
         discount_type?: 'percent' | 'fixed'
         discount_value?: number
+        shipping_discount_type?: 'percent' | 'fixed'
+        shipping_discount_value?: number
         allow_promotion_checkout?: boolean
+        combinable_with_public?: boolean
+        starts_at?: string
         expires_at?: string
         max_uses?: number
         product_discounts?: ProductDiscount[]
+        message_template?: string
+        bday_customer_days_before?: number
+        bday_store_date?: string
+        bday_store_days_before?: number
       }) =>
         rpc<Coupon>('admin_create_coupon', {
           p_token: adminToken(),
           p_code: payload.code,
-          p_kind: payload.kind,
           p_discount_type: payload.discount_type ?? null,
           p_discount_value: payload.discount_value ?? null,
+          p_shipping_discount_type: payload.shipping_discount_type ?? null,
+          p_shipping_discount_value: payload.shipping_discount_value ?? null,
           p_allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
+          p_combinable_with_public: payload.combinable_with_public ?? false,
+          p_starts_at: payload.starts_at || null,
           p_expires_at: payload.expires_at || null,
           p_max_uses: payload.max_uses ?? null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
+          p_message_template: payload.message_template || null,
+          p_bday_customer_days_before: payload.bday_customer_days_before ?? null,
+          p_bday_store_date: payload.bday_store_date || null,
+          p_bday_store_days_before: payload.bday_store_days_before ?? null,
         }),
       update: (
         id: string,
         payload: {
           active: boolean
           allow_promotion_checkout: boolean
+          combinable_with_public?: boolean
+          starts_at?: string
           expires_at?: string
           max_uses?: number
           discount_type?: 'percent' | 'fixed'
           discount_value?: number
+          shipping_discount_type?: 'percent' | 'fixed'
+          shipping_discount_value?: number
           product_discounts?: ProductDiscount[]
+          message_template?: string
+          bday_customer_days_before?: number
+          bday_store_date?: string
+          bday_store_days_before?: number
         }
       ) =>
         rpc<Coupon>('admin_update_coupon', {
@@ -354,13 +379,28 @@ const remoteApi = {
           p_id: id,
           p_active: payload.active,
           p_allow_promotion_checkout: payload.allow_promotion_checkout,
+          p_combinable_with_public: payload.combinable_with_public ?? false,
+          p_starts_at: payload.starts_at || null,
           p_expires_at: payload.expires_at || null,
           p_max_uses: payload.max_uses ?? null,
           p_discount_type: payload.discount_type ?? null,
           p_discount_value: payload.discount_value ?? null,
+          p_shipping_discount_type: payload.shipping_discount_type ?? null,
+          p_shipping_discount_value: payload.shipping_discount_value ?? null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
+          p_message_template: payload.message_template || null,
+          p_bday_customer_days_before: payload.bday_customer_days_before ?? null,
+          p_bday_store_date: payload.bday_store_date || null,
+          p_bday_store_days_before: payload.bday_store_days_before ?? null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_coupon', { p_token: adminToken(), p_id: id }),
+      // Roda a cada load do CRM (sem cron no projeto) — concede os
+      // cupons de aniversário (cliente/loja) cujo dia de disparo é hoje;
+      // devolve quem foi concedido agora pra front notificar via WhatsApp.
+      checkBirthdays: () =>
+        rpc<{ coupon_id: string; message_template: string; newly_granted: string[] }[]>('admin_check_birthday_coupons', {
+          p_token: adminToken(),
+        }),
       // Cupom alvo: nasce de um filtro no CRM, amarrado a clientes
       // específicos (por whatsapp) em vez de um código público qualquer um
       // pode usar. Intransferível — cada concessão só vale pro whatsapp dela.

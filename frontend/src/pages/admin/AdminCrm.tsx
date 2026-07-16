@@ -338,28 +338,53 @@ function ToggleSwitch({ checked, onClick }: { checked: boolean; onClick: (e: Rea
   )
 }
 
+type ProductDiscountMode = 'nenhum' | 'flat' | 'produto'
+
+// Tipo deixou de ser um botão exclusivo — desconto (flat ou por
+// produto), frete e os dois modos de aniversário combinam livremente no
+// mesmo cupom avulso.
 type CouponForm = {
   code: string
-  kind: 'desconto' | 'frete' | 'aniversario' | 'produto'
+  productMode: ProductDiscountMode
   discount_type: DiscountType
   discount_value: string
   productDiscounts: ProductDiscount[]
+  shippingEnabled: boolean
+  shipping_discount_type: DiscountType
+  shipping_discount_value: string
+  bdayCustomerEnabled: boolean
+  bdayCustomerDaysBefore: string
+  bdayStoreEnabled: boolean
+  bdayStoreDate: string
+  bdayStoreDaysBefore: string
+  messageTemplate: string
   allow_promotion_checkout: boolean
+  combinable_with_public: boolean
+  starts_at: string
   expires_at: string
   max_uses: string
 }
 const EMPTY_COUPON_FORM: CouponForm = {
   code: '',
-  kind: 'desconto',
+  productMode: 'flat',
   discount_type: 'percent',
   discount_value: '',
   productDiscounts: [],
+  shippingEnabled: false,
+  shipping_discount_type: 'percent',
+  shipping_discount_value: '',
+  bdayCustomerEnabled: false,
+  bdayCustomerDaysBefore: '',
+  bdayStoreEnabled: false,
+  bdayStoreDate: '',
+  bdayStoreDaysBefore: '',
+  messageTemplate: '',
   allow_promotion_checkout: false,
+  combinable_with_public: false,
+  starts_at: '',
   expires_at: '',
   max_uses: '',
 }
-
-type ProductDiscountMode = 'nenhum' | 'flat' | 'produto'
 
 // "Campanha": um cupom exclusivo vinculado a um segmento. 'segmento'
 // dispara uma vez, na hora, pros clientes que casam com o critério do
@@ -590,6 +615,25 @@ export default function AdminCrm() {
       }
     })()
   }, [segments, customers, products])
+
+  // Mesma lógica do auto-check de campanha evento acima, mas pros cupons
+  // avulsos de aniversário (cliente/loja) — sem cron no projeto, só roda
+  // quando alguém abre o CRM. Idempotente (admin_check_birthday_coupons
+  // só concede pra quem ainda não tinha).
+  const autoCheckedBirthdays = useRef(false)
+  useEffect(() => {
+    if (autoCheckedBirthdays.current) return
+    if (coupons.length === 0) return
+    autoCheckedBirthdays.current = true
+    ;(async () => {
+      const results = await api.admin.coupons.checkBirthdays().catch(() => [])
+      if (results.length === 0) return
+      for (const r of results) {
+        api.admin.whatsapp.notifyCouponGrant(r.coupon_id, r.message_template).catch(() => {})
+      }
+      loadCoupons()
+    })()
+  }, [coupons])
 
   // A UI já força "off" visualmente pra campanha desatualizada (segmento
   // mudou), mas aqui sincroniza o servidor de fato — sem isso, o
@@ -1599,11 +1643,22 @@ export default function AdminCrm() {
     setEditingCouponId(c.id)
     const form: CouponForm = {
       code: c.code,
-      kind: c.kind,
+      productMode: c.kind === 'produto' ? 'produto' : c.discount_type ? 'flat' : 'nenhum',
       discount_type: c.discount_type ?? 'percent',
-      discount_value: c.discount_value != null ? String(c.discount_value) : '',
+      discount_value: c.kind !== 'produto' && c.discount_value != null ? String(c.discount_value) : '',
       productDiscounts: c.product_discounts ?? [],
+      shippingEnabled: !!c.shipping_discount_type,
+      shipping_discount_type: c.shipping_discount_type ?? 'percent',
+      shipping_discount_value: c.shipping_discount_value != null ? String(c.shipping_discount_value) : '',
+      bdayCustomerEnabled: c.bday_customer_days_before != null,
+      bdayCustomerDaysBefore: c.bday_customer_days_before != null ? String(c.bday_customer_days_before) : '',
+      bdayStoreEnabled: !!c.bday_store_date,
+      bdayStoreDate: c.bday_store_date ?? '',
+      bdayStoreDaysBefore: c.bday_store_days_before != null ? String(c.bday_store_days_before) : '',
+      messageTemplate: c.message_template ?? '',
       allow_promotion_checkout: c.allow_promotion_checkout,
+      combinable_with_public: c.combinable_with_public ?? false,
+      starts_at: c.starts_at ?? '',
       expires_at: c.expires_at ?? '',
       max_uses: c.max_uses != null ? String(c.max_uses) : '',
     }
@@ -1613,27 +1668,50 @@ export default function AdminCrm() {
     setShowCouponForm(true)
   }
 
+  const couponHasBday = couponForm.bdayCustomerEnabled || couponForm.bdayStoreEnabled
+  const couponMessageValid = !couponHasBday || (couponForm.messageTemplate.includes('/nome') && couponForm.messageTemplate.includes('/cupom'))
+
   const saveCoupon = async () => {
     setCouponError(null)
-    if (couponForm.kind === 'produto' && couponForm.productDiscounts.length === 0) {
+    if (couponForm.productMode === 'produto' && couponForm.productDiscounts.length === 0) {
       setCouponError('Busque e adicione ao menos um produto.')
+      return
+    }
+    if (couponForm.productMode === 'nenhum' && !couponForm.shippingEnabled) {
+      setCouponError('Escolha ao menos um desconto (produto, valor ou frete).')
+      return
+    }
+    if (!couponMessageValid) {
+      setCouponError('A mensagem precisa citar /nome e /cupom.')
+      return
+    }
+    if (couponForm.bdayStoreEnabled && !couponForm.bdayStoreDate) {
+      setCouponError('Defina a data do aniversário da loja.')
       return
     }
     setSavingCoupon(true)
     try {
       const payload = {
-        discount_type: couponForm.kind === 'produto' ? undefined : couponForm.discount_type,
-        discount_value: couponForm.kind === 'produto' ? undefined : Number(couponForm.discount_value),
-        product_discounts: couponForm.kind === 'produto' ? couponForm.productDiscounts : undefined,
+        discount_type: couponForm.productMode === 'flat' ? couponForm.discount_type : undefined,
+        discount_value: couponForm.productMode === 'flat' ? Number(couponForm.discount_value) : undefined,
+        product_discounts: couponForm.productMode === 'produto' ? couponForm.productDiscounts : undefined,
+        shipping_discount_type: couponForm.shippingEnabled ? couponForm.shipping_discount_type : undefined,
+        shipping_discount_value: couponForm.shippingEnabled ? Number(couponForm.shipping_discount_value) : undefined,
         allow_promotion_checkout: couponForm.allow_promotion_checkout,
+        combinable_with_public: couponForm.combinable_with_public,
+        starts_at: couponForm.starts_at || undefined,
         expires_at: couponForm.expires_at || undefined,
         max_uses: couponForm.max_uses ? Number(couponForm.max_uses) : undefined,
+        message_template: couponHasBday ? couponForm.messageTemplate : undefined,
+        bday_customer_days_before: couponForm.bdayCustomerEnabled ? Number(couponForm.bdayCustomerDaysBefore) || 0 : undefined,
+        bday_store_date: couponForm.bdayStoreEnabled ? couponForm.bdayStoreDate : undefined,
+        bday_store_days_before: couponForm.bdayStoreEnabled ? Number(couponForm.bdayStoreDaysBefore) || 0 : undefined,
       }
       if (editingCouponId) {
         const active = coupons.find((c) => c.id === editingCouponId)?.active ?? true
         await api.admin.coupons.update(editingCouponId, { active, ...payload })
       } else {
-        await api.admin.coupons.create({ code: couponForm.code, kind: couponForm.kind, ...payload })
+        await api.admin.coupons.create({ code: couponForm.code, ...payload })
       }
       setShowCouponForm(false)
       setEditingCouponId(null)
@@ -1650,6 +1728,17 @@ export default function AdminCrm() {
     await api.admin.coupons.update(c.id, {
       active: !c.active,
       allow_promotion_checkout: c.allow_promotion_checkout,
+      combinable_with_public: c.combinable_with_public,
+      discount_type: c.discount_type ?? undefined,
+      discount_value: c.discount_value ?? undefined,
+      shipping_discount_type: c.shipping_discount_type ?? undefined,
+      shipping_discount_value: c.shipping_discount_value ?? undefined,
+      product_discounts: c.product_discounts,
+      message_template: c.message_template ?? undefined,
+      bday_customer_days_before: c.bday_customer_days_before ?? undefined,
+      bday_store_date: c.bday_store_date ?? undefined,
+      bday_store_days_before: c.bday_store_days_before ?? undefined,
+      starts_at: c.starts_at ?? undefined,
       expires_at: c.expires_at ?? undefined,
       max_uses: c.max_uses ?? undefined,
     })
@@ -1688,48 +1777,48 @@ export default function AdminCrm() {
           disabled={isEdit}
         />
       </div>
+
       <div>
-        <label className="label">Tipo</label>
-        <div className="grid grid-cols-2 gap-1.5">
-          {(['desconto', 'frete', 'produto', 'aniversario'] as const).map((k) => (
+        <label className="label">Desconto no subtotal</label>
+        <div className="grid grid-cols-3 gap-1.5">
+          {(
+            [
+              { value: 'nenhum', label: 'Nenhum' },
+              { value: 'flat', label: 'Valor fixo/%' },
+              { value: 'produto', label: 'Por produto' },
+            ] as const
+          ).map(({ value, label }) => (
             <button
-              key={k}
+              key={value}
               type="button"
-              disabled={isEdit}
-              onClick={() => setCouponForm({ ...couponForm, kind: k })}
-              className={`py-2.5 rounded-xl border text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                couponForm.kind === k ? 'sunset-bg text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
+              onClick={() => setCouponForm({ ...couponForm, productMode: value })}
+              className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
+                couponForm.productMode === value ? 'sunset-bg text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
               }`}
             >
-              {COUPON_KIND_LABEL[k]}
+              {label}
             </button>
           ))}
         </div>
-        {couponForm.kind === 'frete' && (
-          <p className="text-xs text-son-silver-dim mt-1.5">
-            Desconta do frete que o cliente paga — o motoboy recebe o valor cheio do mesmo jeito, a loja absorve a diferença.
-          </p>
-        )}
-        {couponForm.kind === 'aniversario' && (
-          <p className="text-xs text-son-silver-dim mt-1.5">Só é aceito durante o mês de aniversário do cliente.</p>
-        )}
-        {couponForm.kind === 'produto' && (
+        {couponForm.productMode === 'produto' && (
           <p className="text-xs text-son-silver-dim mt-1.5">
             Os produtos escolhidos aparecem destacados em /catalogo na categoria "Promoção" com o desconto já visível, e o desconto se
             aplica sozinho assim que o produto entra no carrinho — sem precisar digitar código.
           </p>
         )}
       </div>
-      {couponForm.kind === 'produto' ? (
+      {couponForm.productMode === 'produto' && (
         <div>
           <label className="label">Produtos em promoção</label>
           <ProductDiscountList
             products={products}
+            categories={categories}
             discounts={couponForm.productDiscounts}
             onChange={(productDiscounts) => setCouponForm({ ...couponForm, productDiscounts })}
           />
         </div>
-      ) : (
+      )}
+      {couponForm.productMode === 'flat' && (
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="label">Tipo de desconto</label>
@@ -1754,6 +1843,123 @@ export default function AdminCrm() {
           </div>
         </div>
       )}
+
+      <label className="flex items-center gap-2 text-sm text-son-silver">
+        <input
+          type="checkbox"
+          className="w-4 h-4 accent-son-pink"
+          checked={couponForm.shippingEnabled}
+          onChange={(e) => setCouponForm({ ...couponForm, shippingEnabled: e.target.checked })}
+        />
+        Também dar desconto no frete
+      </label>
+      {couponForm.shippingEnabled && (
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            className="input-field"
+            value={couponForm.shipping_discount_type}
+            onChange={(e) => setCouponForm({ ...couponForm, shipping_discount_type: e.target.value as DiscountType })}
+          >
+            <option value="percent">Percentual</option>
+            <option value="fixed">Valor fixo (R$)</option>
+          </select>
+          <input
+            className="input-field"
+            type="number"
+            min="0"
+            placeholder="Valor"
+            value={couponForm.shipping_discount_value}
+            onChange={(e) => setCouponForm({ ...couponForm, shipping_discount_value: e.target.value })}
+          />
+        </div>
+      )}
+
+      <label className="flex items-center gap-2 text-sm text-son-silver">
+        <input
+          type="checkbox"
+          className="w-4 h-4 accent-son-pink"
+          checked={couponForm.bdayCustomerEnabled}
+          onChange={(e) => setCouponForm({ ...couponForm, bdayCustomerEnabled: e.target.checked })}
+        />
+        Enviar automaticamente no aniversário do cliente
+      </label>
+      {couponForm.bdayCustomerEnabled && (
+        <div className="border border-white/10 rounded-xl p-3 space-y-2">
+          <div>
+            <label className="label">Dias antes do aniversário do cliente</label>
+            <input
+              className={`input-field w-32 ${NO_SPINNER}`}
+              type="number"
+              min="0"
+              placeholder="0"
+              value={couponForm.bdayCustomerDaysBefore}
+              onChange={(e) => setCouponForm({ ...couponForm, bdayCustomerDaysBefore: e.target.value })}
+            />
+          </div>
+        </div>
+      )}
+
+      <label className="flex items-center gap-2 text-sm text-son-silver">
+        <input
+          type="checkbox"
+          className="w-4 h-4 accent-son-pink"
+          checked={couponForm.bdayStoreEnabled}
+          onChange={(e) => setCouponForm({ ...couponForm, bdayStoreEnabled: e.target.checked })}
+        />
+        Aniversário da loja (envia pra todos os clientes)
+      </label>
+      {couponForm.bdayStoreEnabled && (
+        <div className="border border-white/10 rounded-xl p-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="label">Data do aniversário da loja</label>
+              <input
+                className="input-field"
+                type="date"
+                value={couponForm.bdayStoreDate ? `2000-${couponForm.bdayStoreDate}` : ''}
+                onChange={(e) => setCouponForm({ ...couponForm, bdayStoreDate: e.target.value ? e.target.value.slice(5) : '' })}
+              />
+            </div>
+            <div>
+              <label className="label">Dias antes</label>
+              <input
+                className={`input-field ${NO_SPINNER}`}
+                type="number"
+                min="0"
+                placeholder="0"
+                value={couponForm.bdayStoreDaysBefore}
+                onChange={(e) => setCouponForm({ ...couponForm, bdayStoreDaysBefore: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {couponHasBday && (
+        <div>
+          <label className="label">Mensagem pro cliente (WhatsApp)</label>
+          <textarea
+            className="input-field"
+            rows={4}
+            value={couponForm.messageTemplate}
+            onChange={(e) => setCouponForm({ ...couponForm, messageTemplate: e.target.value })}
+            placeholder={'Olá, /nome! Chegou seu cupom de aniversário /cupom 🎉'}
+          />
+          <p className="text-xs text-son-silver-dim mt-1">
+            Precisa citar <code>/nome</code> e <code>/cupom</code>.
+          </p>
+          <label className="flex items-center gap-2 text-sm text-son-silver mt-2">
+            <input
+              type="checkbox"
+              className="w-4 h-4 accent-son-pink"
+              checked={couponForm.combinable_with_public}
+              onChange={(e) => setCouponForm({ ...couponForm, combinable_with_public: e.target.checked })}
+            />
+            Pode ser combinado com um cupom avulso no checkout de catálogo
+          </label>
+        </div>
+      )}
+
       <label className="flex items-center gap-2 text-sm text-son-silver">
         <input
           type="checkbox"
@@ -1765,8 +1971,13 @@ export default function AdminCrm() {
       </label>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="label">Validade (opcional)</label>
-          <ExpiryInput value={couponForm.expires_at} onChange={(expires_at) => setCouponForm({ ...couponForm, expires_at })} />
+          <label className="label">Válido a partir de (opcional)</label>
+          <input
+            className="input-field"
+            type="date"
+            value={couponForm.starts_at ? couponForm.starts_at.slice(0, 10) : ''}
+            onChange={(e) => setCouponForm({ ...couponForm, starts_at: e.target.value })}
+          />
         </div>
         <div>
           <label className="label">Limite de usos (opcional)</label>
@@ -1778,6 +1989,10 @@ export default function AdminCrm() {
             onChange={(e) => setCouponForm({ ...couponForm, max_uses: e.target.value })}
           />
         </div>
+      </div>
+      <div>
+        <label className="label">Validade (opcional)</label>
+        <ExpiryInput value={couponForm.expires_at} onChange={(expires_at) => setCouponForm({ ...couponForm, expires_at })} />
       </div>
       {couponError && <p className="error-msg">{couponError}</p>}
       <button
@@ -2248,6 +2463,16 @@ export default function AdminCrm() {
                     {discountLabel(c.shipping_discount_type, c.shipping_discount_value) && (
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold">
                         Frete: {discountLabel(c.shipping_discount_type, c.shipping_discount_value)}
+                      </span>
+                    )}
+                    {c.bday_customer_days_before != null && (
+                      <span className="px-2 py-0.5 rounded-full bg-son-gold/15 text-son-gold text-[10px] font-semibold">
+                        Aniversário cliente · {c.bday_customer_days_before}d antes
+                      </span>
+                    )}
+                    {c.bday_store_date && (
+                      <span className="px-2 py-0.5 rounded-full bg-son-gold/15 text-son-gold text-[10px] font-semibold">
+                        Aniversário da loja · {c.bday_store_date}
                       </span>
                     )}
                   </div>
