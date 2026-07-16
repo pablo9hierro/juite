@@ -54,6 +54,8 @@ export interface LocalCampanhaCoupon {
   starts_at: string | null
   ends_at: string | null
   trigger_criteria: CrmFilterCriteria | null
+  trigger_description: string | null
+  end_criteria: CrmFilterCriteria | null
   message_template: string
   uses_per_customer: number
   active: boolean
@@ -68,6 +70,7 @@ export interface LocalCampanhaExtraCoupon {
   campanha_id: string
   coupon_id: string
   message_template: string
+  end_criteria: CrmFilterCriteria | null
   created_at: string
 }
 

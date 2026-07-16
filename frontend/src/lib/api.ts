@@ -335,6 +335,7 @@ const remoteApi = {
         bday_customer_days_before?: number
         bday_store_date?: string
         bday_store_days_before?: number
+        description?: string
       }) =>
         rpc<Coupon>('admin_create_coupon', {
           p_token: adminToken(),
@@ -353,6 +354,7 @@ const remoteApi = {
           p_bday_customer_days_before: payload.bday_customer_days_before ?? null,
           p_bday_store_date: payload.bday_store_date || null,
           p_bday_store_days_before: payload.bday_store_days_before ?? null,
+          p_description: payload.description || null,
         }),
       update: (
         id: string,
@@ -372,6 +374,7 @@ const remoteApi = {
           bday_customer_days_before?: number
           bday_store_date?: string
           bday_store_days_before?: number
+          description?: string
         }
       ) =>
         rpc<Coupon>('admin_update_coupon', {
@@ -392,6 +395,7 @@ const remoteApi = {
           p_bday_customer_days_before: payload.bday_customer_days_before ?? null,
           p_bday_store_date: payload.bday_store_date || null,
           p_bday_store_days_before: payload.bday_store_days_before ?? null,
+          p_description: payload.description || null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_coupon', { p_token: adminToken(), p_id: id }),
       // Roda a cada load do CRM (sem cron no projeto) — concede os
@@ -622,13 +626,25 @@ const remoteApi = {
           p_ends_at: payload.ends_at || null,
         }),
       // Define/edita o gatilho (trigger_criteria) de uma campanha 'evento'
-      // — decoupled do cadastro e de qualquer cupom.
-      setGatilho: (id: string, triggerCriteria: CrmFilterCriteria) =>
+      // — decoupled do cadastro e de qualquer cupom. null limpa (volta
+      // pra "sem critério ainda").
+      setGatilho: (id: string, triggerCriteria: CrmFilterCriteria | null, description?: string) =>
         rpc<CrmCampanhaCoupon>('admin_set_campanha_gatilho', {
           p_token: adminToken(),
           p_id: id,
           p_trigger_criteria: triggerCriteria,
+          p_trigger_description: description || null,
         }),
+      // "Encerrar por evento" da campanha inteira (principal + extras) —
+      // null limpa.
+      setEndCriteria: (id: string, endCriteria: CrmFilterCriteria | null) =>
+        rpc<CrmCampanhaCoupon>('admin_set_campanha_end_criteria', {
+          p_token: adminToken(),
+          p_id: id,
+          p_end_criteria: endCriteria,
+        }),
+      // Desvincula o cupom principal (volta pra "aguardando cupom").
+      deletePrimary: (id: string) => rpc<CrmCampanhaCoupon>('admin_delete_campanha_primary_coupon', { p_token: adminToken(), p_id: id }),
       // Edita nome/descrição/duração do cadastro — não mexe em gatilho
       // nem em cupom nenhum.
       updateCadastro: (id: string, payload: { name: string; description?: string; starts_at?: string; ends_at?: string }) =>
@@ -663,6 +679,7 @@ const remoteApi = {
           uses_per_customer?: number
           combinable_with_public?: boolean
           allow_promotion_checkout?: boolean
+          starts_at?: string
           expires_at?: string
           max_uses?: number
           discount_type?: 'percent' | 'fixed'
@@ -670,6 +687,7 @@ const remoteApi = {
           shipping_discount_type?: 'percent' | 'fixed'
           shipping_discount_value?: number
           product_discounts?: ProductDiscount[]
+          description?: string
         }
       ) =>
         rpc<CrmCampanhaCoupon>('admin_update_campanha_coupon', {
@@ -679,6 +697,7 @@ const remoteApi = {
           p_uses_per_customer: payload.uses_per_customer ?? 1,
           p_combinable_with_public: payload.combinable_with_public ?? false,
           p_allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
+          p_starts_at: payload.starts_at || null,
           p_expires_at: payload.expires_at || null,
           p_max_uses: payload.max_uses ?? null,
           p_discount_type: payload.discount_type ?? null,
@@ -686,6 +705,7 @@ const remoteApi = {
           p_shipping_discount_type: payload.shipping_discount_type ?? null,
           p_shipping_discount_value: payload.shipping_discount_value ?? null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
+          p_description: payload.description || null,
         }),
       // Cupom exclusivo — se a campanha ainda não tem nenhum, este vira o
       // PRINCIPAL (preenche coupon_id) e, se for 'segmento', dispara na
@@ -699,6 +719,7 @@ const remoteApi = {
           uses_per_customer?: number
           combinable_with_public?: boolean
           allow_promotion_checkout?: boolean
+          starts_at?: string
           expires_at?: string
           max_uses?: number
           discount_type?: 'percent' | 'fixed'
@@ -707,6 +728,7 @@ const remoteApi = {
           shipping_discount_value?: number
           product_discounts?: ProductDiscount[]
           customer_whatsapps?: string[]
+          description?: string
         }
       ) =>
         rpc<Coupon>('admin_create_campanha_extra_coupon', {
@@ -717,6 +739,7 @@ const remoteApi = {
           p_uses_per_customer: payload.uses_per_customer ?? 1,
           p_combinable_with_public: payload.combinable_with_public ?? false,
           p_allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
+          p_starts_at: payload.starts_at || null,
           p_expires_at: payload.expires_at || null,
           p_max_uses: payload.max_uses ?? null,
           p_discount_type: payload.discount_type ?? null,
@@ -725,6 +748,7 @@ const remoteApi = {
           p_shipping_discount_value: payload.shipping_discount_value ?? null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
           p_customer_whatsapps: payload.customer_whatsapps ?? [],
+          p_description: payload.description || null,
         }),
       deleteExtra: (id: string) => rpc<void>('admin_delete_campanha_extra_coupon', { p_token: adminToken(), p_id: id }),
       // Edita mensagem/desconto/prazo de um cupom extra já existente —
@@ -736,6 +760,7 @@ const remoteApi = {
           uses_per_customer?: number
           combinable_with_public?: boolean
           allow_promotion_checkout?: boolean
+          starts_at?: string
           expires_at?: string
           max_uses?: number
           discount_type?: 'percent' | 'fixed'
@@ -743,6 +768,7 @@ const remoteApi = {
           shipping_discount_type?: 'percent' | 'fixed'
           shipping_discount_value?: number
           product_discounts?: ProductDiscount[]
+          description?: string
         }
       ) =>
         rpc<CrmCampanhaCoupon>('admin_update_campanha_extra_coupon', {
@@ -752,6 +778,7 @@ const remoteApi = {
           p_uses_per_customer: payload.uses_per_customer ?? 1,
           p_combinable_with_public: payload.combinable_with_public ?? false,
           p_allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
+          p_starts_at: payload.starts_at || null,
           p_expires_at: payload.expires_at || null,
           p_max_uses: payload.max_uses ?? null,
           p_discount_type: payload.discount_type ?? null,
@@ -759,7 +786,16 @@ const remoteApi = {
           p_shipping_discount_type: payload.shipping_discount_type ?? null,
           p_shipping_discount_value: payload.shipping_discount_value ?? null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
+          p_description: payload.description || null,
         }),
+      // "Encerrar por evento" de UM cupom extra específico — null limpa.
+      setExtraEndCriteria: (id: string, endCriteria: CrmFilterCriteria | null) =>
+        rpc<CrmCampanhaCoupon>('admin_set_extra_coupon_end_criteria', {
+          p_token: adminToken(),
+          p_id: id,
+          p_end_criteria: endCriteria,
+        }),
+      deactivateExtra: (id: string) => rpc<CrmCampanhaCoupon>('admin_deactivate_campanha_extra_coupon', { p_token: adminToken(), p_id: id }),
     },
     // Único pedaço do admin que ainda fala com o backend Rust (Railway) em
     // vez do Supabase — a chave da Evolution API precisa ficar fora do

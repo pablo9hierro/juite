@@ -813,6 +813,7 @@ async function createCoupon(payload: {
   bday_customer_days_before?: number
   bday_store_date?: string
   bday_store_days_before?: number
+  description?: string
 }): Promise<Coupon> {
   const db = loadDb()
   db.coupons = db.coupons ?? []
@@ -849,6 +850,7 @@ async function createCoupon(payload: {
     bday_customer_days_before: payload.bday_customer_days_before ?? null,
     bday_store_date: payload.bday_store_date || null,
     bday_store_days_before: payload.bday_store_days_before ?? null,
+    description: payload.description?.trim() || null,
   }
   db.coupons.push(coupon)
   saveDb(db)
@@ -873,6 +875,7 @@ async function updateCoupon(
     bday_customer_days_before?: number
     bday_store_date?: string
     bday_store_days_before?: number
+    description?: string
   }
 ): Promise<Coupon> {
   const db = loadDb()
@@ -903,6 +906,7 @@ async function updateCoupon(
   coupon.bday_customer_days_before = payload.bday_customer_days_before ?? null
   coupon.bday_store_date = payload.bday_store_date || null
   coupon.bday_store_days_before = payload.bday_store_days_before ?? null
+  coupon.description = payload.description?.trim() || null
   saveDb(db)
   return withGrantCount(db, coupon)
 }
@@ -971,6 +975,7 @@ async function createTargetedCoupon(payload: {
   custom_message?: string
   combinable_with_public?: boolean
   allow_promotion_checkout?: boolean
+  starts_at?: string
   expires_at?: string
   max_uses?: number
   discount_type?: 'percent' | 'fixed'
@@ -978,6 +983,7 @@ async function createTargetedCoupon(payload: {
   shipping_discount_type?: 'percent' | 'fixed'
   shipping_discount_value?: number
   product_discounts?: import('./types').ProductDiscount[]
+  description?: string
 }): Promise<Coupon> {
   const db = loadDb()
   db.coupons = db.coupons ?? []
@@ -1005,9 +1011,10 @@ async function createTargetedCoupon(payload: {
     allow_promotion_checkout: payload.allow_promotion_checkout ?? false,
     combinable_with_public: payload.combinable_with_public ?? false,
     active: true,
-    starts_at: null,
+    starts_at: payload.starts_at || null,
     expires_at: payload.expires_at || null,
     max_uses: payload.max_uses ?? null,
+    description: payload.description?.trim() || null,
     used_count: 0,
     created_at: nowIso(),
   }
@@ -1109,7 +1116,9 @@ function campanhaExtraCoupons(db: LocalDb, campanhaId: string): import('./types'
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .map((ec) => {
       const coupon = (db.coupons ?? []).find((c) => c.id === ec.coupon_id)
-      return coupon ? { id: ec.id, coupon: withGrantCount(db, coupon), message_template: ec.message_template } : null
+      return coupon
+        ? { id: ec.id, coupon: withGrantCount(db, coupon), message_template: ec.message_template, end_criteria: ec.end_criteria ?? null }
+        : null
     })
     .filter((x): x is import('./types').CrmCampanhaExtraCoupon => !!x)
 }
@@ -1150,6 +1159,8 @@ async function createCampanha(payload: {
     starts_at: payload.starts_at || null,
     ends_at: payload.ends_at || null,
     trigger_criteria: null,
+    trigger_description: null,
+    end_criteria: null,
     message_template: '',
     uses_per_customer: 1,
     active: true,
@@ -1163,20 +1174,84 @@ async function createCampanha(payload: {
 }
 
 // Define/edita o gatilho (trigger_criteria) de uma campanha 'evento' —
-// decoupled do cadastro e de qualquer cupom.
-async function setCampanhaGatilho(id: string, triggerCriteria: import('./types').CrmFilterCriteria): Promise<import('./types').CrmCampanhaCoupon> {
+// decoupled do cadastro e de qualquer cupom. null limpa (volta pra "sem
+// critério ainda").
+async function setCampanhaGatilho(
+  id: string,
+  triggerCriteria: import('./types').CrmFilterCriteria | null,
+  description?: string
+): Promise<import('./types').CrmCampanhaCoupon> {
   const db = loadDb()
   const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
   if (!row) throw new ApiError(404, 'campanha not found')
   if (row.orientation !== 'evento') throw new ApiError(400, 'only orientation=evento campanhas have a gatilho')
+  if (triggerCriteria === null) {
+    row.trigger_criteria = null
+    row.last_synced_segment_criteria = null
+    row.trigger_description = description?.trim() || null
+    saveDb(db)
+    return { ...row, extra_coupons: campanhaExtraCoupons(db, row.id) }
+  }
   const segment = (db.segments ?? []).find((s) => s.id === row.segment_id)
   if (segment && JSON.stringify(triggerCriteria) === JSON.stringify(segment.filter_criteria)) {
     throw new ApiError(400, "trigger_criteria must differ from the segment's current filter in at least one field")
   }
   row.trigger_criteria = triggerCriteria
+  row.trigger_description = description?.trim() || null
   if (segment) row.last_synced_segment_criteria = segment.filter_criteria
   saveDb(db)
   return { ...row, extra_coupons: campanhaExtraCoupons(db, row.id) }
+}
+
+// "Encerrar por evento" da campanha inteira — null limpa.
+async function setCampanhaEndCriteria(
+  id: string,
+  endCriteria: import('./types').CrmFilterCriteria | null
+): Promise<import('./types').CrmCampanhaCoupon> {
+  const db = loadDb()
+  const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
+  if (!row) throw new ApiError(404, 'campanha not found')
+  row.end_criteria = endCriteria
+  saveDb(db)
+  return { ...row, extra_coupons: campanhaExtraCoupons(db, row.id) }
+}
+
+// Desvincula o cupom principal (volta pra "aguardando cupom").
+async function deleteCampanhaPrimaryCoupon(id: string): Promise<import('./types').CrmCampanhaCoupon> {
+  const db = loadDb()
+  const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
+  if (!row) throw new ApiError(404, 'campanha not found')
+  row.coupon_id = null
+  row.message_template = ''
+  saveDb(db)
+  return { ...row, extra_coupons: campanhaExtraCoupons(db, row.id) }
+}
+
+// "Encerrar por evento" de UM cupom extra — null limpa.
+async function setExtraCouponEndCriteria(
+  id: string,
+  endCriteria: import('./types').CrmFilterCriteria | null
+): Promise<import('./types').CrmCampanhaCoupon> {
+  const db = loadDb()
+  const ec = (db.campanhaExtraCoupons ?? []).find((x) => x.id === id)
+  if (!ec) throw new ApiError(404, 'extra coupon not found')
+  ec.end_criteria = endCriteria
+  saveDb(db)
+  const campanha = (db.campanhaCoupons ?? []).find((c) => c.id === ec.campanha_id)
+  if (!campanha) throw new ApiError(404, 'campanha not found')
+  return { ...campanha, extra_coupons: campanhaExtraCoupons(db, campanha.id) }
+}
+
+async function deactivateCampanhaExtraCoupon(id: string): Promise<import('./types').CrmCampanhaCoupon> {
+  const db = loadDb()
+  const ec = (db.campanhaExtraCoupons ?? []).find((x) => x.id === id)
+  if (!ec) throw new ApiError(404, 'extra coupon not found')
+  const coupon = (db.coupons ?? []).find((c) => c.id === ec.coupon_id)
+  if (coupon) coupon.active = false
+  saveDb(db)
+  const campanha = (db.campanhaCoupons ?? []).find((c) => c.id === ec.campanha_id)
+  if (!campanha) throw new ApiError(404, 'campanha not found')
+  return { ...campanha, extra_coupons: campanhaExtraCoupons(db, campanha.id) }
 }
 
 async function fireCampanhaEvent(id: string, customerWhatsapps: string[]): Promise<{ newly_granted: string[] }> {
@@ -1235,6 +1310,7 @@ async function updateCampanhaCoupon(
     uses_per_customer?: number
     combinable_with_public?: boolean
     allow_promotion_checkout?: boolean
+    starts_at?: string
     expires_at?: string
     max_uses?: number
     discount_type?: 'percent' | 'fixed'
@@ -1242,6 +1318,7 @@ async function updateCampanhaCoupon(
     shipping_discount_type?: 'percent' | 'fixed'
     shipping_discount_value?: number
     product_discounts?: import('./types').ProductDiscount[]
+    description?: string
   }
 ): Promise<import('./types').CrmCampanhaCoupon> {
   const db = loadDb()
@@ -1262,8 +1339,10 @@ async function updateCampanhaCoupon(
   coupon.product_discounts = hasProducts ? payload.product_discounts! : []
   coupon.combinable_with_public = payload.combinable_with_public ?? false
   coupon.allow_promotion_checkout = payload.allow_promotion_checkout ?? false
+  coupon.starts_at = payload.starts_at || null
   coupon.expires_at = payload.expires_at || null
   coupon.max_uses = payload.max_uses ?? null
+  coupon.description = payload.description?.trim() || null
   for (const g of db.couponGrants ?? []) {
     if (g.coupon_id === row.coupon_id) g.granted_uses = payload.uses_per_customer ?? 1
   }
@@ -1285,6 +1364,7 @@ async function createCampanhaExtraCoupon(
     uses_per_customer?: number
     combinable_with_public?: boolean
     allow_promotion_checkout?: boolean
+    starts_at?: string
     expires_at?: string
     max_uses?: number
     discount_type?: 'percent' | 'fixed'
@@ -1293,6 +1373,7 @@ async function createCampanhaExtraCoupon(
     shipping_discount_value?: number
     product_discounts?: import('./types').ProductDiscount[]
     customer_whatsapps?: string[]
+    description?: string
   }
 ): Promise<Coupon> {
   const campanhaCheck = (loadDb().campanhaCoupons ?? []).find((c) => c.id === campanhaId)
@@ -1312,12 +1393,13 @@ async function createCampanhaExtraCoupon(
     coupon.active = false
   }
   db.couponGrants = db.couponGrants ?? []
+  const inWindow = !payload.starts_at || new Date(payload.starts_at) <= new Date()
 
   if (isPrimary) {
     campanha.coupon_id = coupon.id
     campanha.message_template = payload.message_template.trim()
     campanha.uses_per_customer = payload.uses_per_customer ?? 1
-    if (campanha.orientation === 'segmento') {
+    if (campanha.orientation === 'segmento' && inWindow) {
       campanha.fired_at = nowIso()
       for (const whatsapp of payload.customer_whatsapps ?? []) {
         if (!whatsapp?.trim()) continue
@@ -1337,20 +1419,24 @@ async function createCampanhaExtraCoupon(
       campanha_id: campanhaId,
       coupon_id: coupon.id,
       message_template: payload.message_template.trim(),
+      end_criteria: null,
       created_at: nowIso(),
     })
     // A campanha já disparou antes (tem concessão do cupom principal)?
-    // Esse cupom novo entra pra mesma turma na hora.
-    const existingGrants = db.couponGrants.filter((g) => g.coupon_id === campanha.coupon_id)
-    for (const g of existingGrants) {
-      db.couponGrants.push({
-        id: uid(),
-        coupon_id: coupon.id,
-        customer_whatsapp: g.customer_whatsapp,
-        granted_uses: payload.uses_per_customer ?? 1,
-        used_count: 0,
-        created_at: nowIso(),
-      })
+    // Esse cupom novo entra pra mesma turma na hora — desde que a
+    // janela dele já tenha começado.
+    if (inWindow) {
+      const existingGrants = db.couponGrants.filter((g) => g.coupon_id === campanha.coupon_id)
+      for (const g of existingGrants) {
+        db.couponGrants.push({
+          id: uid(),
+          coupon_id: coupon.id,
+          customer_whatsapp: g.customer_whatsapp,
+          granted_uses: payload.uses_per_customer ?? 1,
+          used_count: 0,
+          created_at: nowIso(),
+        })
+      }
     }
   }
   saveDb(db)
@@ -1391,6 +1477,7 @@ async function updateCampanhaExtraCoupon(
     uses_per_customer?: number
     combinable_with_public?: boolean
     allow_promotion_checkout?: boolean
+    starts_at?: string
     expires_at?: string
     max_uses?: number
     discount_type?: 'percent' | 'fixed'
@@ -1398,6 +1485,7 @@ async function updateCampanhaExtraCoupon(
     shipping_discount_type?: 'percent' | 'fixed'
     shipping_discount_value?: number
     product_discounts?: import('./types').ProductDiscount[]
+    description?: string
   }
 ): Promise<import('./types').CrmCampanhaCoupon> {
   const db = loadDb()
@@ -1418,8 +1506,10 @@ async function updateCampanhaExtraCoupon(
   coupon.product_discounts = hasProducts ? payload.product_discounts! : []
   coupon.combinable_with_public = payload.combinable_with_public ?? false
   coupon.allow_promotion_checkout = payload.allow_promotion_checkout ?? false
+  coupon.starts_at = payload.starts_at || null
   coupon.expires_at = payload.expires_at || null
   coupon.max_uses = payload.max_uses ?? null
+  coupon.description = payload.description?.trim() || null
   for (const g of db.couponGrants ?? []) {
     if (g.coupon_id === ec.coupon_id) g.granted_uses = payload.uses_per_customer ?? 1
   }
@@ -2121,6 +2211,8 @@ export const localApi = {
       list: adminListCampanhaCoupons,
       create: createCampanha,
       setGatilho: setCampanhaGatilho,
+      setEndCriteria: setCampanhaEndCriteria,
+      deletePrimary: deleteCampanhaPrimaryCoupon,
       updateCadastro: updateCampanhaCadastro,
       fireEvent: fireCampanhaEvent,
       delete: deleteCampanhaCoupon,
@@ -2129,6 +2221,8 @@ export const localApi = {
       createExtra: createCampanhaExtraCoupon,
       updateExtra: updateCampanhaExtraCoupon,
       deleteExtra: deleteCampanhaExtraCoupon,
+      setExtraEndCriteria: setExtraCouponEndCriteria,
+      deactivateExtra: deactivateCampanhaExtraCoupon,
     },
     whatsapp: {
       status: async () => ({ instance: { state: 'close' } }),

@@ -48,6 +48,9 @@ export interface Coupon {
   id: string
   code: string
   kind: CouponKind
+  // Texto livre, só interno (nunca vai pro cliente) — anotação do admin
+  // sobre o cupom.
+  description?: string | null
   // kind='frete': discount_type/value É a taxa de frete (legado, cupom
   // avulso). kind='desconto': desconto flat sobre o subtotal. kind='produto':
   // discount_type/value ficam null, o desconto mora em product_discounts.
@@ -114,6 +117,10 @@ export interface CrmCampanhaExtraCoupon {
   id: string
   coupon: Coupon
   message_template: string
+  // Critério "por evento" pra encerrar SÓ este cupom extra (decoupled do
+  // segmento, mesmo mecanismo do gatilho) — null = sem encerramento
+  // automático.
+  end_criteria: CrmFilterCriteria | null
 }
 
 export interface CrmCampanhaCoupon {
@@ -129,6 +136,11 @@ export interface CrmCampanhaCoupon {
   starts_at: string | null
   ends_at: string | null
   trigger_criteria: CrmFilterCriteria | null
+  // Texto livre, só interno — anotação do admin sobre o gatilho.
+  trigger_description?: string | null
+  // Critério "por evento" pra encerrar a campanha INTEIRA (principal +
+  // extras) — mesmo mecanismo do gatilho, decoupled do segmento.
+  end_criteria: CrmFilterCriteria | null
   message_template: string
   uses_per_customer: number
   active: boolean

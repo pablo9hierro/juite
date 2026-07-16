@@ -363,6 +363,7 @@ type CouponForm = {
   starts_at: string
   expires_at: string
   max_uses: string
+  description: string
 }
 const EMPTY_COUPON_FORM: CouponForm = {
   code: '',
@@ -384,6 +385,7 @@ const EMPTY_COUPON_FORM: CouponForm = {
   starts_at: '',
   expires_at: '',
   max_uses: '',
+  description: '',
 }
 
 // "Campanha": um cupom exclusivo vinculado a um segmento. 'segmento'
@@ -409,8 +411,10 @@ type CampanhaForm = {
   uses_per_customer: string
   combinable_with_public: boolean
   allow_promotion_checkout: boolean
+  starts_at: string
   expires_at: string
   max_uses: string
+  description: string
 }
 const EMPTY_CAMPANHA_FORM: CampanhaForm = {
   segmentId: '',
@@ -428,8 +432,10 @@ const EMPTY_CAMPANHA_FORM: CampanhaForm = {
   uses_per_customer: '1',
   combinable_with_public: false,
   allow_promotion_checkout: false,
+  starts_at: '',
   expires_at: '',
   max_uses: '',
+  description: '',
 }
 
 export default function AdminCrm() {
@@ -506,11 +512,22 @@ export default function AdminCrm() {
   const [savingCampanhaCadastro, setSavingCampanhaCadastro] = useState(false)
   const [campanhaCadastroError, setCampanhaCadastroError] = useState<string | null>(null)
 
+  // "Encerrar por evento" da campanha inteira — vive no formulário de
+  // cadastro (não é por cupom, é a campanha toda que desativa quando o
+  // critério bate).
+  const [campanhaEndEnabled, setCampanhaEndEnabled] = useState(false)
+  const [campanhaEndCriteria, setCampanhaEndCriteria] = useState<FilterState>(EMPTY_FILTER)
+  const [originalCampanhaEndEnabled, setOriginalCampanhaEndEnabled] = useState(false)
+  const [originalCampanhaEndCriteria, setOriginalCampanhaEndCriteria] = useState<FilterState>(EMPTY_FILTER)
+
   // Gatilho é um formulário PRÓPRIO (não faz parte de CampanhaForm) — só
   // o trigger_criteria, salvo via admin_set_campanha_gatilho, decoupled
-  // de tudo que é cupom (mensagem/desconto/prazo).
+  // de tudo que é cupom (mensagem/desconto/prazo). Descrição é texto
+  // livre à parte, não faz parte do critério em si.
   const [gatilhoForm, setGatilhoForm] = useState<FilterState>(EMPTY_FILTER)
   const [originalGatilhoForm, setOriginalGatilhoForm] = useState<FilterState | null>(null)
+  const [gatilhoDescription, setGatilhoDescription] = useState('')
+  const [originalGatilhoDescription, setOriginalGatilhoDescription] = useState('')
   const [savingGatilho, setSavingGatilho] = useState(false)
   const [gatilhoSaveError, setGatilhoSaveError] = useState<string | null>(null)
 
@@ -532,10 +549,6 @@ export default function AdminCrm() {
   const [savingCampanhaBasic, setSavingCampanhaBasic] = useState(false)
   const [campanhaBasicError, setCampanhaBasicError] = useState<string | null>(null)
 
-  // Botão "Novo" da cadeia da campanha — escolhe entre editar o gatilho
-  // (critério do evento) ou criar mais um cupom exclusivo pra ele.
-  const [campanhaNovoChooser, setCampanhaNovoChooser] = useState<CrmCampanhaCoupon | null>(null)
-
   // Cupom extra — mais um cupom entregue junto com o principal da mesma
   // campanha (reaproveita o shape de CampanhaForm, ignorando os campos
   // que não fazem sentido aqui: segmentId/orientation/triggerCriteria/
@@ -548,6 +561,13 @@ export default function AdminCrm() {
   const [originalExtraCouponForm, setOriginalExtraCouponForm] = useState<CampanhaForm | null>(null)
   const [savingExtraCoupon, setSavingExtraCoupon] = useState(false)
   const [extraCouponError, setExtraCouponError] = useState<string | null>(null)
+  // "Encerrar por evento" só deste cupom extra — só faz sentido editando
+  // um já existente (precisa do id da linha, que só existe depois de
+  // criado).
+  const [extraCouponEndEnabled, setExtraCouponEndEnabled] = useState(false)
+  const [extraCouponEndCriteria, setExtraCouponEndCriteria] = useState<FilterState>(EMPTY_FILTER)
+  const [originalExtraCouponEndEnabled, setOriginalExtraCouponEndEnabled] = useState(false)
+  const [originalExtraCouponEndCriteria, setOriginalExtraCouponEndCriteria] = useState<FilterState>(EMPTY_FILTER)
 
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [couponsLoading, setCouponsLoading] = useState(true)
@@ -653,6 +673,37 @@ export default function AdminCrm() {
       }
     }
   }, [segments, campanhaCouponsBySegment])
+
+  // "Encerrar por evento": mesma ideia do healedStale acima, mas o critério
+  // é definido pelo próprio admin (end_criteria) e o efeito é desativar a
+  // campanha inteira (toggleActive) ou só um cupom extra (deactivateExtra)
+  // quando bate — independente do segmento de referência.
+  const autoEndedCampanhas = useRef<Set<string>>(new Set())
+  const autoEndedExtras = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (customers.length === 0 || products.length === 0) return
+    for (const seg of segments) {
+      const rows = campanhaCouponsBySegment[seg.id] ?? []
+      for (const row of rows) {
+        if (row.active && row.end_criteria && !autoEndedCampanhas.current.has(row.id)) {
+          const matches = applyFilters(customers, row.end_criteria as unknown as FilterState, products).length > 0
+          if (matches) {
+            autoEndedCampanhas.current.add(row.id)
+            api.admin.campanhaCoupons.toggleActive(row.id, false).then(() => loadCampanhaCoupons(seg.id)).catch(() => {})
+          }
+        }
+        for (const ec of row.extra_coupons) {
+          if (ec.coupon.active && ec.end_criteria && !autoEndedExtras.current.has(ec.id)) {
+            const matches = applyFilters(customers, ec.end_criteria as unknown as FilterState, products).length > 0
+            if (matches) {
+              autoEndedExtras.current.add(ec.id)
+              api.admin.campanhaCoupons.deactivateExtra(ec.id).then(() => loadCampanhaCoupons(seg.id)).catch(() => {})
+            }
+          }
+        }
+      }
+    }
+  }, [segments, campanhaCouponsBySegment, customers, products])
 
   const neighborhoods = useMemo(
     () => Array.from(new Set(customers.flatMap((c) => c.neighborhoods))).sort(),
@@ -1356,6 +1407,10 @@ export default function AdminCrm() {
       setCampanhaCadastroForm(form)
       setOriginalCampanhaCadastroForm(form)
       setCampanhaCadastroError(null)
+      setCampanhaEndEnabled(!!cc.end_criteria)
+      setCampanhaEndCriteria((cc.end_criteria as unknown as FilterState) ?? EMPTY_FILTER)
+      setOriginalCampanhaEndEnabled(!!cc.end_criteria)
+      setOriginalCampanhaEndCriteria((cc.end_criteria as unknown as FilterState) ?? EMPTY_FILTER)
       setEditingCampanhaId(cc.id)
       return
     }
@@ -1363,6 +1418,8 @@ export default function AdminCrm() {
       const criteria = (cc.trigger_criteria as unknown as FilterState) ?? EMPTY_FILTER
       setGatilhoForm(criteria)
       setOriginalGatilhoForm(criteria)
+      setGatilhoDescription(cc.trigger_description ?? '')
+      setOriginalGatilhoDescription(cc.trigger_description ?? '')
       setGatilhoSaveError(null)
       setEditingCampanhaId(cc.id)
       return
@@ -1382,8 +1439,10 @@ export default function AdminCrm() {
       uses_per_customer: String(cc.uses_per_customer),
       combinable_with_public: coupon?.combinable_with_public ?? false,
       allow_promotion_checkout: coupon?.allow_promotion_checkout ?? false,
+      starts_at: coupon?.starts_at ? coupon.starts_at.slice(0, 10) : '',
       expires_at: coupon?.expires_at ?? '',
       max_uses: coupon?.max_uses != null ? String(coupon.max_uses) : '',
+      description: coupon?.description ?? '',
     }
     setCampanhaEditForm(form)
     setOriginalCampanhaEditForm(form)
@@ -1431,6 +1490,7 @@ export default function AdminCrm() {
   const gatilhoHasChanged =
     !originalGatilhoForm ||
     JSON.stringify(gatilhoForm) !== JSON.stringify(originalGatilhoForm) ||
+    gatilhoDescription !== originalGatilhoDescription ||
     (!!editingCampanhaRow && isCampanhaStale(editingCampanhaRow, editingCampanhaSegment ?? undefined))
 
   const saveGatilho = async () => {
@@ -1438,7 +1498,11 @@ export default function AdminCrm() {
     setGatilhoSaveError(null)
     setSavingGatilho(true)
     try {
-      const row = await api.admin.campanhaCoupons.setGatilho(editingCampanhaId, gatilhoForm as unknown as CrmFilterCriteria)
+      const row = await api.admin.campanhaCoupons.setGatilho(
+        editingCampanhaId,
+        gatilhoForm as unknown as CrmFilterCriteria,
+        gatilhoDescription.trim() || undefined
+      )
       setEditingCampanhaId(null)
       loadCampanhaCoupons(row.segment_id)
     } catch (err) {
@@ -1448,8 +1512,23 @@ export default function AdminCrm() {
     }
   }
 
+  const clearGatilho = (cc: CrmCampanhaCoupon) =>
+    askConfirm('Limpar o gatilho deste evento? Os cupons ligados a ele deixam de ter critério de disparo automático.', async () => {
+      const row = await api.admin.campanhaCoupons.setGatilho(cc.id, null)
+      loadCampanhaCoupons(row.segment_id)
+    })
+
+  const deletePrimaryCoupon = (cc: CrmCampanhaCoupon) =>
+    askConfirm('Remover o cupom principal desta campanha?', async () => {
+      await api.admin.campanhaCoupons.deletePrimary(cc.id)
+      loadCampanhaCoupons(cc.segment_id)
+    })
+
   const campanhaCadastroHasChanged =
-    !originalCampanhaCadastroForm || JSON.stringify(campanhaCadastroForm) !== JSON.stringify(originalCampanhaCadastroForm)
+    !originalCampanhaCadastroForm ||
+    JSON.stringify(campanhaCadastroForm) !== JSON.stringify(originalCampanhaCadastroForm) ||
+    campanhaEndEnabled !== originalCampanhaEndEnabled ||
+    (campanhaEndEnabled && JSON.stringify(campanhaEndCriteria) !== JSON.stringify(originalCampanhaEndCriteria))
 
   const saveCampanhaCadastro = async () => {
     if (!editingCampanhaId) return
@@ -1466,6 +1545,10 @@ export default function AdminCrm() {
         starts_at: campanhaCadastroForm.starts_at || undefined,
         ends_at: campanhaCadastroForm.ends_at || undefined,
       })
+      await api.admin.campanhaCoupons.setEndCriteria(
+        editingCampanhaId,
+        campanhaEndEnabled ? (campanhaEndCriteria as unknown as CrmFilterCriteria) : null
+      )
       setEditingCampanhaId(null)
       loadCampanhaCoupons(row.segment_id)
     } catch (err) {
@@ -1493,6 +1576,7 @@ export default function AdminCrm() {
         uses_per_customer: Number(campanhaEditForm.uses_per_customer) || 1,
         combinable_with_public: campanhaEditForm.combinable_with_public,
         allow_promotion_checkout: campanhaEditForm.allow_promotion_checkout,
+        starts_at: campanhaEditForm.starts_at || undefined,
         expires_at: campanhaEditForm.expires_at || undefined,
         max_uses: campanhaEditForm.max_uses ? Number(campanhaEditForm.max_uses) : undefined,
         discount_type: campanhaEditForm.productMode === 'flat' ? campanhaEditForm.discount_type : undefined,
@@ -1500,6 +1584,7 @@ export default function AdminCrm() {
         shipping_discount_type: campanhaEditForm.shippingEnabled ? campanhaEditForm.shipping_discount_type : undefined,
         shipping_discount_value: campanhaEditForm.shippingEnabled ? Number(campanhaEditForm.shipping_discount_value) : undefined,
         product_discounts: campanhaEditForm.productMode === 'produto' ? campanhaEditForm.productDiscounts : undefined,
+        description: campanhaEditForm.description || undefined,
       })
       setEditingCampanhaId(null)
       loadCampanhaCoupons(row.segment_id)
@@ -1516,6 +1601,10 @@ export default function AdminCrm() {
     setEditingExtraCouponId(null)
     setExtraCouponForm(EMPTY_CAMPANHA_FORM)
     setOriginalExtraCouponForm(null)
+    setExtraCouponEndEnabled(false)
+    setExtraCouponEndCriteria(EMPTY_FILTER)
+    setOriginalExtraCouponEndEnabled(false)
+    setOriginalExtraCouponEndCriteria(EMPTY_FILTER)
     setExtraCouponCampanha(cc)
   }
 
@@ -1534,17 +1623,28 @@ export default function AdminCrm() {
       shipping_discount_value: ec.coupon.shipping_discount_value != null ? String(ec.coupon.shipping_discount_value) : '',
       combinable_with_public: ec.coupon.combinable_with_public ?? false,
       allow_promotion_checkout: ec.coupon.allow_promotion_checkout,
+      starts_at: ec.coupon.starts_at ? ec.coupon.starts_at.slice(0, 10) : '',
       expires_at: ec.coupon.expires_at ?? '',
       max_uses: ec.coupon.max_uses != null ? String(ec.coupon.max_uses) : '',
+      description: ec.coupon.description ?? '',
     }
     setEditingExtraCouponId(ec.id)
     setExtraCouponForm(form)
     setOriginalExtraCouponForm(form)
     setExtraCouponCampanha(cc)
+    setExtraCouponEndEnabled(!!ec.end_criteria)
+    setExtraCouponEndCriteria((ec.end_criteria as unknown as FilterState) ?? EMPTY_FILTER)
+    setOriginalExtraCouponEndEnabled(!!ec.end_criteria)
+    setOriginalExtraCouponEndCriteria((ec.end_criteria as unknown as FilterState) ?? EMPTY_FILTER)
   }
 
   const extraCouponMessageValid = extraCouponForm.messageTemplate.includes('/nome') && extraCouponForm.messageTemplate.includes('/cupom')
-  const extraCouponHasChanged = !editingExtraCouponId || !originalExtraCouponForm || JSON.stringify(extraCouponForm) !== JSON.stringify(originalExtraCouponForm)
+  const extraCouponHasChanged =
+    !editingExtraCouponId ||
+    !originalExtraCouponForm ||
+    JSON.stringify(extraCouponForm) !== JSON.stringify(originalExtraCouponForm) ||
+    extraCouponEndEnabled !== originalExtraCouponEndEnabled ||
+    (extraCouponEndEnabled && JSON.stringify(extraCouponEndCriteria) !== JSON.stringify(originalExtraCouponEndCriteria))
 
   const saveExtraCoupon = async () => {
     if (!extraCouponCampanha) return
@@ -1561,6 +1661,7 @@ export default function AdminCrm() {
           uses_per_customer: Number(extraCouponForm.uses_per_customer) || 1,
           combinable_with_public: extraCouponForm.combinable_with_public,
           allow_promotion_checkout: extraCouponForm.allow_promotion_checkout,
+          starts_at: extraCouponForm.starts_at || undefined,
           expires_at: extraCouponForm.expires_at || undefined,
           max_uses: extraCouponForm.max_uses ? Number(extraCouponForm.max_uses) : undefined,
           discount_type: extraCouponForm.productMode === 'flat' ? extraCouponForm.discount_type : undefined,
@@ -1568,7 +1669,12 @@ export default function AdminCrm() {
           shipping_discount_type: extraCouponForm.shippingEnabled ? extraCouponForm.shipping_discount_type : undefined,
           shipping_discount_value: extraCouponForm.shippingEnabled ? Number(extraCouponForm.shipping_discount_value) : undefined,
           product_discounts: extraCouponForm.productMode === 'produto' ? extraCouponForm.productDiscounts : undefined,
+          description: extraCouponForm.description || undefined,
         })
+        await api.admin.campanhaCoupons.setExtraEndCriteria(
+          editingExtraCouponId,
+          extraCouponEndEnabled ? (extraCouponEndCriteria as unknown as CrmFilterCriteria) : null
+        )
         const segmentId = extraCouponCampanha.segment_id
         setExtraCouponCampanha(null)
         setEditingExtraCouponId(null)
@@ -1592,6 +1698,7 @@ export default function AdminCrm() {
         uses_per_customer: Number(extraCouponForm.uses_per_customer) || 1,
         combinable_with_public: extraCouponForm.combinable_with_public,
         allow_promotion_checkout: extraCouponForm.allow_promotion_checkout,
+        starts_at: extraCouponForm.starts_at || undefined,
         expires_at: extraCouponForm.expires_at || undefined,
         max_uses: extraCouponForm.max_uses ? Number(extraCouponForm.max_uses) : undefined,
         discount_type: extraCouponForm.productMode === 'flat' ? extraCouponForm.discount_type : undefined,
@@ -1600,6 +1707,7 @@ export default function AdminCrm() {
         shipping_discount_value: extraCouponForm.shippingEnabled ? Number(extraCouponForm.shipping_discount_value) : undefined,
         product_discounts: extraCouponForm.productMode === 'produto' ? extraCouponForm.productDiscounts : undefined,
         customer_whatsapps: matchingWhatsapps,
+        description: extraCouponForm.description || undefined,
       })
       // Campanha já disparou pra alguém antes (segmento imediato ou evento
       // já concedido)? Esse cupom novo é concedido pra mesma turma na
@@ -1641,15 +1749,25 @@ export default function AdminCrm() {
 
   const openEditCoupon = (c: Coupon) => {
     setEditingCouponId(c.id)
+    // kind='frete' é o formato legado (cupom criado antes deste
+    // formulário existir) — discount_type/value ali É a taxa de frete;
+    // reflete isso nos campos de frete daqui, não nos de subtotal.
+    const isLegacyFrete = c.kind === 'frete'
     const form: CouponForm = {
       code: c.code,
-      productMode: c.kind === 'produto' ? 'produto' : c.discount_type ? 'flat' : 'nenhum',
-      discount_type: c.discount_type ?? 'percent',
-      discount_value: c.kind !== 'produto' && c.discount_value != null ? String(c.discount_value) : '',
+      productMode: c.kind === 'produto' ? 'produto' : 'flat',
+      discount_type: isLegacyFrete ? 'percent' : c.discount_type ?? 'percent',
+      discount_value: c.kind !== 'produto' && !isLegacyFrete && c.discount_value != null ? String(c.discount_value) : '',
       productDiscounts: c.product_discounts ?? [],
-      shippingEnabled: !!c.shipping_discount_type,
-      shipping_discount_type: c.shipping_discount_type ?? 'percent',
-      shipping_discount_value: c.shipping_discount_value != null ? String(c.shipping_discount_value) : '',
+      shippingEnabled: isLegacyFrete || !!c.shipping_discount_type,
+      shipping_discount_type: isLegacyFrete ? c.discount_type ?? 'percent' : c.shipping_discount_type ?? 'percent',
+      shipping_discount_value: isLegacyFrete
+        ? c.discount_value != null
+          ? String(c.discount_value)
+          : ''
+        : c.shipping_discount_value != null
+        ? String(c.shipping_discount_value)
+        : '',
       bdayCustomerEnabled: c.bday_customer_days_before != null,
       bdayCustomerDaysBefore: c.bday_customer_days_before != null ? String(c.bday_customer_days_before) : '',
       bdayStoreEnabled: !!c.bday_store_date,
@@ -1661,6 +1779,7 @@ export default function AdminCrm() {
       starts_at: c.starts_at ?? '',
       expires_at: c.expires_at ?? '',
       max_uses: c.max_uses != null ? String(c.max_uses) : '',
+      description: c.description ?? '',
     }
     setCouponForm(form)
     setOriginalCouponForm(form)
@@ -1675,10 +1794,6 @@ export default function AdminCrm() {
     setCouponError(null)
     if (couponForm.productMode === 'produto' && couponForm.productDiscounts.length === 0) {
       setCouponError('Busque e adicione ao menos um produto.')
-      return
-    }
-    if (couponForm.productMode === 'nenhum' && !couponForm.shippingEnabled) {
-      setCouponError('Escolha ao menos um desconto (produto, valor ou frete).')
       return
     }
     if (!couponMessageValid) {
@@ -1706,6 +1821,7 @@ export default function AdminCrm() {
         bday_customer_days_before: couponForm.bdayCustomerEnabled ? Number(couponForm.bdayCustomerDaysBefore) || 0 : undefined,
         bday_store_date: couponForm.bdayStoreEnabled ? couponForm.bdayStoreDate : undefined,
         bday_store_days_before: couponForm.bdayStoreEnabled ? Number(couponForm.bdayStoreDaysBefore) || 0 : undefined,
+        description: couponForm.description || undefined,
       }
       if (editingCouponId) {
         const active = coupons.find((c) => c.id === editingCouponId)?.active ?? true
@@ -1780,10 +1896,9 @@ export default function AdminCrm() {
 
       <div>
         <label className="label">Desconto no subtotal</label>
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-2 gap-1.5">
           {(
             [
-              { value: 'nenhum', label: 'Nenhum' },
               { value: 'flat', label: 'Valor fixo/%' },
               { value: 'produto', label: 'Por produto' },
             ] as const
@@ -1993,6 +2108,16 @@ export default function AdminCrm() {
       <div>
         <label className="label">Validade (opcional)</label>
         <ExpiryInput value={couponForm.expires_at} onChange={(expires_at) => setCouponForm({ ...couponForm, expires_at })} />
+      </div>
+      <div>
+        <label className="label">Descrição interna (opcional)</label>
+        <textarea
+          className="input-field"
+          rows={2}
+          placeholder="Anotação só pra equipe, não aparece pro cliente"
+          value={couponForm.description}
+          onChange={(e) => setCouponForm({ ...couponForm, description: e.target.value })}
+        />
       </div>
       {couponError && <p className="error-msg">{couponError}</p>}
       <button
@@ -2336,6 +2461,11 @@ export default function AdminCrm() {
                                   >
                                     Editar
                                   </button>
+                                  {!!cc.trigger_criteria && (
+                                    <button type="button" onClick={() => clearGatilho(cc)} className="text-son-silver-dim hover:text-son-pink">
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </>
@@ -2360,12 +2490,15 @@ export default function AdminCrm() {
                                   </button>
                                 </div>
                                 <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
-                                <div className="flex-shrink-0 p-2.5 flex items-center justify-center">
+                                <div className="flex-shrink-0 p-2.5 flex flex-col items-center justify-center gap-1">
                                   <span className="text-xs font-black text-purple-300 text-center">
                                     {discountLabel(cCoupon.discount_type, cCoupon.discount_value) ??
                                       discountLabel(cCoupon.shipping_discount_type, cCoupon.shipping_discount_value) ??
                                       `${cCoupon.product_discounts?.length ?? 0} prod.`}
                                   </span>
+                                  <button type="button" onClick={() => deletePrimaryCoupon(cc)} className="text-son-silver-dim hover:text-son-pink">
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
                                 </div>
                               </div>
                             </>
@@ -2405,10 +2538,10 @@ export default function AdminCrm() {
 
                           <button
                             type="button"
-                            onClick={() => setCampanhaNovoChooser(cc)}
+                            onClick={() => openNewCampanhaExtraCoupon(cc)}
                             className="flex items-center gap-1 px-2.5 py-2 rounded-xl border border-dashed border-son-gold/40 text-son-gold text-[10px] font-semibold hover:bg-son-gold/10 flex-shrink-0"
                           >
-                            <Plus className="w-3 h-3" /> Novo
+                            <Plus className="w-3 h-3" /> Novo cupom
                           </button>
 
                           <ToggleSwitch checked={!stale && cc.active} onClick={() => (stale ? setStaleDialogCampanha(cc) : toggleCampanhaActive(cc))} />
@@ -2601,6 +2734,35 @@ export default function AdminCrm() {
                       />
                     </div>
                   </div>
+                  {editingCampanhaRow?.orientation === 'evento' && (
+                    <div className="space-y-2 pt-2 border-t border-white/10">
+                      <label className="flex items-center gap-2 text-sm text-son-silver">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 accent-amber-400"
+                          checked={campanhaEndEnabled}
+                          onChange={(e) => setCampanhaEndEnabled(e.target.checked)}
+                        />
+                        <Zap className="w-4 h-4 text-amber-400" /> Encerrar por evento
+                      </label>
+                      {campanhaEndEnabled && editingCampanhaSegment && (
+                        <div className="space-y-2">
+                          <label className="label">Alvos que encerram a campanha</label>
+                          {renderTriggerFields(
+                            editingCampanhaSegment.filter_criteria as unknown as FilterState,
+                            campanhaEndCriteria,
+                            (patch) => setCampanhaEndCriteria({ ...campanhaEndCriteria, ...patch }),
+                            undefined,
+                            (keys) => {
+                              const patch: Partial<FilterState> = {}
+                              for (const key of keys) (patch as Record<string, unknown>)[key] = EMPTY_FILTER[key]
+                              setCampanhaEndCriteria({ ...campanhaEndCriteria, ...patch })
+                            }
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {campanhaCadastroError && <p className="error-msg">{campanhaCadastroError}</p>}
                   <button
                     onClick={saveCampanhaCadastro}
@@ -2649,6 +2811,16 @@ export default function AdminCrm() {
                   >
                     <Plus className="w-3.5 h-3.5" /> Novos Alvos (Opcional)
                   </button>
+                  <div>
+                    <label className="label">Descrição interna (opcional)</label>
+                    <textarea
+                      className="input-field"
+                      rows={2}
+                      placeholder="Anotação só pra equipe, não aparece pro cliente"
+                      value={gatilhoDescription}
+                      onChange={(e) => setGatilhoDescription(e.target.value)}
+                    />
+                  </div>
                   {gatilhoSaveError && <p className="error-msg">{gatilhoSaveError}</p>}
                   <button
                     onClick={saveGatilho}
@@ -2776,9 +2948,30 @@ export default function AdminCrm() {
                       />
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Válido a partir de (opcional)</label>
+                      <input
+                        className="input-field"
+                        type="date"
+                        value={campanhaEditForm.starts_at ? campanhaEditForm.starts_at.slice(0, 10) : ''}
+                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, starts_at: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Validade (opcional)</label>
+                      <ExpiryInput value={campanhaEditForm.expires_at} onChange={(expires_at) => setCampanhaEditForm({ ...campanhaEditForm, expires_at })} />
+                    </div>
+                  </div>
                   <div>
-                    <label className="label">Validade (opcional)</label>
-                    <ExpiryInput value={campanhaEditForm.expires_at} onChange={(expires_at) => setCampanhaEditForm({ ...campanhaEditForm, expires_at })} />
+                    <label className="label">Descrição interna (opcional)</label>
+                    <textarea
+                      className="input-field"
+                      rows={2}
+                      placeholder="Anotação só pra equipe, não aparece pro cliente"
+                      value={campanhaEditForm.description}
+                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, description: e.target.value })}
+                    />
                   </div>
                   {campanhaEditError && <p className="error-msg">{campanhaEditError}</p>}
                   <button
@@ -2829,62 +3022,6 @@ export default function AdminCrm() {
               <button onClick={addGatilhoExtraTargets} className="btn-primary w-full">
                 Adicionar alvos
               </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {campanhaNovoChooser && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.92 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.92 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="glass rounded-2xl p-6 max-w-sm w-full my-8"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-white">Novo</h3>
-                <button type="button" onClick={() => setCampanhaNovoChooser(null)} className="text-son-silver-dim hover:text-white">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="space-y-2">
-                {campanhaNovoChooser.orientation === 'evento' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const cc = campanhaNovoChooser
-                      setCampanhaNovoChooser(null)
-                      if (cc) openEditCampanha(cc, 'gatilho')
-                    }}
-                    className="w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border border-cyan-400/30 bg-cyan-500/5 text-left hover:bg-cyan-500/10"
-                  >
-                    <Crosshair className="w-4 h-4 text-cyan-300 flex-shrink-0" />
-                    <span className="text-sm font-semibold text-white">Gatilho de evento alvo</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const cc = campanhaNovoChooser
-                    setCampanhaNovoChooser(null)
-                    if (cc) openNewCampanhaExtraCoupon(cc)
-                  }}
-                  className="w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border border-purple-400/30 bg-purple-500/5 text-left hover:bg-purple-500/10"
-                >
-                  <Gift className="w-4 h-4 text-purple-300 flex-shrink-0" />
-                  <span className="text-sm font-semibold text-white">Cupom exclusivo</span>
-                </button>
-              </div>
             </motion.div>
           </motion.div>
         )}
@@ -3072,10 +3209,63 @@ export default function AdminCrm() {
                   />
                   Pode ser usado também num checkout de promoção
                 </label>
-                <div>
-                  <label className="label">Validade (opcional)</label>
-                  <ExpiryInput value={extraCouponForm.expires_at} onChange={(expires_at) => setExtraCouponForm({ ...extraCouponForm, expires_at })} />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Válido a partir de (opcional)</label>
+                    <input
+                      className="input-field"
+                      type="date"
+                      value={extraCouponForm.starts_at ? extraCouponForm.starts_at.slice(0, 10) : ''}
+                      onChange={(e) => setExtraCouponForm({ ...extraCouponForm, starts_at: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Validade (opcional)</label>
+                    <ExpiryInput value={extraCouponForm.expires_at} onChange={(expires_at) => setExtraCouponForm({ ...extraCouponForm, expires_at })} />
+                  </div>
                 </div>
+                <div>
+                  <label className="label">Descrição interna (opcional)</label>
+                  <textarea
+                    className="input-field"
+                    rows={2}
+                    placeholder="Anotação só pra equipe, não aparece pro cliente"
+                    value={extraCouponForm.description}
+                    onChange={(e) => setExtraCouponForm({ ...extraCouponForm, description: e.target.value })}
+                  />
+                </div>
+                {editingExtraCouponId && extraCouponCampanha?.orientation === 'evento' && (() => {
+                  const extraCouponSegment = segments.find((s) => s.id === extraCouponCampanha.segment_id)
+                  return (
+                    <div className="space-y-2 pt-2 border-t border-white/10">
+                      <label className="flex items-center gap-2 text-sm text-son-silver">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 accent-amber-400"
+                          checked={extraCouponEndEnabled}
+                          onChange={(e) => setExtraCouponEndEnabled(e.target.checked)}
+                        />
+                        <Zap className="w-4 h-4 text-amber-400" /> Encerrar por evento
+                      </label>
+                      {extraCouponEndEnabled && extraCouponSegment && (
+                        <div className="space-y-2">
+                          <label className="label">Alvos que encerram este cupom</label>
+                          {renderTriggerFields(
+                            extraCouponSegment.filter_criteria as unknown as FilterState,
+                            extraCouponEndCriteria,
+                            (patch) => setExtraCouponEndCriteria({ ...extraCouponEndCriteria, ...patch }),
+                            undefined,
+                            (keys) => {
+                              const patch: Partial<FilterState> = {}
+                              for (const key of keys) (patch as Record<string, unknown>)[key] = EMPTY_FILTER[key]
+                              setExtraCouponEndCriteria({ ...extraCouponEndCriteria, ...patch })
+                            }
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
                 {extraCouponError && <p className="error-msg">{extraCouponError}</p>}
                 <button
                   onClick={saveExtraCoupon}
