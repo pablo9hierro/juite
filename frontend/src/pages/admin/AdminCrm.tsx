@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, Cake, Gift, Layers, Loader2, Plus, Search, Sparkles, Tag, Trash2, Users, X, Zap } from 'lucide-react'
+import { AlertTriangle, Cake, Crosshair, Gift, Layers, Loader2, Plus, Search, Sparkles, Tag, Trash2, Users, X, Zap } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import WhatsAppLink from '../../components/ui/WhatsAppLink'
 import ExpiryInput from '../../components/admin/ExpiryInput'
@@ -444,10 +444,27 @@ export default function AdminCrm() {
   // Edição inline de uma campanha já criada — o card em si morfa num
   // formulário (motion), não navega pra outro lugar.
   const [editingCampanhaId, setEditingCampanhaId] = useState<string | null>(null)
+  // O popup de edição da campanha mostra um recorte diferente do MESMO
+  // formulário dependendo do modo: 'gatilho' só os campos de critério do
+  // evento (decoupled do segmento), 'cupom' só mensagem/desconto/prazo —
+  // nunca os dois juntos (reflete a cadeia visual de subcards separados).
+  const [campanhaEditMode, setCampanhaEditMode] = useState<'gatilho' | 'cupom'>('cupom')
   const [campanhaEditForm, setCampanhaEditForm] = useState<CampanhaForm>(EMPTY_CAMPANHA_FORM)
   const [savingCampanhaEdit, setSavingCampanhaEdit] = useState(false)
   const [campanhaEditError, setCampanhaEditError] = useState<string | null>(null)
   const [originalCampanhaEditForm, setOriginalCampanhaEditForm] = useState<CampanhaForm | null>(null)
+
+  // "Novos Alvos (Opcional)" — dentro da edição do gatilho, abre o
+  // formulário de filtro completo numa cópia isolada; ao confirmar, os
+  // campos preenchidos aqui são só MESCLADOS no critério do gatilho, sem
+  // tocar no filtro salvo do segmento.
+  const [gatilhoExtraOpen, setGatilhoExtraOpen] = useState(false)
+  const [gatilhoExtraFilter, setGatilhoExtraFilter] = useState<FilterState>(EMPTY_FILTER)
+  const [gatilhoExtraError, setGatilhoExtraError] = useState<string | null>(null)
+
+  // Botão "Novo" da cadeia da campanha — escolhe entre editar o gatilho
+  // (critério do evento) ou criar mais um cupom exclusivo pra ele.
+  const [campanhaNovoChooser, setCampanhaNovoChooser] = useState<CrmCampanhaCoupon | null>(null)
 
   // Cupom extra — mais um cupom entregue junto com o principal da mesma
   // campanha (reaproveita o shape de CampanhaForm, ignorando os campos
@@ -703,12 +720,30 @@ export default function AdminCrm() {
     segmentCriteria: FilterState,
     value: FilterState,
     onChange: (patch: Partial<FilterState>) => void,
-    staleFields?: Set<keyof FilterState>
+    staleFields?: Set<keyof FilterState>,
+    onRemoveGroup?: (keys: (keyof FilterState)[]) => void
   ) => {
-    const gold = (partial: Partial<FilterState>) => (
-      <span className="px-2.5 py-1 rounded-full bg-son-gold/15 text-son-gold text-[11px] font-medium w-fit">
-        {describeFilter({ ...EMPTY_FILTER, ...partial }, products, categories)[0]}
-      </span>
+    // Bloco aparece se o SEGMENTO usa o campo (referência) OU se o
+    // gatilho já tem um valor próprio nele — o segundo caso cobre "Novos
+    // Alvos (Opcional)", onde o admin adiciona ao gatilho um campo que o
+    // segmento em si nunca usou. Nos fluxos antigos (criar campanha,
+    // editar gatilho sem alvo extra) value é sempre subconjunto de
+    // segmentCriteria, então isso não muda nada do comportamento anterior.
+    const fieldHeader = (inSegment: boolean, partial: Partial<FilterState>, removeKeys: (keyof FilterState)[]) => (
+      <div className="flex items-center justify-between gap-2">
+        {inSegment ? (
+          <span className="px-2.5 py-1 rounded-full bg-son-gold/15 text-son-gold text-[11px] font-medium w-fit">
+            {describeFilter({ ...EMPTY_FILTER, ...partial }, products, categories)[0]}
+          </span>
+        ) : (
+          <span className="px-2.5 py-1 rounded-full bg-cyan-500/15 text-cyan-300 text-[11px] font-medium w-fit">Alvo novo (opcional)</span>
+        )}
+        {onRemoveGroup && (
+          <button type="button" onClick={() => onRemoveGroup(removeKeys)} className="text-son-silver-dim hover:text-red-400 flex-shrink-0" title="Remover este alvo">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
     )
     // Cada INPUT individual fica vermelho se o valor dele mudou desde a
     // última sincronização — não o bloco inteiro (ex: se só o "R$" mudou
@@ -716,10 +751,10 @@ export default function AdminCrm() {
     const ring = (field: keyof FilterState) => (staleFields?.has(field) ? ' !border-2 !border-red-500' : '')
     const groupBorder = 'border border-white/10 rounded-xl p-3 space-y-2'
     const blocks: React.ReactNode[] = []
-    if (segmentCriteria.minOrders) {
+    if (segmentCriteria.minOrders || value.minOrders) {
       blocks.push(
         <div key="minOrders" className={groupBorder}>
-          {gold({ minOrders: segmentCriteria.minOrders, minOrdersDays: segmentCriteria.minOrdersDays })}
+          {fieldHeader(!!segmentCriteria.minOrders, { minOrders: segmentCriteria.minOrders, minOrdersDays: segmentCriteria.minOrdersDays }, ['minOrders', 'minOrdersDays'])}
           <div className="flex items-center gap-2">
             <input className={`input-field w-24 ${NO_SPINNER}${ring('minOrders')}`} type="number" min="1" placeholder="N° Vezes" value={value.minOrders} onChange={(e) => onChange({ minOrders: e.target.value })} />
             <span className="text-son-silver-dim text-xs whitespace-nowrap">no período de</span>
@@ -729,10 +764,10 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.minItems) {
+    if (segmentCriteria.minItems || value.minItems) {
       blocks.push(
         <div key="minItems" className={groupBorder}>
-          {gold({ minItems: segmentCriteria.minItems, minItemsDays: segmentCriteria.minItemsDays })}
+          {fieldHeader(!!segmentCriteria.minItems, { minItems: segmentCriteria.minItems, minItemsDays: segmentCriteria.minItemsDays }, ['minItems', 'minItemsDays'])}
           <div className="flex items-center gap-2">
             <input className={`input-field w-24 ${NO_SPINNER}${ring('minItems')}`} type="number" min="1" placeholder="N° Produtos" value={value.minItems} onChange={(e) => onChange({ minItems: e.target.value })} />
             <span className="text-son-silver-dim text-xs whitespace-nowrap">no período de</span>
@@ -742,10 +777,10 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.spentBelowAmount) {
+    if (segmentCriteria.spentBelowAmount || value.spentBelowAmount) {
       blocks.push(
         <div key="spentBelow" className={groupBorder}>
-          {gold({ spentBelowAmount: segmentCriteria.spentBelowAmount, spentBelowDays: segmentCriteria.spentBelowDays })}
+          {fieldHeader(!!segmentCriteria.spentBelowAmount, { spentBelowAmount: segmentCriteria.spentBelowAmount, spentBelowDays: segmentCriteria.spentBelowDays }, ['spentBelowAmount', 'spentBelowDays'])}
           <div className="flex items-center gap-2">
             <span className="text-son-silver-dim text-xs">R$</span>
             <input className={`input-field w-24 ${NO_SPINNER}${ring('spentBelowAmount')}`} type="number" min="0" value={value.spentBelowAmount} onChange={(e) => onChange({ spentBelowAmount: e.target.value })} />
@@ -756,10 +791,10 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.spentAboveAmount) {
+    if (segmentCriteria.spentAboveAmount || value.spentAboveAmount) {
       blocks.push(
         <div key="spentAbove" className={groupBorder}>
-          {gold({ spentAboveAmount: segmentCriteria.spentAboveAmount, spentAboveDays: segmentCriteria.spentAboveDays })}
+          {fieldHeader(!!segmentCriteria.spentAboveAmount, { spentAboveAmount: segmentCriteria.spentAboveAmount, spentAboveDays: segmentCriteria.spentAboveDays }, ['spentAboveAmount', 'spentAboveDays'])}
           <div className="flex items-center gap-2">
             <span className="text-son-silver-dim text-xs">R$</span>
             <input className={`input-field w-24 ${NO_SPINNER}${ring('spentAboveAmount')}`} type="number" min="0" value={value.spentAboveAmount} onChange={(e) => onChange({ spentAboveAmount: e.target.value })} />
@@ -770,10 +805,10 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.frequencyDropPercent) {
+    if (segmentCriteria.frequencyDropPercent || value.frequencyDropPercent) {
       blocks.push(
         <div key="frequencyDrop" className={groupBorder}>
-          {gold({ frequencyDropPercent: segmentCriteria.frequencyDropPercent })}
+          {fieldHeader(!!segmentCriteria.frequencyDropPercent, { frequencyDropPercent: segmentCriteria.frequencyDropPercent }, ['frequencyDropPercent'])}
           <input
             className={`input-field w-24 ${NO_SPINNER}${ring('frequencyDropPercent')}`}
             type="number"
@@ -785,26 +820,26 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.newCustomerDays) {
+    if (segmentCriteria.newCustomerDays || value.newCustomerDays) {
       blocks.push(
         <div key="newCustomer" className={groupBorder}>
-          {gold({ newCustomerDays: segmentCriteria.newCustomerDays })}
+          {fieldHeader(!!segmentCriteria.newCustomerDays, { newCustomerDays: segmentCriteria.newCustomerDays }, ['newCustomerDays'])}
           <input className={`input-field w-24 ${NO_SPINNER}${ring('newCustomerDays')}`} type="number" min="1" value={value.newCustomerDays} onChange={(e) => onChange({ newCustomerDays: e.target.value })} />
         </div>
       )
     }
-    if (segmentCriteria.maxDistanceKm) {
+    if (segmentCriteria.maxDistanceKm || value.maxDistanceKm) {
       blocks.push(
         <div key="maxDistance" className={groupBorder}>
-          {gold({ maxDistanceKm: segmentCriteria.maxDistanceKm })}
+          {fieldHeader(!!segmentCriteria.maxDistanceKm, { maxDistanceKm: segmentCriteria.maxDistanceKm }, ['maxDistanceKm'])}
           <input className={`input-field w-24 ${NO_SPINNER}${ring('maxDistanceKm')}`} type="number" min="0" value={value.maxDistanceKm} onChange={(e) => onChange({ maxDistanceKm: e.target.value })} />
         </div>
       )
     }
-    if (segmentCriteria.neighborhoods.length > 0) {
+    if (segmentCriteria.neighborhoods.length > 0 || value.neighborhoods.length > 0) {
       blocks.push(
         <div key="neighborhoods" className={groupBorder}>
-          {gold({ neighborhoods: segmentCriteria.neighborhoods })}
+          {fieldHeader(segmentCriteria.neighborhoods.length > 0, { neighborhoods: segmentCriteria.neighborhoods }, ['neighborhoods'])}
           <select
             className={`input-field appearance-none cursor-pointer${ring('neighborhoods')}`}
             value=""
@@ -837,10 +872,10 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.birthdayMonth) {
+    if (segmentCriteria.birthdayMonth || value.birthdayMonth) {
       blocks.push(
         <div key="birthday" className={groupBorder}>
-          {gold({ birthdayMonth: segmentCriteria.birthdayMonth })}
+          {fieldHeader(!!segmentCriteria.birthdayMonth, { birthdayMonth: segmentCriteria.birthdayMonth }, ['birthdayMonth'])}
           <select
             className={`input-field appearance-none cursor-pointer${ring('birthdayMonth')}`}
             value={value.birthdayMonth}
@@ -856,15 +891,20 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.recurringProductIds.length > 0 || segmentCriteria.recurringCategoryIds.length > 0) {
+    const segmentHasRecurring = segmentCriteria.recurringProductIds.length > 0 || segmentCriteria.recurringCategoryIds.length > 0
+    if (segmentHasRecurring || value.recurringProductIds.length > 0 || value.recurringCategoryIds.length > 0) {
       const recurringSelectionChanged = staleFields?.has('recurringProductIds') || staleFields?.has('recurringCategoryIds')
       blocks.push(
         <div key="recurring" className={groupBorder}>
-          {gold({
-            recurringProductIds: segmentCriteria.recurringProductIds,
-            recurringCategoryIds: segmentCriteria.recurringCategoryIds,
-            recurringDays: segmentCriteria.recurringDays,
-          })}
+          {fieldHeader(
+            segmentHasRecurring,
+            {
+              recurringProductIds: segmentCriteria.recurringProductIds,
+              recurringCategoryIds: segmentCriteria.recurringCategoryIds,
+              recurringDays: segmentCriteria.recurringDays,
+            },
+            ['recurringProductIds', 'recurringCategoryIds', 'recurringDays']
+          )}
           <div className={recurringSelectionChanged ? 'rounded-xl !border-2 !border-red-500' : ''}>
             <ProductCategoryMultiSelect
               products={products}
@@ -888,6 +928,217 @@ export default function AdminCrm() {
     }
     return blocks
   }
+
+  // Formulário completo de filtro (todos os campos, sempre visíveis) —
+  // usado tanto pra segmentação quanto pro popup "Novos Alvos (Opcional)"
+  // de um gatilho de evento (aí opera numa cópia isolada, não no filtro
+  // do segmento).
+  const renderFilterFields = (value: FilterState, onChange: (patch: Partial<FilterState>) => void, errors: PairErrors) => (
+    <>
+      <div className="border border-white/10 rounded-xl p-3">
+        <label className="label">Volume de Compras no Período</label>
+        <div className="flex items-center gap-2">
+          <input
+            className={`input-field w-32 ${NO_SPINNER}`}
+            type="number"
+            min="1"
+            placeholder="N° Vezes"
+            value={value.minOrders}
+            onChange={(e) => onChange({ minOrders: e.target.value })}
+          />
+          <span className="text-son-silver-dim text-sm whitespace-nowrap">no período de</span>
+          <input
+            className={`input-field w-24 ${NO_SPINNER}`}
+            type="number"
+            min="1"
+            placeholder="Opcional"
+            value={value.minOrdersDays}
+            onChange={(e) => onChange({ minOrdersDays: e.target.value })}
+          />
+          <span className="text-son-silver-dim text-sm whitespace-nowrap">Dias</span>
+        </div>
+        {errors.minOrders && <p className="error-msg mt-1">{errors.minOrders}</p>}
+      </div>
+
+      <div className="border border-white/10 rounded-xl p-3">
+        <label className="label">Quantidade de Produtos no Período</label>
+        <div className="flex items-center gap-2">
+          <input
+            className={`input-field w-32 ${NO_SPINNER}`}
+            type="number"
+            min="1"
+            placeholder="N° Produtos"
+            value={value.minItems}
+            onChange={(e) => onChange({ minItems: e.target.value })}
+          />
+          <span className="text-son-silver-dim text-sm whitespace-nowrap">no período de</span>
+          <input
+            className={`input-field w-24 ${NO_SPINNER}`}
+            type="number"
+            min="1"
+            placeholder="Opcional"
+            value={value.minItemsDays}
+            onChange={(e) => onChange({ minItemsDays: e.target.value })}
+          />
+          <span className="text-son-silver-dim text-sm whitespace-nowrap">Dias</span>
+        </div>
+        {errors.minItems && <p className="error-msg mt-1">{errors.minItems}</p>}
+      </div>
+
+      <div className="border border-white/10 rounded-xl p-3">
+        <label className="label">Distância de no máximo (km)</label>
+        <input
+          className={`input-field w-28 ${NO_SPINNER}`}
+          type="number"
+          min="0"
+          placeholder="Opcional"
+          value={value.maxDistanceKm}
+          onChange={(e) => onChange({ maxDistanceKm: e.target.value })}
+        />
+      </div>
+
+      <div className="border border-white/10 rounded-xl p-3">
+        <label className="label">Gastou abaixo de</label>
+        <div className="flex items-center gap-2">
+          <span className="text-son-silver-dim text-sm">R$</span>
+          <input
+            className={`input-field w-32 ${NO_SPINNER}`}
+            type="number"
+            min="0"
+            value={value.spentBelowAmount}
+            onChange={(e) => onChange({ spentBelowAmount: e.target.value })}
+          />
+          <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
+          <input
+            className={`input-field w-24 ${NO_SPINNER}`}
+            type="number"
+            min="1"
+            placeholder="Opcional"
+            value={value.spentBelowDays}
+            onChange={(e) => onChange({ spentBelowDays: e.target.value })}
+          />
+          <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
+        </div>
+        {errors.spentBelow && <p className="error-msg mt-1">{errors.spentBelow}</p>}
+      </div>
+
+      <div className="border border-white/10 rounded-xl p-3">
+        <label className="label">Gastou acima de</label>
+        <div className="flex items-center gap-2">
+          <span className="text-son-silver-dim text-sm">R$</span>
+          <input
+            className={`input-field w-32 ${NO_SPINNER}`}
+            type="number"
+            min="0"
+            value={value.spentAboveAmount}
+            onChange={(e) => onChange({ spentAboveAmount: e.target.value })}
+          />
+          <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
+          <input
+            className={`input-field w-24 ${NO_SPINNER}`}
+            type="number"
+            min="1"
+            placeholder="Opcional"
+            value={value.spentAboveDays}
+            onChange={(e) => onChange({ spentAboveDays: e.target.value })}
+          />
+          <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
+        </div>
+        {errors.spentAbove && <p className="error-msg mt-1">{errors.spentAbove}</p>}
+      </div>
+
+      <div className="border border-white/10 rounded-xl p-3">
+        <label className="label">Reduziu a frequência de compra em (%)</label>
+        <input
+          className={`input-field w-24 ${NO_SPINNER}`}
+          type="number"
+          min="1"
+          max="100"
+          placeholder="Opcional"
+          value={value.frequencyDropPercent}
+          onChange={(e) => onChange({ frequencyDropPercent: e.target.value })}
+        />
+      </div>
+
+      <div className="border border-white/10 rounded-xl p-3">
+        <label className="label">Cliente novo em (dias)</label>
+        <input
+          className={`input-field w-28 ${NO_SPINNER}`}
+          type="number"
+          min="1"
+          placeholder="Opcional"
+          value={value.newCustomerDays}
+          onChange={(e) => onChange({ newCustomerDays: e.target.value })}
+        />
+      </div>
+
+      <div className="border border-white/10 rounded-xl p-3">
+        <label className="label">Clientes que aniversariam em</label>
+        <select className="input-field max-w-xs appearance-none cursor-pointer" value={value.birthdayMonth} onChange={(e) => onChange({ birthdayMonth: e.target.value })}>
+          <option value="">Qualquer mês</option>
+          {MONTH_NAMES.map((m, i) => (
+            <option key={m} value={i}>
+              {m}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="border border-white/10 rounded-xl p-3">
+        <label className="label">Bairro</label>
+        <select
+          className="input-field max-w-xs appearance-none cursor-pointer"
+          value=""
+          onChange={(e) => {
+            if (!e.target.value || value.neighborhoods.includes(e.target.value)) return
+            onChange({ neighborhoods: [...value.neighborhoods, e.target.value] })
+          }}
+        >
+          <option value="">Adicionar bairro...</option>
+          {neighborhoods
+            .filter((n) => !value.neighborhoods.includes(n))
+            .map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+        </select>
+        {value.neighborhoods.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {value.neighborhoods.map((n) => (
+              <span key={n} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-son-pink/15 text-son-pink text-xs font-medium">
+                {n}
+                <button type="button" onClick={() => onChange({ neighborhoods: value.neighborhoods.filter((x) => x !== n) })}>
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="border border-white/10 rounded-xl p-3">
+        <label className="label">Recorrência Média de Consumo</label>
+        <ProductCategoryMultiSelect
+          products={products}
+          categories={categories}
+          selectedProductIds={value.recurringProductIds}
+          selectedCategoryIds={value.recurringCategoryIds}
+          onChangeProducts={(recurringProductIds) => onChange({ recurringProductIds })}
+          onChangeCategories={(recurringCategoryIds) => onChange({ recurringCategoryIds })}
+        />
+        <input
+          className={`input-field mt-2 w-44 ${NO_SPINNER}`}
+          type="number"
+          min="1"
+          placeholder="N° Dias (Opcional)"
+          value={value.recurringDays}
+          onChange={(e) => onChange({ recurringDays: e.target.value })}
+        />
+        {errors.recurring && <p className="error-msg mt-1">{errors.recurring}</p>}
+      </div>
+    </>
+  )
 
   const switchCampanhaOrientation = (orientation: CampanhaOrientation) => {
     const segment = segments.find((s) => s.id === campanhaForm.segmentId)
@@ -999,9 +1250,13 @@ export default function AdminCrm() {
 
   // Não dá pra editar orientation/trigger_criteria/código de uma campanha
   // já criada (identidade fixa) — só mensagem, desconto e prazo.
-  const openEditCampanha = (cc: CrmCampanhaCoupon) => {
+  const openEditCampanha = (cc: CrmCampanhaCoupon, mode: 'gatilho' | 'cupom' = 'cupom') => {
     const coupon = coupons.find((c) => c.id === cc.coupon_id)
     setCampanhaEditError(null)
+    setCampanhaEditMode(mode)
+    setGatilhoExtraOpen(false)
+    setGatilhoExtraFilter(EMPTY_FILTER)
+    setGatilhoExtraError(null)
     const form: CampanhaForm = {
       ...EMPTY_CAMPANHA_FORM,
       orientation: cc.orientation,
@@ -1023,6 +1278,40 @@ export default function AdminCrm() {
     setCampanhaEditForm(form)
     setOriginalCampanhaEditForm(form)
     setEditingCampanhaId(cc.id)
+  }
+
+  // Mescla os campos preenchidos no formulário-cópia "Novos Alvos" dentro
+  // do critério do gatilho que já está sendo editado — não mexe no filtro
+  // do segmento, só no rascunho local (campanhaEditForm.triggerCriteria).
+  const addGatilhoExtraTargets = () => {
+    const errors = validatePairErrors(gatilhoExtraFilter)
+    if (Object.keys(errors).length > 0) {
+      setGatilhoExtraError(PAIR_ERROR_MESSAGE)
+      return
+    }
+    if (filterIsEmpty(gatilhoExtraFilter)) {
+      setGatilhoExtraError('Preencha pelo menos um campo pra adicionar como alvo.')
+      return
+    }
+    const merged: FilterState = { ...(campanhaEditForm.triggerCriteria ?? EMPTY_FILTER) }
+    for (const group of FIELD_GROUPS) {
+      if (!group.isFilled(gatilhoExtraFilter)) continue
+      for (const key of FIELD_GROUP_KEYS[group.key]) {
+        // Cópia dinâmica campo-a-campo entre dois FilterState — o TS não
+        // correlaciona union de chave genérica, daí o cast local.
+        ;(merged as Record<string, unknown>)[key] = gatilhoExtraFilter[key]
+      }
+    }
+    setCampanhaEditForm({ ...campanhaEditForm, triggerCriteria: merged })
+    setGatilhoExtraFilter(EMPTY_FILTER)
+    setGatilhoExtraError(null)
+    setGatilhoExtraOpen(false)
+  }
+
+  const removeGatilhoField = (keys: (keyof FilterState)[]) => {
+    const patch: Partial<FilterState> = {}
+    for (const key of keys) (patch as Record<string, unknown>)[key] = EMPTY_FILTER[key]
+    setCampanhaEditForm({ ...campanhaEditForm, triggerCriteria: { ...(campanhaEditForm.triggerCriteria ?? EMPTY_FILTER), ...patch } })
   }
 
   const campanhaEditMessageValid = campanhaEditForm.messageTemplate.includes('/nome') && campanhaEditForm.messageTemplate.includes('/cupom')
@@ -1389,215 +1678,7 @@ export default function AdminCrm() {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-          <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Volume de Compras no Período</label>
-            <div className="flex items-center gap-2">
-              <input
-                className={`input-field w-32 ${NO_SPINNER}`}
-                type="number"
-                min="1"
-                placeholder="N° Vezes"
-                value={filter.minOrders}
-                onChange={(e) => setFilter({ ...filter, minOrders: e.target.value })}
-              />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">no período de</span>
-              <input
-                className={`input-field w-24 ${NO_SPINNER}`}
-                type="number"
-                min="1"
-                placeholder="Opcional"
-                value={filter.minOrdersDays}
-                onChange={(e) => setFilter({ ...filter, minOrdersDays: e.target.value })}
-              />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">Dias</span>
-            </div>
-            {pairErrors.minOrders && <p className="error-msg mt-1">{pairErrors.minOrders}</p>}
-          </div>
-
-          <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Quantidade de Produtos no Período</label>
-            <div className="flex items-center gap-2">
-              <input
-                className={`input-field w-32 ${NO_SPINNER}`}
-                type="number"
-                min="1"
-                placeholder="N° Produtos"
-                value={filter.minItems}
-                onChange={(e) => setFilter({ ...filter, minItems: e.target.value })}
-              />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">no período de</span>
-              <input
-                className={`input-field w-24 ${NO_SPINNER}`}
-                type="number"
-                min="1"
-                placeholder="Opcional"
-                value={filter.minItemsDays}
-                onChange={(e) => setFilter({ ...filter, minItemsDays: e.target.value })}
-              />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">Dias</span>
-            </div>
-            {pairErrors.minItems && <p className="error-msg mt-1">{pairErrors.minItems}</p>}
-          </div>
-
-          <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Distância de no máximo (km)</label>
-            <input
-              className={`input-field w-28 ${NO_SPINNER}`}
-              type="number"
-              min="0"
-              placeholder="Opcional"
-              value={filter.maxDistanceKm}
-              onChange={(e) => setFilter({ ...filter, maxDistanceKm: e.target.value })}
-            />
-          </div>
-
-          <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Gastou abaixo de</label>
-            <div className="flex items-center gap-2">
-              <span className="text-son-silver-dim text-sm">R$</span>
-              <input
-                className={`input-field w-32 ${NO_SPINNER}`}
-                type="number"
-                min="0"
-                value={filter.spentBelowAmount}
-                onChange={(e) => setFilter({ ...filter, spentBelowAmount: e.target.value })}
-              />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
-              <input
-                className={`input-field w-24 ${NO_SPINNER}`}
-                type="number"
-                min="1"
-                placeholder="Opcional"
-                value={filter.spentBelowDays}
-                onChange={(e) => setFilter({ ...filter, spentBelowDays: e.target.value })}
-              />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
-            </div>
-            {pairErrors.spentBelow && <p className="error-msg mt-1">{pairErrors.spentBelow}</p>}
-          </div>
-
-          <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Gastou acima de</label>
-            <div className="flex items-center gap-2">
-              <span className="text-son-silver-dim text-sm">R$</span>
-              <input
-                className={`input-field w-32 ${NO_SPINNER}`}
-                type="number"
-                min="0"
-                value={filter.spentAboveAmount}
-                onChange={(e) => setFilter({ ...filter, spentAboveAmount: e.target.value })}
-              />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">em</span>
-              <input
-                className={`input-field w-24 ${NO_SPINNER}`}
-                type="number"
-                min="1"
-                placeholder="Opcional"
-                value={filter.spentAboveDays}
-                onChange={(e) => setFilter({ ...filter, spentAboveDays: e.target.value })}
-              />
-              <span className="text-son-silver-dim text-sm whitespace-nowrap">dias</span>
-            </div>
-            {pairErrors.spentAbove && <p className="error-msg mt-1">{pairErrors.spentAbove}</p>}
-          </div>
-
-          <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Reduziu a frequência de compra em (%)</label>
-            <input
-              className={`input-field w-24 ${NO_SPINNER}`}
-              type="number"
-              min="1"
-              max="100"
-              placeholder="Opcional"
-              value={filter.frequencyDropPercent}
-              onChange={(e) => setFilter({ ...filter, frequencyDropPercent: e.target.value })}
-            />
-          </div>
-
-          <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Cliente novo em (dias)</label>
-            <input
-              className={`input-field w-28 ${NO_SPINNER}`}
-              type="number"
-              min="1"
-              placeholder="Opcional"
-              value={filter.newCustomerDays}
-              onChange={(e) => setFilter({ ...filter, newCustomerDays: e.target.value })}
-            />
-          </div>
-
-          <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Clientes que aniversariam em</label>
-            <select
-              className="input-field max-w-xs appearance-none cursor-pointer"
-              value={filter.birthdayMonth}
-              onChange={(e) => setFilter({ ...filter, birthdayMonth: e.target.value })}
-            >
-              <option value="">Qualquer mês</option>
-              {MONTH_NAMES.map((m, i) => (
-                <option key={m} value={i}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Bairro</label>
-            <select
-              className="input-field max-w-xs appearance-none cursor-pointer"
-              value=""
-              onChange={(e) => {
-                if (!e.target.value || filter.neighborhoods.includes(e.target.value)) return
-                setFilter({ ...filter, neighborhoods: [...filter.neighborhoods, e.target.value] })
-              }}
-            >
-              <option value="">Adicionar bairro...</option>
-              {neighborhoods
-                .filter((n) => !filter.neighborhoods.includes(n))
-                .map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-            </select>
-            {filter.neighborhoods.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {filter.neighborhoods.map((n) => (
-                  <span key={n} className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-son-pink/15 text-son-pink text-xs font-medium">
-                    {n}
-                    <button
-                      type="button"
-                      onClick={() => setFilter({ ...filter, neighborhoods: filter.neighborhoods.filter((x) => x !== n) })}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="border border-white/10 rounded-xl p-3">
-            <label className="label">Recorrência Média de Consumo</label>
-            <ProductCategoryMultiSelect
-              products={products}
-              categories={categories}
-              selectedProductIds={filter.recurringProductIds}
-              selectedCategoryIds={filter.recurringCategoryIds}
-              onChangeProducts={(recurringProductIds) => setFilter({ ...filter, recurringProductIds })}
-              onChangeCategories={(recurringCategoryIds) => setFilter({ ...filter, recurringCategoryIds })}
-            />
-            <input
-              className={`input-field mt-2 w-44 ${NO_SPINNER}`}
-              type="number"
-              min="1"
-              placeholder="N° Dias (Opcional)"
-              value={filter.recurringDays}
-              onChange={(e) => setFilter({ ...filter, recurringDays: e.target.value })}
-            />
-            {pairErrors.recurring && <p className="error-msg mt-1">{pairErrors.recurring}</p>}
-          </div>
+          {renderFilterFields(filter, (patch) => setFilter({ ...filter, ...patch }), pairErrors)}
 
           {filterFormError && <p className="error-msg">{filterFormError}</p>}
           <div className="flex gap-2">
@@ -1785,12 +1866,25 @@ export default function AdminCrm() {
                       {campanhas.map((cc) => {
                         const cCoupon = coupons.find((c) => c.id === cc.coupon_id)
                         const stale = isCampanhaStale(cc, s)
-                      return (
-                        <div key={cc.id} className="flex items-center gap-2 flex-wrap">
-                          {/* subcard: orientada a segmento/evento */}
-                          <div
-                            title={stale ? 'Clique em "Editar" e atualize os campos dos eventos alvos desta campanha, pois você editou a segmentação original.' : undefined}
-                            className={`flex-shrink-0 w-56 rounded-xl px-3 py-2 ${
+                        // Cadeia estilo n8n: cada subcard é arrastável dentro de um
+                        // raio curto só pra reposicionar visualmente (não persiste,
+                        // não afeta nenhuma lógica) — o container tracejado ao redor
+                        // delimita que aqueles subcards pertencem a esta campanha.
+                        const dragProps = {
+                          drag: true,
+                          dragMomentum: false,
+                          dragElastic: 0.15,
+                          dragConstraints: { left: -50, right: 50, top: -30, bottom: 30 },
+                          whileDrag: { zIndex: 30, scale: 1.03 },
+                        } as const
+                        return (
+                        <div key={cc.id} className="relative rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* subcard: cadastro da campanha (só identificação, sem gatilho nem cupom) */}
+                          <motion.div
+                            {...dragProps}
+                            title={stale ? 'Clique em "Editar" no gatilho e atualize os campos alvo desta campanha, pois você editou a segmentação original.' : undefined}
+                            className={`flex-shrink-0 w-56 rounded-xl px-3 py-2 cursor-grab active:cursor-grabbing ${
                               stale
                                 ? 'border-2 border-red-500 bg-red-500/5 shadow-[0_0_10px_2px_rgba(239,68,68,0.5)]'
                                 : 'border border-purple-400/30 bg-purple-500/5'
@@ -1829,22 +1923,71 @@ export default function AdminCrm() {
                               )}
                               <button
                                 type="button"
-                                onClick={() => openEditCampanha(cc)}
+                                onClick={() => openEditCampanha(cc, 'cupom')}
                                 className="text-[10px] font-semibold text-son-silver-dim hover:text-white"
                               >
                                 Editar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCampanhaNovoChooser(cc)}
+                                className="text-[10px] font-semibold text-son-gold hover:text-white"
+                              >
+                                Novo
                               </button>
                               <button type="button" onClick={() => removeCampanha(cc)} className="text-son-silver-dim hover:text-son-pink">
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                          </div>
+                          </motion.div>
+
+                          {cc.orientation === 'evento' && (
+                            <>
+                              <div className="w-5 border-t-2 border-dashed border-cyan-400/40 flex-shrink-0" />
+                              {/* subcard: gatilho do evento — só o critério que dispara, decoupled do segmento */}
+                              <motion.div
+                                {...dragProps}
+                                title={stale ? 'O segmento mudou — edite este gatilho pra revisar ou confirmar os alvos.' : undefined}
+                                className={`flex-shrink-0 w-56 rounded-xl px-3 py-2 cursor-grab active:cursor-grabbing ${
+                                  stale
+                                    ? 'border-2 border-red-500 bg-red-500/5 shadow-[0_0_10px_2px_rgba(239,68,68,0.5)]'
+                                    : 'border border-cyan-400/30 bg-cyan-500/5'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Crosshair className="w-4 h-4 text-cyan-300 flex-shrink-0" />
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-white">Gatilho do evento</p>
+                                    <p className="text-[10px] text-son-silver-dim truncate">
+                                      {describeFilter(cc.trigger_criteria as unknown as FilterState, products, categories).join(' · ') || 'Sem critério'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 mt-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditCampanha(cc, 'gatilho')}
+                                    className="text-[10px] font-semibold text-son-silver-dim hover:text-white"
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openNewCampanhaExtraCoupon(cc)}
+                                    className="text-[10px] font-semibold text-son-gold hover:text-white"
+                                  >
+                                    + Novo cupom
+                                  </button>
+                                </div>
+                              </motion.div>
+                            </>
+                          )}
 
                           {cCoupon && (
                             <>
                               <div className="w-5 border-t-2 border-dashed border-purple-400/40 flex-shrink-0" />
                               {/* subcard: cupom exclusivo — mesmo desenho de bilhete do cupom avulso, só que pequeno e ligado */}
-                              <div className="flex-shrink-0 w-40 rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch">
+                              <motion.div {...dragProps} className="flex-shrink-0 w-40 rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch cursor-grab active:cursor-grabbing">
                                 <div className="min-w-0 flex-1 p-2.5">
                                   <p className="font-mono text-xs font-bold text-white truncate">{cCoupon.code}</p>
                                   <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
@@ -1859,14 +2002,14 @@ export default function AdminCrm() {
                                       `${cCoupon.product_discounts?.length ?? 0} prod.`}
                                   </span>
                                 </div>
-                              </div>
+                              </motion.div>
                             </>
                           )}
 
                           {cc.extra_coupons.map((ec) => (
                             <div key={ec.id} className="flex items-center gap-2">
                               <div className="w-5 border-t-2 border-dashed border-purple-400/40 flex-shrink-0" />
-                              <div className="flex-shrink-0 w-40 rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch">
+                              <motion.div {...dragProps} className="flex-shrink-0 w-40 rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch cursor-grab active:cursor-grabbing">
                                 <div className="min-w-0 flex-1 p-2.5">
                                   <p className="font-mono text-xs font-bold text-white truncate">{ec.coupon.code}</p>
                                   <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
@@ -1884,19 +2027,20 @@ export default function AdminCrm() {
                                     <Trash2 className="w-3 h-3" />
                                   </button>
                                 </div>
-                              </div>
+                              </motion.div>
                             </div>
                           ))}
 
                           <button
                             type="button"
-                            onClick={() => openNewCampanhaExtraCoupon(cc)}
+                            onClick={() => setCampanhaNovoChooser(cc)}
                             className="flex items-center gap-1 px-2.5 py-2 rounded-xl border border-dashed border-son-gold/40 text-son-gold text-[10px] font-semibold hover:bg-son-gold/10 flex-shrink-0"
                           >
-                            <Plus className="w-3 h-3" /> Novo Cupom
+                            <Plus className="w-3 h-3" /> Novo
                           </button>
 
                           <ToggleSwitch checked={!stale && cc.active} onClick={() => (stale ? setStaleDialogCampanha(cc) : toggleCampanhaActive(cc))} />
+                        </div>
                         </div>
                         )
                       })}
@@ -2020,86 +2164,150 @@ export default function AdminCrm() {
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-white flex items-center gap-2">
-                  {editingCampanhaRow.orientation === 'evento' ? (
+                  {campanhaEditMode === 'gatilho' ? (
+                    <Crosshair className="w-4 h-4 text-cyan-300" />
+                  ) : editingCampanhaRow.orientation === 'evento' ? (
                     <Zap className="w-4 h-4 text-amber-400" />
                   ) : (
                     <Gift className="w-4 h-4 text-purple-300" />
                   )}
-                  Editar campanha
+                  {campanhaEditMode === 'gatilho' ? 'Editar gatilho do evento' : 'Editar cupom'}
                 </h3>
                 <button type="button" onClick={() => setEditingCampanhaId(null)} className="text-son-silver-dim hover:text-white">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {editingCampanhaRow.orientation === 'evento' && editingCampanhaSegment && (() => {
-                const changedKeys = getChangedFields(
-                  (editingCampanhaRow.last_synced_segment_criteria as unknown as FilterState) ?? EMPTY_FILTER,
-                  editingCampanhaSegment.filter_criteria as unknown as FilterState
-                )
-                return (
-                  <div className="space-y-2 mb-4">
-                    <label className="label">
-                      Critério do evento{' '}
-                      {changedKeys.size > 0 && (
-                        <span className="text-red-400 font-normal">
-                          (o segmento mudou — ajuste ou confirme o(s) campo(s) destacado(s) em vermelho abaixo)
-                        </span>
-                      )}
-                    </label>
-                    {renderTriggerFields(
-                      editingCampanhaSegment.filter_criteria as unknown as FilterState,
-                      campanhaEditForm.triggerCriteria ?? EMPTY_FILTER,
-                      (patch) =>
-                        setCampanhaEditForm({ ...campanhaEditForm, triggerCriteria: { ...(campanhaEditForm.triggerCriteria ?? EMPTY_FILTER), ...patch } }),
-                      changedKeys
+              {campanhaEditMode === 'gatilho' ? (
+                <div className="space-y-3">
+                  {editingCampanhaSegment && (() => {
+                    const changedKeys = getChangedFields(
+                      (editingCampanhaRow.last_synced_segment_criteria as unknown as FilterState) ?? EMPTY_FILTER,
+                      editingCampanhaSegment.filter_criteria as unknown as FilterState
+                    )
+                    return (
+                      <div className="space-y-2">
+                        <label className="label">
+                          Alvos do gatilho{' '}
+                          {changedKeys.size > 0 && (
+                            <span className="text-red-400 font-normal">
+                              (o segmento mudou — ajuste ou confirme o(s) campo(s) destacado(s) em vermelho abaixo)
+                            </span>
+                          )}
+                        </label>
+                        {renderTriggerFields(
+                          editingCampanhaSegment.filter_criteria as unknown as FilterState,
+                          campanhaEditForm.triggerCriteria ?? EMPTY_FILTER,
+                          (patch) =>
+                            setCampanhaEditForm({ ...campanhaEditForm, triggerCriteria: { ...(campanhaEditForm.triggerCriteria ?? EMPTY_FILTER), ...patch } }),
+                          changedKeys,
+                          removeGatilhoField
+                        )}
+                      </div>
+                    )
+                  })()}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGatilhoExtraFilter(EMPTY_FILTER)
+                      setGatilhoExtraError(null)
+                      setGatilhoExtraOpen(true)
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-cyan-400/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/10 w-full justify-center"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Novos Alvos (Opcional)
+                  </button>
+                  {campanhaEditError && <p className="error-msg">{campanhaEditError}</p>}
+                  <button
+                    onClick={saveCampanhaEdit}
+                    disabled={savingCampanhaEdit || !campanhaEditMessageValid || !campanhaEditHasChanged}
+                    className="btn-primary w-full mt-2"
+                  >
+                    {savingCampanhaEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Salvar alterações
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="label">Mensagem pro cliente (WhatsApp)</label>
+                    <textarea
+                      className="input-field"
+                      rows={4}
+                      value={campanhaEditForm.messageTemplate}
+                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, messageTemplate: e.target.value })}
+                    />
+                    <p className="text-xs text-son-silver-dim mt-1">
+                      Precisa citar <code>/nome</code> e <code>/cupom</code>.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="label">Desconto no produto</label>
+                    <div className="grid grid-cols-2 gap-1.5 mb-2">
+                      {(
+                        [
+                          { value: 'flat', label: 'Valor total' },
+                          { value: 'produto', label: 'Produto/Categoria' },
+                        ] as const
+                      ).map(({ value, label }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setCampanhaEditForm({ ...campanhaEditForm, productMode: value })}
+                          className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
+                            campanhaEditForm.productMode === value
+                              ? 'bg-purple-500 text-white border-transparent'
+                              : 'bg-son-surface border-white/10 text-son-silver'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {campanhaEditForm.productMode === 'flat' && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <select
+                          className="input-field"
+                          value={campanhaEditForm.discount_type}
+                          onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, discount_type: e.target.value as DiscountType })}
+                        >
+                          <option value="percent">Percentual</option>
+                          <option value="fixed">Valor fixo (R$)</option>
+                        </select>
+                        <input
+                          className="input-field"
+                          type="number"
+                          min="0"
+                          placeholder="Valor"
+                          value={campanhaEditForm.discount_value}
+                          onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, discount_value: e.target.value })}
+                        />
+                      </div>
+                    )}
+                    {campanhaEditForm.productMode === 'produto' && (
+                      <ProductDiscountList
+                        products={products}
+                        categories={categories}
+                        discounts={campanhaEditForm.productDiscounts}
+                        onChange={(productDiscounts) => setCampanhaEditForm({ ...campanhaEditForm, productDiscounts })}
+                      />
                     )}
                   </div>
-                )
-              })()}
-
-              <div className="space-y-3">
-                <div>
-                  <label className="label">Mensagem pro cliente (WhatsApp)</label>
-                  <textarea
-                    className="input-field"
-                    rows={4}
-                    value={campanhaEditForm.messageTemplate}
-                    onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, messageTemplate: e.target.value })}
-                  />
-                  <p className="text-xs text-son-silver-dim mt-1">
-                    Precisa citar <code>/nome</code> e <code>/cupom</code>.
-                  </p>
-                </div>
-                <div>
-                  <label className="label">Desconto no produto</label>
-                  <div className="grid grid-cols-2 gap-1.5 mb-2">
-                    {(
-                      [
-                        { value: 'flat', label: 'Valor total' },
-                        { value: 'produto', label: 'Produto/Categoria' },
-                      ] as const
-                    ).map(({ value, label }) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setCampanhaEditForm({ ...campanhaEditForm, productMode: value })}
-                        className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
-                          campanhaEditForm.productMode === value
-                            ? 'bg-purple-500 text-white border-transparent'
-                            : 'bg-son-surface border-white/10 text-son-silver'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  {campanhaEditForm.productMode === 'flat' && (
+                  <label className="flex items-center gap-2 text-sm text-son-silver">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-purple-400"
+                      checked={campanhaEditForm.shippingEnabled}
+                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, shippingEnabled: e.target.checked })}
+                    />
+                    Também dar desconto no frete
+                  </label>
+                  {campanhaEditForm.shippingEnabled && (
                     <div className="grid grid-cols-2 gap-2">
                       <select
                         className="input-field"
-                        value={campanhaEditForm.discount_type}
-                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, discount_type: e.target.value as DiscountType })}
+                        value={campanhaEditForm.shipping_discount_type}
+                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, shipping_discount_type: e.target.value as DiscountType })}
                       >
                         <option value="percent">Percentual</option>
                         <option value="fixed">Valor fixo (R$)</option>
@@ -2109,83 +2317,138 @@ export default function AdminCrm() {
                         type="number"
                         min="0"
                         placeholder="Valor"
-                        value={campanhaEditForm.discount_value}
-                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, discount_value: e.target.value })}
+                        value={campanhaEditForm.shipping_discount_value}
+                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, shipping_discount_value: e.target.value })}
                       />
                     </div>
                   )}
-                  {campanhaEditForm.productMode === 'produto' && (
-                    <ProductDiscountList
-                      products={products}
-                      categories={categories}
-                      discounts={campanhaEditForm.productDiscounts}
-                      onChange={(productDiscounts) => setCampanhaEditForm({ ...campanhaEditForm, productDiscounts })}
-                    />
-                  )}
-                </div>
-                <label className="flex items-center gap-2 text-sm text-son-silver">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 accent-purple-400"
-                    checked={campanhaEditForm.shippingEnabled}
-                    onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, shippingEnabled: e.target.checked })}
-                  />
-                  Também dar desconto no frete
-                </label>
-                {campanhaEditForm.shippingEnabled && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      className="input-field"
-                      value={campanhaEditForm.shipping_discount_type}
-                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, shipping_discount_type: e.target.value as DiscountType })}
-                    >
-                      <option value="percent">Percentual</option>
-                      <option value="fixed">Valor fixo (R$)</option>
-                    </select>
-                    <input
-                      className="input-field"
-                      type="number"
-                      min="0"
-                      placeholder="Valor"
-                      value={campanhaEditForm.shipping_discount_value}
-                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, shipping_discount_value: e.target.value })}
-                    />
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="label">Usos por cliente</label>
-                    <input
-                      className="input-field"
-                      type="number"
-                      min="1"
-                      value={campanhaEditForm.uses_per_customer}
-                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, uses_per_customer: e.target.value })}
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Usos por cliente</label>
+                      <input
+                        className="input-field"
+                        type="number"
+                        min="1"
+                        value={campanhaEditForm.uses_per_customer}
+                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, uses_per_customer: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Limite global (opcional)</label>
+                      <input
+                        className="input-field"
+                        type="number"
+                        min="1"
+                        value={campanhaEditForm.max_uses}
+                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, max_uses: e.target.value })}
+                      />
+                    </div>
                   </div>
                   <div>
-                    <label className="label">Limite global (opcional)</label>
-                    <input
-                      className="input-field"
-                      type="number"
-                      min="1"
-                      value={campanhaEditForm.max_uses}
-                      onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, max_uses: e.target.value })}
-                    />
+                    <label className="label">Validade (opcional)</label>
+                    <ExpiryInput value={campanhaEditForm.expires_at} onChange={(expires_at) => setCampanhaEditForm({ ...campanhaEditForm, expires_at })} />
                   </div>
+                  {campanhaEditError && <p className="error-msg">{campanhaEditError}</p>}
+                  <button
+                    onClick={saveCampanhaEdit}
+                    disabled={savingCampanhaEdit || !campanhaEditMessageValid || !campanhaEditHasChanged}
+                    className="btn-primary w-full mt-2"
+                  >
+                    {savingCampanhaEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Salvar alterações
+                  </button>
                 </div>
-                <div>
-                  <label className="label">Validade (opcional)</label>
-                  <ExpiryInput value={campanhaEditForm.expires_at} onChange={(expires_at) => setCampanhaEditForm({ ...campanhaEditForm, expires_at })} />
-                </div>
-                {campanhaEditError && <p className="error-msg">{campanhaEditError}</p>}
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {editingCampanhaId && editingCampanhaRow && campanhaEditMode === 'gatilho' && gatilhoExtraOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-start justify-center p-4 overflow-y-auto"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="glass rounded-2xl p-5 max-w-lg w-full my-8 space-y-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                  <Crosshair className="w-4 h-4 text-cyan-300" /> Novos Alvos (Opcional)
+                </h3>
+                <button type="button" onClick={() => setGatilhoExtraOpen(false)} className="text-son-silver-dim hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-xs text-son-silver-dim">
+                Adiciona campo(s) ao gatilho deste evento — não altera o filtro salvo da segmentação, só o critério desta campanha.
+              </p>
+              {renderFilterFields(gatilhoExtraFilter, (patch) => setGatilhoExtraFilter({ ...gatilhoExtraFilter, ...patch }), {})}
+              {gatilhoExtraError && <p className="error-msg">{gatilhoExtraError}</p>}
+              <button onClick={addGatilhoExtraTargets} className="btn-primary w-full">
+                Adicionar alvos
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {campanhaNovoChooser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="glass rounded-2xl p-6 max-w-sm w-full my-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-white">Novo</h3>
+                <button type="button" onClick={() => setCampanhaNovoChooser(null)} className="text-son-silver-dim hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="space-y-2">
                 <button
-                  onClick={saveCampanhaEdit}
-                  disabled={savingCampanhaEdit || !campanhaEditMessageValid || !campanhaEditHasChanged}
-                  className="btn-primary w-full mt-2"
+                  type="button"
+                  onClick={() => {
+                    const cc = campanhaNovoChooser
+                    setCampanhaNovoChooser(null)
+                    if (cc) openEditCampanha(cc, 'gatilho')
+                  }}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border border-cyan-400/30 bg-cyan-500/5 text-left hover:bg-cyan-500/10"
                 >
-                  {savingCampanhaEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  Salvar alterações
+                  <Crosshair className="w-4 h-4 text-cyan-300 flex-shrink-0" />
+                  <span className="text-sm font-semibold text-white">Gatilho de evento alvo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cc = campanhaNovoChooser
+                    setCampanhaNovoChooser(null)
+                    if (cc) openNewCampanhaExtraCoupon(cc)
+                  }}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border border-purple-400/30 bg-purple-500/5 text-left hover:bg-purple-500/10"
+                >
+                  <Gift className="w-4 h-4 text-purple-300 flex-shrink-0" />
+                  <span className="text-sm font-semibold text-white">Cupom exclusivo</span>
                 </button>
               </div>
             </motion.div>
