@@ -33,8 +33,9 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!supabaseUrl || !serviceKey) {
+  if (!supabaseUrl || !anonKey || !serviceKey) {
     return json({ error: 'Supabase não configurado no servidor (faltam envs na Vercel).' }, 500)
   }
 
@@ -45,16 +46,19 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   // Valida a sessão de admin via RPC — sem isso qualquer um poderia usar
-  // essa rota pra escrever no bucket com a service_role key. Content-Profile
-  // é OBRIGATÓRIO aqui: sem ele o PostgREST procura a função no schema
-  // "public" (padrão) em vez de "sunset", onde ela realmente mora — o
-  // supabase-js do frontend faz isso sozinho via `db.schema`, mas fetch()
-  // cru não, então precisa declarar na mão.
+  // essa rota pra escrever no bucket com a service_role key. Usa a ANON
+  // key aqui (não a service_role): admin_ping já é SECURITY DEFINER e já é
+  // GRANT'd pra anon, e o service_role nunca recebeu GRANT USAGE no schema
+  // "sunset" neste projeto (só anon/authenticated) — usar a service_role
+  // key só dava "permission denied for schema sunset" (42501), sem
+  // relação nenhuma com a sessão em si. Content-Profile é OBRIGATÓRIO:
+  // sem ele o PostgREST procura a função em "public" (padrão), não em
+  // "sunset" — supabase-js faz isso sozinho via `db.schema`, fetch() cru não.
   const pingRes = await fetch(`${supabaseUrl}/rest/v1/rpc/admin_ping`, {
     method: 'POST',
     headers: {
-      apikey: serviceKey,
-      Authorization: `Bearer ${serviceKey}`,
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
       'Content-Type': 'application/json',
       'Content-Profile': 'sunset',
     },
