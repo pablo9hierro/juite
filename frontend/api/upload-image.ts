@@ -61,15 +61,20 @@ export default async function handler(req: Request): Promise<Response> {
     body: JSON.stringify({ p_token: token }),
   })
   if (!pingRes.ok) {
-    // 404/PGRST202 = a função sunset.admin_ping ainda não existe no banco
-    // (falta rodar supabase/sunset_admin_ping.sql) — bem diferente de "sessão
-    // expirada", então não confunde as duas coisas no diagnóstico.
     const body = await pingRes.text().catch(() => '')
-    const message =
-      pingRes.status === 404 || body.includes('PGRST202') || body.includes('function sunset.admin_ping')
-        ? 'RPC sunset.admin_ping não existe no Supabase ainda — rode supabase/sunset_admin_ping.sql no SQL Editor.'
-        : 'Sessão de admin inválida ou expirada — faça login novamente.'
-    return json({ error: message }, 401)
+    // 404/PGRST202 = a função sunset.admin_ping ainda não existe no banco
+    // (falta rodar supabase/sunset_admin_ping.sql).
+    if (pingRes.status === 404 || body.includes('PGRST202') || body.includes('function sunset.admin_ping')) {
+      return json({ error: 'RPC sunset.admin_ping não existe no Supabase ainda — rode supabase/sunset_admin_ping.sql no SQL Editor.' }, 401)
+    }
+    // P0001 + "unauthorized" = _require_admin rejeitou o token de verdade
+    // (sessão expirada/inválida). Qualquer OUTRA coisa (apikey errada,
+    // RLS, erro de rede etc.) não devia virar essa mensagem — mostra o
+    // corpo cru pra dar pra diagnosticar de verdade em vez de adivinhar.
+    if (body.includes('"unauthorized"')) {
+      return json({ error: 'Sessão de admin inválida ou expirada — faça login novamente.' }, 401)
+    }
+    return json({ error: `Falha ao validar sessão (HTTP ${pingRes.status}): ${body.slice(0, 300) || 'sem corpo'}` }, 401)
   }
 
   const contentType = req.headers.get('content-type') ?? 'application/octet-stream'
