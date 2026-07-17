@@ -45,13 +45,18 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   // Valida a sessão de admin via RPC — sem isso qualquer um poderia usar
-  // essa rota pra escrever no bucket com a service_role key.
+  // essa rota pra escrever no bucket com a service_role key. Content-Profile
+  // é OBRIGATÓRIO aqui: sem ele o PostgREST procura a função no schema
+  // "public" (padrão) em vez de "sunset", onde ela realmente mora — o
+  // supabase-js do frontend faz isso sozinho via `db.schema`, mas fetch()
+  // cru não, então precisa declarar na mão.
   const pingRes = await fetch(`${supabaseUrl}/rest/v1/rpc/admin_ping`, {
     method: 'POST',
     headers: {
       apikey: serviceKey,
       Authorization: `Bearer ${serviceKey}`,
       'Content-Type': 'application/json',
+      'Content-Profile': 'sunset',
     },
     body: JSON.stringify({ p_token: token }),
   })
