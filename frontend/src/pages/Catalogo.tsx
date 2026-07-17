@@ -71,6 +71,14 @@ export default function Catalogo() {
     return map
   }, [promos])
 
+  // Categorias que têm pelo menos um produto em promoção — ganham o ícone
+  // de fogo na própria aba, além da aba "Promoção" dedicada.
+  const categoriesWithPromo = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of products) if (p.category_id && promoByProduct.has(p.id)) set.add(p.category_id)
+    return set
+  }, [products, promoByProduct])
+
   const isPromo = categoryFilter === 'promo'
 
   const filtered = useMemo(() => {
@@ -322,6 +330,7 @@ export default function Catalogo() {
                 categoryFilter === c.id ? 'sunset-bg text-white' : 'bg-son-surface border border-white/5 text-son-silver hover:bg-son-surface-light'
               }`}
             >
+              {categoriesWithPromo.has(c.id) && '🔥 '}
               {c.name}
             </button>
           ))}

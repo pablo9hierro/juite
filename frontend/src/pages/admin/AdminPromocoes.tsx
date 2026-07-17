@@ -2,24 +2,21 @@ import { useEffect, useRef, useState } from 'react'
 import { ImagePlus, Loader2, Megaphone, Plus, Trash2, X } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import ExpiryInput from '../../components/admin/ExpiryInput'
-import ProductMultiSelect from '../../components/admin/ProductMultiSelect'
 import ProductDiscountList from '../../components/admin/ProductDiscountList'
 import ToggleSwitch from '../../components/admin/ToggleSwitch'
 import { api, ApiError } from '../../lib/api'
-import type { DiscountType, Product, ProductDiscount, Promotion, PromotionType } from '../../lib/types'
+import type { Category, Product, ProductDiscount, Promotion } from '../../lib/types'
 
 const MAX_BANNER_MB = 10
 
+// Promoção "kit" (pacote fechado, desconto único sobre o total) saiu do
+// fluxo de criação — toda promoção nova é "selfie service" (desconto por
+// produto). Quem quiser um kit hoje cadastra o kit como PRODUTO próprio
+// (categoria "Kit") e escolhe esse produto aqui, com o desconto dele.
 type PromotionForm = {
   title: string
   image_url: string
-  product_ids: string[]
-  promotion_type: PromotionType
-  discount_type: DiscountType | ''
-  discount_value: string
   productDiscounts: ProductDiscount[]
-  shipping_discount_type: DiscountType | ''
-  shipping_discount_value: string
   active: boolean
   starts_at: string
   expires_at: string
@@ -27,26 +24,15 @@ type PromotionForm = {
 const EMPTY_PROMOTION_FORM: PromotionForm = {
   title: '',
   image_url: '',
-  product_ids: [],
-  promotion_type: 'kit',
-  discount_type: '',
-  discount_value: '',
   productDiscounts: [],
-  shipping_discount_type: '',
-  shipping_discount_value: '',
   active: true,
   starts_at: '',
   expires_at: '',
 }
 
-function discountLabel(discountType: DiscountType | null, value: number | null) {
+function discountLabel(discountType: 'percent' | 'fixed' | null | undefined, value: number | null | undefined) {
   if (!discountType || value == null) return null
   return discountType === 'percent' ? `${value}% off` : `R$ ${value.toFixed(2).replace('.', ',')} off`
-}
-
-const PROMOTION_TYPE_LABEL: Record<PromotionType, string> = {
-  kit: 'Kit (pacote fechado)',
-  selfie_service: 'Selfie service (cliente monta o carrinho)',
 }
 
 // Imagem inicial do carrossel da landing: sempre obrigatória, sempre a
@@ -124,10 +110,10 @@ function HeroImageCard() {
 
 export default function AdminPromocoes() {
   const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
 
   const [promotions, setPromotions] = useState<Promotion[]>([])
   const [promotionsLoading, setPromotionsLoading] = useState(true)
-  const [promotionChooserOpen, setPromotionChooserOpen] = useState(false)
   const [showPromotionForm, setShowPromotionForm] = useState(false)
   const [promotionForm, setPromotionForm] = useState<PromotionForm>(EMPTY_PROMOTION_FORM)
   const [editingPromotionId, setEditingPromotionId] = useState<string | null>(null)
@@ -142,6 +128,7 @@ export default function AdminPromocoes() {
   }
   useEffect(() => {
     api.admin.products.list().then(setProducts)
+    api.admin.categories.list().then(setCategories)
     loadPromotions()
   }, [])
 
@@ -165,16 +152,9 @@ export default function AdminPromocoes() {
     }
   }
 
-  // Escolher o tipo é o PRIMEIRO passo, num toggle separado — só depois
-  // disso abre o formulário de verdade, já dedicado àquele tipo (sem tabs
-  // pra trocar depois, evita o formulário misturar campo de um tipo com
-  // estado deixado do outro).
-  const openPromotionChooser = () => setPromotionChooserOpen(true)
-
-  const startNewPromotion = (type: PromotionType) => {
-    setPromotionChooserOpen(false)
+  const openNewPromotion = () => {
     setEditingPromotionId(null)
-    setPromotionForm({ ...EMPTY_PROMOTION_FORM, promotion_type: type })
+    setPromotionForm(EMPTY_PROMOTION_FORM)
     setPromotionError(null)
     setShowPromotionForm(true)
   }
@@ -184,13 +164,7 @@ export default function AdminPromocoes() {
     setPromotionForm({
       title: p.title,
       image_url: p.image_url,
-      product_ids: p.product_ids,
-      promotion_type: p.promotion_type,
-      discount_type: p.discount_type ?? '',
-      discount_value: p.discount_value != null ? String(p.discount_value) : '',
       productDiscounts: p.product_discounts ?? [],
-      shipping_discount_type: p.shipping_discount_type ?? '',
-      shipping_discount_value: p.shipping_discount_value != null ? String(p.shipping_discount_value) : '',
       active: p.active ?? true,
       starts_at: p.starts_at ?? '',
       expires_at: p.expires_at ?? '',
@@ -201,8 +175,12 @@ export default function AdminPromocoes() {
 
   const savePromotion = async () => {
     setPromotionError(null)
-    if (promotionForm.promotion_type === 'selfie_service' && promotionForm.productDiscounts.length === 0) {
+    if (promotionForm.productDiscounts.length === 0) {
       setPromotionError('Busque e adicione ao menos um produto com desconto.')
+      return
+    }
+    if (promotionForm.productDiscounts.some((d) => !d.discount_value || d.discount_value <= 0)) {
+      setPromotionError('Todo produto selecionado precisa de um desconto (em R$ ou %), nem que seja mínimo.')
       return
     }
     setSavingPromotion(true)
@@ -210,14 +188,9 @@ export default function AdminPromocoes() {
       const payload = {
         title: promotionForm.title,
         image_url: promotionForm.image_url,
-        product_ids: promotionForm.product_ids,
-        promotion_type: promotionForm.promotion_type,
-        discount_type: promotionForm.promotion_type === 'kit' ? promotionForm.discount_type || undefined : undefined,
-        discount_value:
-          promotionForm.promotion_type === 'kit' && promotionForm.discount_value ? Number(promotionForm.discount_value) : undefined,
-        product_discounts: promotionForm.promotion_type === 'selfie_service' ? promotionForm.productDiscounts : undefined,
-        shipping_discount_type: promotionForm.shipping_discount_type || undefined,
-        shipping_discount_value: promotionForm.shipping_discount_value ? Number(promotionForm.shipping_discount_value) : undefined,
+        product_ids: promotionForm.productDiscounts.map((d) => d.product_id),
+        promotion_type: 'selfie_service' as const,
+        product_discounts: promotionForm.productDiscounts,
         starts_at: promotionForm.starts_at || undefined,
         expires_at: promotionForm.expires_at || undefined,
       }
@@ -267,7 +240,7 @@ export default function AdminPromocoes() {
 
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-black">Promoções</h1>
-        <button onClick={openPromotionChooser} className="btn-primary text-sm py-2 px-4">
+        <button onClick={openNewPromotion} className="btn-primary text-sm py-2 px-4">
           <Plus className="w-4 h-4" /> Nova promoção
         </button>
       </div>
@@ -279,7 +252,7 @@ export default function AdminPromocoes() {
         <div className="text-center py-16 text-son-silver-dim">
           <Megaphone className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p>Nenhuma promoção cadastrada.</p>
-          <p className="text-xs mt-1">Toda promoção precisa de imagem + desconto (produto e/ou frete).</p>
+          <p className="text-xs mt-1">Toda promoção precisa de imagem + ao menos um produto com desconto.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -329,42 +302,6 @@ export default function AdminPromocoes() {
               </div>
             </Card>
           ))}
-        </div>
-      )}
-
-      {promotionChooserOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="glass rounded-2xl p-5 max-w-sm w-full space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white text-lg">Nova promoção</h3>
-              <button onClick={() => setPromotionChooserOpen(false)} className="text-son-silver-dim hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-xs text-son-silver-dim">Qual tipo de promoção você quer criar?</p>
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => startNewPromotion('kit')}
-                className="w-full text-left px-4 py-3 rounded-xl border border-dashed border-son-gold/40 text-son-gold text-sm font-semibold hover:bg-son-gold/10"
-              >
-                Kit (pacote fechado)
-                <span className="block text-xs font-normal text-son-silver-dim mt-0.5">
-                  Cliente leva todos os itens juntos ou não compra nada — desconto único sobre o total.
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => startNewPromotion('selfie_service')}
-                className="w-full text-left px-4 py-3 rounded-xl border border-dashed border-son-pink/40 text-son-pink text-sm font-semibold hover:bg-son-pink/10"
-              >
-                Selfie service (cliente monta o carrinho)
-                <span className="block text-xs font-normal text-son-silver-dim mt-0.5">
-                  Cliente escolhe entre os produtos da promoção — cada um com seu próprio desconto.
-                </span>
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -428,92 +365,18 @@ export default function AdminPromocoes() {
                 {promotionError && <p className="error-msg mt-1">{promotionError}</p>}
               </div>
               <div>
-                <label className="label">Tipo de promoção</label>
-                <div
-                  className={`py-2.5 px-3 rounded-xl border text-xs font-medium ${
-                    promotionForm.promotion_type === 'kit'
-                      ? 'border-son-gold/40 text-son-gold bg-son-gold/10'
-                      : 'border-son-pink/40 text-son-pink bg-son-pink/10'
-                  }`}
-                >
-                  {PROMOTION_TYPE_LABEL[promotionForm.promotion_type]}
-                </div>
-                <p className="text-xs text-son-silver-dim mt-1.5">
-                  {promotionForm.promotion_type === 'kit'
-                    ? 'O cliente só pode comprar o pacote inteiro (todos os produtos da promoção) ou não comprar nada — desconto único sobre o valor total.'
-                    : 'O cliente monta o próprio carrinho em /banner escolhendo entre os produtos da promoção — cada produto tem seu próprio desconto.'}
+                <label className="label">Produtos da promoção (cada um com seu desconto)</label>
+                <p className="text-xs text-son-silver-dim mb-1.5">
+                  O cliente escolhe entre esses produtos em /banner — cada um com seu próprio desconto, todo produto precisa de
+                  algum desconto (nem que seja mínimo). Quer um "kit" fechado? Cadastre-o como um produto próprio (categoria
+                  "Kit") em Produtos, e selecione esse produto aqui.
                 </p>
-              </div>
-              <div>
-                <label className="label">Produtos da promoção</label>
-                <ProductMultiSelect
+                <ProductDiscountList
                   products={products}
-                  selectedIds={promotionForm.product_ids}
-                  onChange={(product_ids) => setPromotionForm({ ...promotionForm, product_ids })}
+                  categories={categories}
+                  discounts={promotionForm.productDiscounts}
+                  onChange={(productDiscounts) => setPromotionForm({ ...promotionForm, productDiscounts })}
                 />
-              </div>
-              {promotionForm.promotion_type === 'selfie_service' ? (
-                <div>
-                  <label className="label">Desconto no produto (cada item tem o seu)</label>
-                  <ProductDiscountList
-                    products={products.filter((p) => promotionForm.product_ids.includes(p.id))}
-                    discounts={promotionForm.productDiscounts}
-                    onChange={(productDiscounts) => setPromotionForm({ ...promotionForm, productDiscounts })}
-                  />
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="label">Desconto no valor total</label>
-                    <select
-                      className="input-field"
-                      value={promotionForm.discount_type}
-                      onChange={(e) => setPromotionForm({ ...promotionForm, discount_type: e.target.value as DiscountType | '' })}
-                    >
-                      <option value="">Sem desconto de produto</option>
-                      <option value="percent">Percentual</option>
-                      <option value="fixed">Valor fixo (R$)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">Valor</label>
-                    <input
-                      className="input-field"
-                      type="number"
-                      min="0"
-                      disabled={!promotionForm.discount_type}
-                      value={promotionForm.discount_value}
-                      onChange={(e) => setPromotionForm({ ...promotionForm, discount_value: e.target.value })}
-                    />
-                  </div>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="label">Desconto no frete</label>
-                  <select
-                    className="input-field"
-                    value={promotionForm.shipping_discount_type}
-                    onChange={(e) =>
-                      setPromotionForm({ ...promotionForm, shipping_discount_type: e.target.value as DiscountType | '' })
-                    }
-                  >
-                    <option value="">Sem desconto de frete</option>
-                    <option value="percent">Percentual</option>
-                    <option value="fixed">Valor fixo (R$)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Valor</label>
-                  <input
-                    className="input-field"
-                    type="number"
-                    min="0"
-                    disabled={!promotionForm.shipping_discount_type}
-                    value={promotionForm.shipping_discount_value}
-                    onChange={(e) => setPromotionForm({ ...promotionForm, shipping_discount_value: e.target.value })}
-                  />
-                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
