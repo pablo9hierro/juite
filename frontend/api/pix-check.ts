@@ -32,12 +32,13 @@ export default async function handler(req: Request): Promise<Response> {
   }
   if (!orderId) return json({ error: 'order_id é obrigatório' }, 400)
 
-  let order: OrderData
+  let order: OrderData | null
   try {
-    order = await callRpc<OrderData>(supabaseUrl, anonKey, 'get_order', { p_order_id: orderId })
+    order = await callRpc<OrderData | null>(supabaseUrl, anonKey, 'get_order', { p_order_id: orderId })
   } catch {
     return json({ error: 'Pedido não encontrado.' }, 404)
   }
+  if (!order) return json({ error: 'Pedido não encontrado.' }, 404)
 
   // Nada a checar: não é pix, já está pago, cobrança ainda não criada, ou
   // modo mock (sem chave — pagamento mock só confirma via botão "simular").

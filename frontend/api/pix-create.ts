@@ -43,12 +43,15 @@ export default async function handler(req: Request): Promise<Response> {
   }
   if (!orderId) return json({ error: 'order_id é obrigatório' }, 400)
 
-  let order: OrderData
+  let order: OrderData | null
   try {
-    order = await callRpc<OrderData>(supabaseUrl, anonKey, 'get_order', { p_order_id: orderId })
+    order = await callRpc<OrderData | null>(supabaseUrl, anonKey, 'get_order', { p_order_id: orderId })
   } catch {
     return json({ error: 'Pedido não encontrado.' }, 404)
   }
+  // get_order devolve sucesso com corpo `null` (não um erro) quando o id
+  // não bate com nenhum pedido — não é uma exceção pra pegar no catch acima.
+  if (!order) return json({ error: 'Pedido não encontrado.' }, 404)
   if (order.payment_method !== 'pix') {
     return json({ error: 'Pedido não é pagamento via Pix.' }, 400)
   }
