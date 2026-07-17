@@ -389,11 +389,15 @@ export interface ShippingSettings {
   max_km: number | null
 }
 
+export interface StoreHourInterval {
+  opens_at: string // 'HH:MM', formato 24h (0-24)
+  closes_at: string
+}
+
 export interface StoreHourDay {
   day_of_week: number // 0=domingo .. 6=sábado
   is_open: boolean
-  opens_at: string | null // 'HH:MM'
-  closes_at: string | null
+  intervals: StoreHourInterval[]
 }
 
 export interface StoreStatus {

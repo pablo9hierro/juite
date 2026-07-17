@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, Cake, Crosshair, Gift, Layers, Loader2, Plus, Search, Sparkles, Tag, Trash2, Users, X, Zap } from 'lucide-react'
+import { AlertTriangle, Ban, Cake, Crosshair, Gift, Layers, Loader2, Plus, Search, Sparkles, Tag, Trash2, Users, X, Zap } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import WhatsAppLink from '../../components/ui/WhatsAppLink'
 import ExpiryInput from '../../components/admin/ExpiryInput'
@@ -321,7 +321,7 @@ function isCampanhaStale(cc: CrmCampanhaCoupon, segment: CrmSegment | undefined)
 // Regra da cadeia: gatilho só pode ser sucedido de cupom; cupom pode ser
 // sucedido de cupom ou gatilho; campanha evento sem gatilho ainda só libera
 // "novo gatilho" (precisa existir antes de qualquer cupom depender dele).
-function getCampanhaNovoOptions(cc: CrmCampanhaCoupon): { cupomEnabled: boolean; gatilhoEnabled: boolean } {
+function getCampanhaNovoOptions(cc: CrmCampanhaCoupon): { cupomEnabled: boolean; gatilhoEnabled: boolean; gatilhoFimEnabled: boolean } {
   const lastNodeType: 'campanha' | 'gatilho' | 'cupom' =
     cc.coupon_id || cc.extra_coupons.length > 0
       ? 'cupom'
@@ -331,6 +331,9 @@ function getCampanhaNovoOptions(cc: CrmCampanhaCoupon): { cupomEnabled: boolean;
   return {
     cupomEnabled: !(cc.orientation === 'evento' && lastNodeType === 'campanha'),
     gatilhoEnabled: cc.orientation === 'evento' && lastNodeType !== 'gatilho',
+    // Gatilho de encerramento é independente da posição na cadeia — só
+    // não pode ter dois (edita o existente em vez de criar outro).
+    gatilhoFimEnabled: cc.orientation === 'evento' && !cc.end_criteria,
   }
 }
 
@@ -515,7 +518,7 @@ export default function AdminCrm() {
   // mensagem/desconto/prazo do cupom principal — nunca dois juntos
   // (reflete a cadeia visual de subcards separados: cadastro / gatilho /
   // cupom(s)).
-  const [campanhaEditMode, setCampanhaEditMode] = useState<'cadastro' | 'gatilho' | 'cupom'>('cupom')
+  const [campanhaEditMode, setCampanhaEditMode] = useState<'cadastro' | 'gatilho' | 'gatilho_fim' | 'cupom'>('cupom')
   // Toggle "+ Novo" no final da cadeia de uma campanha: escolhe entre criar
   // um novo cupom exclusivo ou um novo gatilho — cada opção habilitada ou
   // não dependendo de qual nó está no fim da cadeia daquela campanha
@@ -535,16 +538,17 @@ export default function AdminCrm() {
   const [savingCampanhaCadastro, setSavingCampanhaCadastro] = useState(false)
   const [campanhaCadastroError, setCampanhaCadastroError] = useState<string | null>(null)
 
-  // "Encerrar por evento" da campanha inteira — vive no formulário de
-  // cadastro (não é por cupom, é a campanha toda que desativa quando o
-  // critério bate).
-  const [campanhaEndEnabled, setCampanhaEndEnabled] = useState(false)
+  // "Gatilho de encerramento" — nó próprio na cadeia (igual o gatilho de
+  // disparo, mas quando o critério bate a AÇÃO é desativar a campanha
+  // inteira em vez de conceder cupom). Editado via campanhaEditMode
+  // 'gatilho_fim', mesmo popup/mecanismo do gatilho normal.
   const [campanhaEndCriteria, setCampanhaEndCriteria] = useState<FilterState>(EMPTY_FILTER)
-  const [originalCampanhaEndEnabled, setOriginalCampanhaEndEnabled] = useState(false)
   const [originalCampanhaEndCriteria, setOriginalCampanhaEndCriteria] = useState<FilterState>(EMPTY_FILTER)
-  // "Novos Alvos (Opcional)" do encerrar-por-evento da campanha — mesma
-  // dinâmica do gatilhoExtraOpen: formulário-cópia completo (estilo
-  // segmentação) que só MESCLA os campos preenchidos no campanhaEndCriteria.
+  const [savingCampanhaEnd, setSavingCampanhaEnd] = useState(false)
+  const [campanhaEndSaveError, setCampanhaEndSaveError] = useState<string | null>(null)
+  // "Novos Alvos (Opcional)" do gatilho de encerramento — mesma dinâmica do
+  // gatilhoExtraOpen: formulário-cópia completo (estilo segmentação) que só
+  // MESCLA os campos preenchidos no campanhaEndCriteria.
   const [campanhaEndExtraOpen, setCampanhaEndExtraOpen] = useState(false)
   const [campanhaEndExtraFilter, setCampanhaEndExtraFilter] = useState<FilterState>(EMPTY_FILTER)
   const [campanhaEndExtraError, setCampanhaEndExtraError] = useState<string | null>(null)
@@ -1434,7 +1438,7 @@ export default function AdminCrm() {
   // Não dá pra editar orientation/código de uma campanha já criada
   // (identidade fixa) — gatilho tem popup próprio (ver saveGatilho), este
   // aqui cobre só mensagem/desconto/prazo do cupom.
-  const openEditCampanha = (cc: CrmCampanhaCoupon, mode: 'cadastro' | 'gatilho' | 'cupom' = 'cupom') => {
+  const openEditCampanha = (cc: CrmCampanhaCoupon, mode: 'cadastro' | 'gatilho' | 'gatilho_fim' | 'cupom' = 'cupom') => {
     const coupon = coupons.find((c) => c.id === cc.coupon_id)
     setCampanhaEditError(null)
     setCampanhaEditMode(mode)
@@ -1446,10 +1450,6 @@ export default function AdminCrm() {
       setCampanhaCadastroForm(form)
       setOriginalCampanhaCadastroForm(form)
       setCampanhaCadastroError(null)
-      setCampanhaEndEnabled(!!cc.end_criteria)
-      setCampanhaEndCriteria((cc.end_criteria as unknown as FilterState) ?? EMPTY_FILTER)
-      setOriginalCampanhaEndEnabled(!!cc.end_criteria)
-      setOriginalCampanhaEndCriteria((cc.end_criteria as unknown as FilterState) ?? EMPTY_FILTER)
       setEditingCampanhaId(cc.id)
       return
     }
@@ -1460,6 +1460,14 @@ export default function AdminCrm() {
       setGatilhoDescription(cc.trigger_description ?? '')
       setOriginalGatilhoDescription(cc.trigger_description ?? '')
       setGatilhoSaveError(null)
+      setEditingCampanhaId(cc.id)
+      return
+    }
+    if (mode === 'gatilho_fim') {
+      const criteria = (cc.end_criteria as unknown as FilterState) ?? EMPTY_FILTER
+      setCampanhaEndCriteria(criteria)
+      setOriginalCampanhaEndCriteria(criteria)
+      setCampanhaEndSaveError(null)
       setEditingCampanhaId(cc.id)
       return
     }
@@ -1613,10 +1621,7 @@ export default function AdminCrm() {
     })
 
   const campanhaCadastroHasChanged =
-    !originalCampanhaCadastroForm ||
-    JSON.stringify(campanhaCadastroForm) !== JSON.stringify(originalCampanhaCadastroForm) ||
-    campanhaEndEnabled !== originalCampanhaEndEnabled ||
-    (campanhaEndEnabled && JSON.stringify(campanhaEndCriteria) !== JSON.stringify(originalCampanhaEndCriteria))
+    !originalCampanhaCadastroForm || JSON.stringify(campanhaCadastroForm) !== JSON.stringify(originalCampanhaCadastroForm)
 
   const saveCampanhaCadastro = async () => {
     if (!editingCampanhaId) return
@@ -1633,10 +1638,6 @@ export default function AdminCrm() {
         starts_at: campanhaCadastroForm.starts_at || undefined,
         ends_at: campanhaCadastroForm.ends_at || undefined,
       })
-      await api.admin.campanhaCoupons.setEndCriteria(
-        editingCampanhaId,
-        campanhaEndEnabled ? (campanhaEndCriteria as unknown as CrmFilterCriteria) : null
-      )
       setEditingCampanhaId(null)
       loadCampanhaCoupons(row.segment_id)
     } catch (err) {
@@ -1645,6 +1646,30 @@ export default function AdminCrm() {
       setSavingCampanhaCadastro(false)
     }
   }
+
+  const campanhaEndHasChanged =
+    !editingCampanhaId || JSON.stringify(campanhaEndCriteria) !== JSON.stringify(originalCampanhaEndCriteria)
+
+  const saveGatilhoFim = async () => {
+    if (!editingCampanhaId) return
+    setCampanhaEndSaveError(null)
+    setSavingCampanhaEnd(true)
+    try {
+      const row = await api.admin.campanhaCoupons.setEndCriteria(editingCampanhaId, campanhaEndCriteria as unknown as CrmFilterCriteria)
+      setEditingCampanhaId(null)
+      loadCampanhaCoupons(row.segment_id)
+    } catch (err) {
+      setCampanhaEndSaveError(err instanceof ApiError ? err.message : 'Não foi possível salvar o gatilho de encerramento.')
+    } finally {
+      setSavingCampanhaEnd(false)
+    }
+  }
+
+  const clearCampanhaEndCriteria = (cc: CrmCampanhaCoupon) =>
+    askConfirm('Remover o gatilho de encerramento desta campanha?', async () => {
+      const row = await api.admin.campanhaCoupons.setEndCriteria(cc.id, null)
+      loadCampanhaCoupons(row.segment_id)
+    })
 
   const campanhaEditMessageValid = campanhaEditForm.messageTemplate.includes('/nome') && campanhaEditForm.messageTemplate.includes('/cupom')
   const campanhaEditHasChanged =
@@ -2624,6 +2649,36 @@ export default function AdminCrm() {
                             </div>
                           ))}
 
+                          {cc.orientation === 'evento' && cc.end_criteria && (
+                            <>
+                              <div className="w-5 border-t-2 border-dashed border-red-400/40 flex-shrink-0" />
+                              {/* subcard: gatilho de encerramento — critério independente que desativa a campanha inteira */}
+                              <div className="flex-shrink-0 w-56 rounded-xl px-3 py-2 border border-red-400/30 bg-red-500/5">
+                                <div className="flex items-center gap-2">
+                                  <Ban className="w-4 h-4 text-red-400 flex-shrink-0" />
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-white">Gatilho de encerramento</p>
+                                    <p className="text-[10px] text-son-silver-dim truncate">
+                                      {describeFilter((cc.end_criteria as unknown as FilterState) ?? EMPTY_FILTER, products, categories).join(' · ') || 'Sem critério ainda'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 mt-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditCampanha(cc, 'gatilho_fim')}
+                                    className="text-[10px] font-semibold text-son-silver-dim hover:text-white"
+                                  >
+                                    Editar
+                                  </button>
+                                  <button type="button" onClick={() => clearCampanhaEndCriteria(cc)} className="text-son-silver-dim hover:text-son-pink">
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            </>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => setCampanhaNovoChooserId(cc.id)}
@@ -2771,12 +2826,20 @@ export default function AdminCrm() {
                     editingCampanhaRow.orientation === 'evento' ? <Zap className="w-4 h-4 text-amber-400" /> : <Gift className="w-4 h-4 text-son-pink" />
                   ) : campanhaEditMode === 'gatilho' ? (
                     <Crosshair className="w-4 h-4 text-cyan-300" />
+                  ) : campanhaEditMode === 'gatilho_fim' ? (
+                    <Ban className="w-4 h-4 text-red-400" />
                   ) : editingCampanhaRow.orientation === 'evento' ? (
                     <Zap className="w-4 h-4 text-amber-400" />
                   ) : (
                     <Gift className="w-4 h-4 text-purple-300" />
                   )}
-                  {campanhaEditMode === 'cadastro' ? 'Editar campanha' : campanhaEditMode === 'gatilho' ? 'Editar gatilho do evento' : 'Editar cupom'}
+                  {campanhaEditMode === 'cadastro'
+                    ? 'Editar campanha'
+                    : campanhaEditMode === 'gatilho'
+                    ? 'Editar gatilho do evento'
+                    : campanhaEditMode === 'gatilho_fim'
+                    ? 'Gatilho de encerramento'
+                    : 'Editar cupom'}
                 </h3>
                 <button type="button" onClick={() => setEditingCampanhaId(null)} className="text-son-silver-dim hover:text-white">
                   <X className="w-5 h-5" />
@@ -2822,46 +2885,6 @@ export default function AdminCrm() {
                       />
                     </div>
                   </div>
-                  {editingCampanhaRow?.orientation === 'evento' && (
-                    <div className="space-y-2 pt-2 border-t border-white/10">
-                      <label className="flex items-center gap-2 text-sm text-son-silver">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 accent-amber-400"
-                          checked={campanhaEndEnabled}
-                          onChange={(e) => setCampanhaEndEnabled(e.target.checked)}
-                        />
-                        <Zap className="w-4 h-4 text-amber-400" /> Encerrar por evento
-                      </label>
-                      {campanhaEndEnabled && editingCampanhaSegment && (
-                        <div className="space-y-2">
-                          <label className="label">Alvos que encerram a campanha</label>
-                          {renderTriggerFields(
-                            editingCampanhaSegment.filter_criteria as unknown as FilterState,
-                            campanhaEndCriteria,
-                            (patch) => setCampanhaEndCriteria({ ...campanhaEndCriteria, ...patch }),
-                            undefined,
-                            (keys) => {
-                              const patch: Partial<FilterState> = {}
-                              for (const key of keys) (patch as Record<string, unknown>)[key] = EMPTY_FILTER[key]
-                              setCampanhaEndCriteria({ ...campanhaEndCriteria, ...patch })
-                            }
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCampanhaEndExtraFilter(EMPTY_FILTER)
-                              setCampanhaEndExtraError(null)
-                              setCampanhaEndExtraOpen(true)
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-amber-400/40 text-amber-300 text-xs font-semibold hover:bg-amber-500/10 w-full justify-center"
-                          >
-                            <Plus className="w-3.5 h-3.5" /> Novos Alvos (Opcional)
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
                   {campanhaCadastroError && <p className="error-msg">{campanhaCadastroError}</p>}
                   <button
                     onClick={saveCampanhaCadastro}
@@ -2920,6 +2943,94 @@ export default function AdminCrm() {
                       onChange={(e) => setGatilhoDescription(e.target.value)}
                     />
                   </div>
+                  <div className="space-y-2 pt-2 border-t border-white/10">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="label !mb-0">Cupons exclusivos deste gatilho</label>
+                      <button
+                        type="button"
+                        onClick={() => openNewCampanhaExtraCoupon(editingCampanhaRow)}
+                        className="btn-primary text-sm py-2.5 px-3 flex-shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Novo cupom exclusivo
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {(() => {
+                        const primaryCoupon = coupons.find((c) => c.id === editingCampanhaRow.coupon_id)
+                        if (!primaryCoupon && editingCampanhaRow.extra_coupons.length === 0) {
+                          return <p className="text-son-silver-dim text-xs">Nenhum cupom criado ainda pra este gatilho.</p>
+                        }
+                        return (
+                          <>
+                            {primaryCoupon && (
+                              <div className="rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch">
+                                <div className="min-w-0 flex-1 p-2.5">
+                                  <p className="font-mono text-xs font-bold text-white truncate">{primaryCoupon.code}</p>
+                                  <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
+                                    {COUPON_KIND_LABEL[primaryCoupon.kind]}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditCampanha(editingCampanhaRow, 'cupom')}
+                                    className="block text-[10px] font-semibold text-son-silver-dim hover:text-white mt-1"
+                                  >
+                                    Editar
+                                  </button>
+                                </div>
+                                <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
+                                <div className="flex-shrink-0 p-2.5 flex flex-col items-center justify-center gap-1">
+                                  <span className="text-xs font-black text-purple-300 text-center">
+                                    {discountLabel(primaryCoupon.discount_type, primaryCoupon.discount_value) ??
+                                      discountLabel(primaryCoupon.shipping_discount_type, primaryCoupon.shipping_discount_value) ??
+                                      `${primaryCoupon.product_discounts?.length ?? 0} prod.`}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => deletePrimaryCoupon(editingCampanhaRow)}
+                                    className="text-son-silver-dim hover:text-son-pink"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            {editingCampanhaRow.extra_coupons.map((ec) => (
+                              <div key={ec.id} className="rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch">
+                                <div className="min-w-0 flex-1 p-2.5">
+                                  <p className="font-mono text-xs font-bold text-white truncate">{ec.coupon.code}</p>
+                                  <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
+                                    {COUPON_KIND_LABEL[ec.coupon.kind]}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditExtraCoupon(ec, editingCampanhaRow)}
+                                    className="block text-[10px] font-semibold text-son-silver-dim hover:text-white mt-1"
+                                  >
+                                    Editar
+                                  </button>
+                                </div>
+                                <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
+                                <div className="flex-shrink-0 p-2.5 flex flex-col items-center justify-center gap-1">
+                                  <span className="text-xs font-black text-purple-300 text-center">
+                                    {discountLabel(ec.coupon.discount_type, ec.coupon.discount_value) ??
+                                      discountLabel(ec.coupon.shipping_discount_type, ec.coupon.shipping_discount_value) ??
+                                      `${ec.coupon.product_discounts?.length ?? 0} prod.`}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeCampanhaExtraCoupon(ec, editingCampanhaRow)}
+                                    className="text-son-silver-dim hover:text-son-pink"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
                   {gatilhoSaveError && <p className="error-msg">{gatilhoSaveError}</p>}
                   <button
                     onClick={saveGatilho}
@@ -2927,6 +3038,48 @@ export default function AdminCrm() {
                     className="btn-primary w-full mt-2"
                   >
                     {savingGatilho ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Salvar alterações
+                  </button>
+                </div>
+              ) : campanhaEditMode === 'gatilho_fim' ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-son-silver-dim">
+                    Quando esses alvos baterem, a campanha inteira (gatilho + todos os cupons) é desativada automaticamente.
+                  </p>
+                  {editingCampanhaSegment && (
+                    <div className="space-y-2">
+                      <label className="label">Alvos que encerram a campanha</label>
+                      {renderTriggerFields(
+                        editingCampanhaSegment.filter_criteria as unknown as FilterState,
+                        campanhaEndCriteria,
+                        (patch) => setCampanhaEndCriteria({ ...campanhaEndCriteria, ...patch }),
+                        undefined,
+                        (keys) => {
+                          const patch: Partial<FilterState> = {}
+                          for (const key of keys) (patch as Record<string, unknown>)[key] = EMPTY_FILTER[key]
+                          setCampanhaEndCriteria({ ...campanhaEndCriteria, ...patch })
+                        }
+                      )}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCampanhaEndExtraFilter(EMPTY_FILTER)
+                      setCampanhaEndExtraError(null)
+                      setCampanhaEndExtraOpen(true)
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-red-400/40 text-red-300 text-xs font-semibold hover:bg-red-500/10 w-full justify-center"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Novos Alvos (Opcional)
+                  </button>
+                  {campanhaEndSaveError && <p className="error-msg">{campanhaEndSaveError}</p>}
+                  <button
+                    onClick={saveGatilhoFim}
+                    disabled={savingCampanhaEnd || !campanhaEndHasChanged}
+                    className="btn-primary w-full mt-2"
+                  >
+                    {savingCampanhaEnd ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                     Salvar alterações
                   </button>
                 </div>
@@ -3127,7 +3280,7 @@ export default function AdminCrm() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {editingCampanhaId && campanhaEditMode === 'cadastro' && campanhaEndExtraOpen && (
+        {editingCampanhaId && campanhaEditMode === 'gatilho_fim' && campanhaEndExtraOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -3145,7 +3298,7 @@ export default function AdminCrm() {
             >
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-white text-lg flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-amber-400" /> Novos Alvos (Opcional)
+                  <Ban className="w-4 h-4 text-red-400" /> Novos Alvos (Opcional)
                 </h3>
                 <button type="button" onClick={() => setCampanhaEndExtraOpen(false)} className="text-son-silver-dim hover:text-white">
                   <X className="w-5 h-5" />
@@ -3205,7 +3358,7 @@ export default function AdminCrm() {
       <AnimatePresence>
         {campanhaNovoChooserCc && (() => {
           const cc = campanhaNovoChooserCc
-          const { cupomEnabled, gatilhoEnabled } = getCampanhaNovoOptions(cc)
+          const { cupomEnabled, gatilhoEnabled, gatilhoFimEnabled } = getCampanhaNovoOptions(cc)
           return (
             <motion.div
               initial={{ opacity: 0 }}
@@ -3255,6 +3408,20 @@ export default function AdminCrm() {
                   >
                     <Crosshair className="w-4 h-4" /> Gatilho de evento
                   </button>
+                  {cc.orientation === 'evento' && (
+                    <button
+                      type="button"
+                      disabled={!gatilhoFimEnabled}
+                      onClick={() => {
+                        setCampanhaNovoChooserId(null)
+                        openEditCampanha(cc, 'gatilho_fim')
+                      }}
+                      title={!gatilhoFimEnabled ? 'Essa campanha já tem um gatilho de encerramento — edite o existente' : undefined}
+                      className="w-full flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-red-400/40 text-red-300 text-sm font-semibold hover:bg-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    >
+                      <Ban className="w-4 h-4" /> Gatilho de encerramento
+                    </button>
+                  )}
                 </div>
               </motion.div>
             </motion.div>

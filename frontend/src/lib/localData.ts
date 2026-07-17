@@ -175,8 +175,7 @@ function seedDb(): LocalDb {
     storeHours: Array.from({ length: 7 }, (_, day_of_week) => ({
       day_of_week,
       is_open: true,
-      opens_at: '09:00',
-      closes_at: '18:00',
+      intervals: [{ opens_at: '09:00', closes_at: '18:00' }],
     })),
     storeManuallyClosed: false,
     storeManualClosedReason: null,

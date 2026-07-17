@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Clock, KeyRound, Loader2, MessageCircle, Power } from 'lucide-react'
+import { Clock, KeyRound, Loader2, MessageCircle, Plus, Power, Trash2 } from 'lucide-react'
 import { api, ApiError } from '../../lib/api'
 import type { StoreHourDay, StoreStatus } from '../../lib/types'
 import { DAY_LABELS, isScheduledOpenNow } from '../../lib/storeHours'
 import WhatsAppConnection from '../../components/ui/WhatsAppConnection'
+
+// Horas inteiras de 0 a 24 (Brasil usa 24h) — granularidade de intervalo é
+// por hora cheia, sem minutos.
+const HOUR_OPTIONS = Array.from({ length: 25 }, (_, h) => `${String(h).padStart(2, '0')}:00`)
 
 function StoreHoursCard() {
   const [status, setStatus] = useState<StoreStatus | null>(null)
@@ -28,6 +32,23 @@ function StoreHoursCard() {
 
   const patchDay = (day: number, patch: Partial<StoreHourDay>) =>
     setHours((prev) => prev.map((h) => (h.day_of_week === day ? { ...h, ...patch } : h)))
+
+  const addInterval = (day: number) =>
+    setHours((prev) =>
+      prev.map((h) => (h.day_of_week === day ? { ...h, intervals: [...h.intervals, { opens_at: '10:00', closes_at: '14:00' }] } : h))
+    )
+
+  const removeInterval = (day: number, index: number) =>
+    setHours((prev) =>
+      prev.map((h) => (h.day_of_week === day ? { ...h, intervals: h.intervals.filter((_, i) => i !== index) } : h))
+    )
+
+  const patchInterval = (day: number, index: number, patch: Partial<{ opens_at: string; closes_at: string }>) =>
+    setHours((prev) =>
+      prev.map((h) =>
+        h.day_of_week === day ? { ...h, intervals: h.intervals.map((iv, i) => (i === index ? { ...iv, ...patch } : iv)) } : h
+      )
+    )
 
   const saveHours = async () => {
     setSavingHours(true)
@@ -150,38 +171,71 @@ function StoreHoursCard() {
         {manualError && <p className="error-msg">{manualError}</p>}
       </div>
 
-      <div className="bg-son-surface border border-white/5 rounded-2xl p-6 space-y-3">
+      <div className="bg-son-surface border border-white/5 rounded-2xl p-6 space-y-4">
         <p className="font-semibold text-white">Horário semanal</p>
-        <div className="space-y-2">
+        <div className="space-y-4">
           {hours
             .slice()
             .sort((a, b) => a.day_of_week - b.day_of_week)
             .map((h) => (
-              <div key={h.day_of_week} className="flex items-center gap-2 flex-wrap">
-                <label className="flex items-center gap-1.5 w-28 flex-shrink-0 text-sm text-son-silver">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 accent-son-pink"
-                    checked={h.is_open}
-                    onChange={(e) => patchDay(h.day_of_week, { is_open: e.target.checked })}
-                  />
-                  {DAY_LABELS[h.day_of_week]}
-                </label>
-                <input
-                  type="time"
-                  className="input-field w-28"
-                  disabled={!h.is_open}
-                  value={h.opens_at ?? ''}
-                  onChange={(e) => patchDay(h.day_of_week, { opens_at: e.target.value })}
-                />
-                <span className="text-son-silver-dim text-xs">até</span>
-                <input
-                  type="time"
-                  className="input-field w-28"
-                  disabled={!h.is_open}
-                  value={h.closes_at ?? ''}
-                  onChange={(e) => patchDay(h.day_of_week, { closes_at: e.target.value })}
-                />
+              <div key={h.day_of_week} className="space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="flex items-center gap-1.5 w-28 flex-shrink-0 text-sm text-son-silver">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-son-pink"
+                      checked={h.is_open}
+                      onChange={(e) => patchDay(h.day_of_week, { is_open: e.target.checked })}
+                    />
+                    {DAY_LABELS[h.day_of_week]}
+                  </label>
+                  {h.is_open && (
+                    <button
+                      type="button"
+                      onClick={() => addInterval(h.day_of_week)}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-son-gold/40 text-son-gold text-[10px] font-semibold hover:bg-son-gold/10"
+                    >
+                      <Plus className="w-3 h-3" /> Intervalo
+                    </button>
+                  )}
+                </div>
+                {h.is_open && (
+                  <div className="pl-[7.5rem] space-y-1.5">
+                    {h.intervals.length === 0 && (
+                      <p className="text-son-silver-dim text-xs">Nenhum intervalo — clique em "+ Intervalo" pra adicionar.</p>
+                    )}
+                    {h.intervals.map((iv, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <select
+                          className="input-field w-24"
+                          value={iv.opens_at}
+                          onChange={(e) => patchInterval(h.day_of_week, i, { opens_at: e.target.value })}
+                        >
+                          {HOUR_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="text-son-silver-dim text-xs">até</span>
+                        <select
+                          className="input-field w-24"
+                          value={iv.closes_at}
+                          onChange={(e) => patchInterval(h.day_of_week, i, { closes_at: e.target.value })}
+                        >
+                          {HOUR_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="button" onClick={() => removeInterval(h.day_of_week, i)} className="text-son-silver-dim hover:text-son-pink">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
         </div>

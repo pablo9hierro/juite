@@ -23,6 +23,7 @@ import {
 import type { PromotionalProduct } from './supabasePublicApi'
 import { distanciaKm } from './geo/rotas'
 import { FALLBACK as STORE_LOCATION } from './geo/mapa'
+import { isScheduledOpenNow } from './storeHours'
 import { useAdminAuth } from '../store/adminAuth'
 import type {
   Promotion,
@@ -1794,8 +1795,7 @@ async function updateHeroImage(imageUrl: string): Promise<{ hero_image_url: stri
 const DEFAULT_STORE_HOURS: StoreHourDay[] = Array.from({ length: 7 }, (_, day_of_week) => ({
   day_of_week,
   is_open: true,
-  opens_at: '09:00',
-  closes_at: '18:00',
+  intervals: [{ opens_at: '09:00', closes_at: '18:00' }],
 }))
 
 async function getStoreStatus(): Promise<StoreStatus> {
@@ -1817,17 +1817,8 @@ async function setStoreHours(hours: StoreHourDay[]): Promise<{ ok: boolean }> {
 async function setStoreManualStatus(manuallyClosed: boolean, reason?: string): Promise<{ ok: boolean }> {
   const db = loadDb()
   if (manuallyClosed) {
-    const now = new Date()
-    const dow = now.getDay()
-    const hourRow = (db.storeHours ?? DEFAULT_STORE_HOURS).find((h) => h.day_of_week === dow)
-    let shouldBeOpen = false
-    if (hourRow?.is_open && hourRow.opens_at && hourRow.closes_at) {
-      const nowMinutes = now.getHours() * 60 + now.getMinutes()
-      const [oh, om] = hourRow.opens_at.split(':').map(Number)
-      const [ch, cm] = hourRow.closes_at.split(':').map(Number)
-      shouldBeOpen = nowMinutes >= oh * 60 + om && nowMinutes < ch * 60 + cm
-    }
-    if (shouldBeOpen && !reason?.trim()) {
+    const current = await getStoreStatus()
+    if (isScheduledOpenNow(current) && !reason?.trim()) {
       throw new ApiError(400, 'a justification is required to close the store during scheduled open hours')
     }
   }

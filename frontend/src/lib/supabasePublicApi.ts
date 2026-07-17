@@ -51,7 +51,7 @@ export const supabasePublicApi = {
   storeStatus: {
     get: async (): Promise<StoreStatus> => {
       const [hoursRes, statusRes] = await Promise.all([
-        supabase.from('store_hours').select('day_of_week, is_open, opens_at, closes_at').order('day_of_week'),
+        supabase.from('store_hours').select('day_of_week, is_open, intervals').order('day_of_week'),
         supabase.from('store_status').select('manually_closed, manual_closed_reason').single(),
       ])
       return {
