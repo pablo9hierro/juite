@@ -1,7 +1,200 @@
-import { useState } from 'react'
-import { KeyRound, Loader2, MessageCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Clock, KeyRound, Loader2, MessageCircle, Power } from 'lucide-react'
 import { api, ApiError } from '../../lib/api'
+import type { StoreHourDay, StoreStatus } from '../../lib/types'
+import { DAY_LABELS, isScheduledOpenNow } from '../../lib/storeHours'
 import WhatsAppConnection from '../../components/ui/WhatsAppConnection'
+
+function StoreHoursCard() {
+  const [status, setStatus] = useState<StoreStatus | null>(null)
+  const [hours, setHours] = useState<StoreHourDay[]>([])
+  const [savingHours, setSavingHours] = useState(false)
+  const [hoursError, setHoursError] = useState<string | null>(null)
+  const [hoursSaved, setHoursSaved] = useState(false)
+
+  const [closeReasonDraft, setCloseReasonDraft] = useState('')
+  const [showCloseReasonPrompt, setShowCloseReasonPrompt] = useState(false)
+  const [savingManual, setSavingManual] = useState(false)
+  const [manualError, setManualError] = useState<string | null>(null)
+
+  const load = () => api.admin.storeStatus.get().then((s) => {
+    setStatus(s)
+    setHours(s.hours)
+  })
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  const patchDay = (day: number, patch: Partial<StoreHourDay>) =>
+    setHours((prev) => prev.map((h) => (h.day_of_week === day ? { ...h, ...patch } : h)))
+
+  const saveHours = async () => {
+    setSavingHours(true)
+    setHoursError(null)
+    setHoursSaved(false)
+    try {
+      await api.admin.storeStatus.setHours(hours)
+      setHoursSaved(true)
+      load()
+    } catch (err) {
+      setHoursError(err instanceof ApiError ? err.message : 'Não foi possível salvar os horários.')
+    } finally {
+      setSavingHours(false)
+    }
+  }
+
+  const toggleManual = async (reason?: string) => {
+    if (!status) return
+    setSavingManual(true)
+    setManualError(null)
+    try {
+      await api.admin.storeStatus.setManualStatus(!status.manually_closed, reason)
+      setShowCloseReasonPrompt(false)
+      setCloseReasonDraft('')
+      load()
+    } catch (err) {
+      setManualError(err instanceof ApiError ? err.message : 'Não foi possível atualizar o status da loja.')
+    } finally {
+      setSavingManual(false)
+    }
+  }
+
+  const handleToggleClick = () => {
+    if (!status) return
+    // Reabrir nunca precisa de justificativa.
+    if (status.manually_closed) {
+      toggleManual()
+      return
+    }
+    // Fechando: se agora é um horário que deveria estar aberto, exige motivo.
+    if (isScheduledOpenNow(status)) {
+      setShowCloseReasonPrompt(true)
+      setManualError(null)
+      return
+    }
+    toggleManual()
+  }
+
+  if (!status) {
+    return (
+      <div className="flex justify-center py-6">
+        <Loader2 className="w-5 h-5 animate-spin text-son-pink" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-lg space-y-4">
+      <div className="bg-son-surface border border-white/5 rounded-2xl p-6 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-white flex items-center gap-2">
+              <Power className={`w-4 h-4 ${status.manually_closed ? 'text-red-400' : 'text-emerald-400'}`} />
+              {status.manually_closed ? 'Loja fechada manualmente' : 'Loja seguindo o horário normal'}
+            </p>
+            {status.manually_closed && status.manual_closed_reason && (
+              <p className="text-son-silver-dim text-xs mt-1">Motivo: {status.manual_closed_reason}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handleToggleClick}
+            disabled={savingManual}
+            className={`inline-flex items-center w-[4.5rem] h-7 px-1 rounded-full border transition-colors duration-200 flex-shrink-0 ${
+              !status.manually_closed ? 'justify-end bg-emerald-500/15 border-emerald-400/60' : 'justify-start bg-white/5 border-white/20'
+            }`}
+          >
+            <span className={`flex items-center gap-1.5 ${!status.manually_closed ? 'flex-row-reverse' : ''}`}>
+              <span className={`w-5 h-5 rounded-full flex-shrink-0 ${!status.manually_closed ? 'bg-emerald-400' : 'bg-son-silver-dim'}`} />
+              <span className={`text-[10px] font-bold ${!status.manually_closed ? 'text-emerald-300' : 'text-son-silver-dim'}`}>
+                {!status.manually_closed ? 'ON' : 'OFF'}
+              </span>
+            </span>
+          </button>
+        </div>
+        {showCloseReasonPrompt && (
+          <div className="space-y-2 pt-2 border-t border-white/10">
+            <label className="label">Por que está fechando fora do previsto? (obrigatório)</label>
+            <textarea
+              className="input-field"
+              rows={2}
+              value={closeReasonDraft}
+              onChange={(e) => setCloseReasonDraft(e.target.value)}
+              placeholder="Ex: imprevisto, manutenção, feriado não programado..."
+            />
+            <p className="text-son-silver-dim text-[11px]">Essa mensagem aparece pros clientes na página inicial.</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => toggleManual(closeReasonDraft)}
+                disabled={savingManual || !closeReasonDraft.trim()}
+                className="btn-primary text-sm py-2 px-3"
+              >
+                {savingManual ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Confirmar fechamento
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCloseReasonPrompt(false)
+                  setCloseReasonDraft('')
+                }}
+                className="btn-secondary text-sm py-2 px-3"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+        {manualError && <p className="error-msg">{manualError}</p>}
+      </div>
+
+      <div className="bg-son-surface border border-white/5 rounded-2xl p-6 space-y-3">
+        <p className="font-semibold text-white">Horário semanal</p>
+        <div className="space-y-2">
+          {hours
+            .slice()
+            .sort((a, b) => a.day_of_week - b.day_of_week)
+            .map((h) => (
+              <div key={h.day_of_week} className="flex items-center gap-2 flex-wrap">
+                <label className="flex items-center gap-1.5 w-28 flex-shrink-0 text-sm text-son-silver">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-son-pink"
+                    checked={h.is_open}
+                    onChange={(e) => patchDay(h.day_of_week, { is_open: e.target.checked })}
+                  />
+                  {DAY_LABELS[h.day_of_week]}
+                </label>
+                <input
+                  type="time"
+                  className="input-field w-28"
+                  disabled={!h.is_open}
+                  value={h.opens_at ?? ''}
+                  onChange={(e) => patchDay(h.day_of_week, { opens_at: e.target.value })}
+                />
+                <span className="text-son-silver-dim text-xs">até</span>
+                <input
+                  type="time"
+                  className="input-field w-28"
+                  disabled={!h.is_open}
+                  value={h.closes_at ?? ''}
+                  onChange={(e) => patchDay(h.day_of_week, { closes_at: e.target.value })}
+                />
+              </div>
+            ))}
+        </div>
+        {hoursError && <p className="error-msg">{hoursError}</p>}
+        {hoursSaved && <p className="text-green-500 text-sm">Horários salvos.</p>}
+        <button onClick={saveHours} disabled={savingHours} className="btn-primary text-sm py-2.5 px-3">
+          {savingHours ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          Salvar horários
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export default function AdminSenha() {
   const [newPassword, setNewPassword] = useState('')
@@ -75,6 +268,16 @@ export default function AdminSenha() {
             Salvar
           </button>
         </form>
+      </div>
+
+      <div>
+        <h2 className="text-2xl font-black mb-1 flex items-center gap-2">
+          <Clock className="w-5 h-5" /> Horário de funcionamento
+        </h2>
+        <p className="text-son-silver-dim text-sm mb-6">
+          Defina os dias e horários que a loja atende, ou force fechar/abrir manualmente a qualquer momento.
+        </p>
+        <StoreHoursCard />
       </div>
 
       <div>

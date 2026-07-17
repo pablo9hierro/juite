@@ -29,6 +29,7 @@ import type {
   Promotion,
   PromotionType,
   ShippingSettings,
+  StoreHourDay,
   Vendedor,
   VendedorRelatorio,
 } from './types'
@@ -108,6 +109,7 @@ const remoteApi = {
   products: supabasePublicApi.products,
   shippingSettings: supabasePublicApi.shippingSettings,
   siteSettings: supabasePublicApi.siteSettings,
+  storeStatus: supabasePublicApi.storeStatus,
   estimateShipping: supabasePublicApi.estimateShipping,
   trackDeliveryPosition: supabasePublicApi.trackDeliveryPosition,
   // Carrossel da landing (promoções ativas) + cupom digitado no checkout.
@@ -574,6 +576,17 @@ const remoteApi = {
     siteSettings: {
       updateHeroImage: (imageUrl: string) =>
         rpc<{ hero_image_url: string }>('admin_update_hero_image', { p_token: adminToken(), p_image_url: imageUrl }),
+    },
+    storeStatus: {
+      get: () => supabasePublicApi.storeStatus.get(),
+      setHours: (hours: StoreHourDay[]) =>
+        rpc<{ ok: boolean }>('admin_set_store_hours', { p_token: adminToken(), p_hours: hours }),
+      setManualStatus: (manuallyClosed: boolean, reason?: string) =>
+        rpc<{ ok: boolean }>('admin_set_store_manual_status', {
+          p_token: adminToken(),
+          p_manually_closed: manuallyClosed,
+          p_reason: reason ?? null,
+        }),
     },
     crm: {
       customers: () => rpc<CrmCustomer[]>('admin_crm_customers', { p_token: adminToken() }),

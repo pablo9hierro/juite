@@ -1,6 +1,6 @@
 import { ApiError } from './apiError'
 import { supabase } from './supabaseClient'
-import type { Category, Coupon, DeliveryPosition, Order, Product, Promotion, ShippingEstimate, ShippingSettings } from './types'
+import type { Category, Coupon, DeliveryPosition, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new ApiError(400, result.error.message)
@@ -46,6 +46,19 @@ export const supabasePublicApi = {
     get: async () => {
       const { data } = await supabase.from('site_settings').select('hero_image_url').single()
       return { hero_image_url: (data?.hero_image_url as string | null) ?? null }
+    },
+  },
+  storeStatus: {
+    get: async (): Promise<StoreStatus> => {
+      const [hoursRes, statusRes] = await Promise.all([
+        supabase.from('store_hours').select('day_of_week, is_open, opens_at, closes_at').order('day_of_week'),
+        supabase.from('store_status').select('manually_closed, manual_closed_reason').single(),
+      ])
+      return {
+        hours: (hoursRes.data ?? []) as StoreHourDay[],
+        manually_closed: !!statusRes.data?.manually_closed,
+        manual_closed_reason: (statusRes.data?.manual_closed_reason as string | null) ?? null,
+      }
     },
   },
   estimateShipping: async (lat: number, lng: number) => {

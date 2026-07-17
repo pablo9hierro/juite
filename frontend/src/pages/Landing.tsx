@@ -6,7 +6,8 @@ import heroBanner from '../assets/hero-banner.png'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
 import { api } from '../lib/api'
-import type { Promotion } from '../lib/types'
+import type { Promotion, StoreStatus } from '../lib/types'
+import { getStoreOpenState } from '../lib/storeHours'
 
 const CAROUSEL_INTERVAL_MS = 2000
 
@@ -76,8 +77,24 @@ function BannerCarousel() {
 }
 
 export default function Landing() {
+  const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
+
+  useEffect(() => {
+    api.storeStatus.get().then(setStoreStatus).catch(() => setStoreStatus(null))
+  }, [])
+
+  const openState = storeStatus ? getStoreOpenState(storeStatus) : null
+  const closed = !!openState && !openState.open
+
   return (
-    <main className="min-h-screen bg-son-black text-white overflow-hidden relative">
+    <>
+      {closed && (
+        <div className="relative z-20 bg-red-500/15 border-b border-red-500/40 text-red-200 text-sm text-center px-4 py-3">
+          <span className="font-semibold">Loja fechada no momento.</span>{' '}
+          {openState?.reason || 'Fora do nosso horário de funcionamento — volte mais tarde!'}
+        </div>
+      )}
+      <main className={`min-h-screen bg-son-black text-white overflow-hidden relative ${closed ? 'grayscale' : ''}`}>
       <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-son-orange/20 blur-[120px]" />
       <div className="absolute top-20 -right-40 w-96 h-96 rounded-full bg-son-purple/25 blur-[120px]" />
       <div className="absolute bottom-0 left-1/3 w-80 h-80 rounded-full bg-son-pink/15 blur-[120px]" />
@@ -147,6 +164,7 @@ export default function Landing() {
           </motion.div>
         ))}
       </section>
-    </main>
+      </main>
+    </>
   )
 }

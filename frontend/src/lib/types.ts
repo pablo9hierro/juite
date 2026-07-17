@@ -389,6 +389,19 @@ export interface ShippingSettings {
   max_km: number | null
 }
 
+export interface StoreHourDay {
+  day_of_week: number // 0=domingo .. 6=sábado
+  is_open: boolean
+  opens_at: string | null // 'HH:MM'
+  closes_at: string | null
+}
+
+export interface StoreStatus {
+  hours: StoreHourDay[]
+  manually_closed: boolean
+  manual_closed_reason: string | null
+}
+
 export interface ShippingEstimate {
   km: number
   price: number

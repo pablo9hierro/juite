@@ -12,6 +12,7 @@ import type {
   Order,
   Product,
   Promotion,
+  StoreHourDay,
   Vendedor,
 } from './types'
 
@@ -91,6 +92,9 @@ export interface LocalDb {
   pricePerKm: number
   maxKm: number | null
   heroImageUrl: string | null
+  storeHours: StoreHourDay[]
+  storeManuallyClosed: boolean
+  storeManualClosedReason: string | null
 }
 
 // Mesma conta de sunset._distance_km/estimate_shipping do backend, só que
@@ -168,6 +172,14 @@ function seedDb(): LocalDb {
     pricePerKm: 1.5,
     maxKm: null,
     heroImageUrl: null,
+    storeHours: Array.from({ length: 7 }, (_, day_of_week) => ({
+      day_of_week,
+      is_open: true,
+      opens_at: '09:00',
+      closes_at: '18:00',
+    })),
+    storeManuallyClosed: false,
+    storeManualClosedReason: null,
   }
 }
 

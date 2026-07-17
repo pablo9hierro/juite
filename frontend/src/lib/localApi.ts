@@ -41,6 +41,8 @@ import type {
   ShippingEstimate,
   ShippingSettings,
   StatusCount,
+  StoreHourDay,
+  StoreStatus,
   TopProduct,
   Vendedor,
   VendedorRelatorio,
@@ -1789,6 +1791,52 @@ async function updateHeroImage(imageUrl: string): Promise<{ hero_image_url: stri
   return { hero_image_url: imageUrl }
 }
 
+const DEFAULT_STORE_HOURS: StoreHourDay[] = Array.from({ length: 7 }, (_, day_of_week) => ({
+  day_of_week,
+  is_open: true,
+  opens_at: '09:00',
+  closes_at: '18:00',
+}))
+
+async function getStoreStatus(): Promise<StoreStatus> {
+  const db = loadDb()
+  return {
+    hours: db.storeHours ?? DEFAULT_STORE_HOURS,
+    manually_closed: db.storeManuallyClosed ?? false,
+    manual_closed_reason: db.storeManualClosedReason ?? null,
+  }
+}
+
+async function setStoreHours(hours: StoreHourDay[]): Promise<{ ok: boolean }> {
+  const db = loadDb()
+  db.storeHours = hours
+  saveDb(db)
+  return { ok: true }
+}
+
+async function setStoreManualStatus(manuallyClosed: boolean, reason?: string): Promise<{ ok: boolean }> {
+  const db = loadDb()
+  if (manuallyClosed) {
+    const now = new Date()
+    const dow = now.getDay()
+    const hourRow = (db.storeHours ?? DEFAULT_STORE_HOURS).find((h) => h.day_of_week === dow)
+    let shouldBeOpen = false
+    if (hourRow?.is_open && hourRow.opens_at && hourRow.closes_at) {
+      const nowMinutes = now.getHours() * 60 + now.getMinutes()
+      const [oh, om] = hourRow.opens_at.split(':').map(Number)
+      const [ch, cm] = hourRow.closes_at.split(':').map(Number)
+      shouldBeOpen = nowMinutes >= oh * 60 + om && nowMinutes < ch * 60 + cm
+    }
+    if (shouldBeOpen && !reason?.trim()) {
+      throw new ApiError(400, 'a justification is required to close the store during scheduled open hours')
+    }
+  }
+  db.storeManuallyClosed = manuallyClosed
+  db.storeManualClosedReason = manuallyClosed ? reason?.trim() || null : null
+  saveDb(db)
+  return { ok: true }
+}
+
 async function estimateShipping(lat: number, lng: number): Promise<ShippingEstimate> {
   const db = loadDb()
   return estimateShippingLocal(lat, lng, db.pricePerKm, db.maxKm ?? null)
@@ -2143,6 +2191,7 @@ export const localApi = {
   products: { list: listProducts, get: getProduct },
   shippingSettings: { get: getShippingSettings },
   siteSettings: { get: getSiteSettings },
+  storeStatus: { get: getStoreStatus },
   estimateShipping,
   trackDeliveryPosition: trackDeliveryPositionLocal,
   promotions: { listActive: listActivePromotions, get: getPromotionPublic },
@@ -2204,6 +2253,7 @@ export const localApi = {
     orders: { list: adminListOrders, updateStatus: adminUpdateStatus, notifyReady: async () => {} },
     shippingSettings: { get: getShippingSettings, update: updateShippingSettings },
     siteSettings: { updateHeroImage },
+    storeStatus: { get: getStoreStatus, setHours: setStoreHours, setManualStatus: setStoreManualStatus },
     financeiro: { get: financeiro, timeseries: financeiroTimeseries },
     crm: { customers: adminCrmCustomers },
     segments: { list: adminListSegments, create: createSegment, update: updateSegment, delete: deleteSegment },
