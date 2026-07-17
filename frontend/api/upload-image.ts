@@ -56,7 +56,15 @@ export default async function handler(req: Request): Promise<Response> {
     body: JSON.stringify({ p_token: token }),
   })
   if (!pingRes.ok) {
-    return json({ error: 'Sessão de admin inválida ou expirada — faça login novamente.' }, 401)
+    // 404/PGRST202 = a função sunset.admin_ping ainda não existe no banco
+    // (falta rodar supabase/sunset_admin_ping.sql) — bem diferente de "sessão
+    // expirada", então não confunde as duas coisas no diagnóstico.
+    const body = await pingRes.text().catch(() => '')
+    const message =
+      pingRes.status === 404 || body.includes('PGRST202') || body.includes('function sunset.admin_ping')
+        ? 'RPC sunset.admin_ping não existe no Supabase ainda — rode supabase/sunset_admin_ping.sql no SQL Editor.'
+        : 'Sessão de admin inválida ou expirada — faça login novamente.'
+    return json({ error: message }, 401)
   }
 
   const contentType = req.headers.get('content-type') ?? 'application/octet-stream'
