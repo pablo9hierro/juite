@@ -318,6 +318,22 @@ function isCampanhaStale(cc: CrmCampanhaCoupon, segment: CrmSegment | undefined)
   return getChangedFields(oldCriteria, segment.filter_criteria as unknown as FilterState).size > 0
 }
 
+// Regra da cadeia: gatilho só pode ser sucedido de cupom; cupom pode ser
+// sucedido de cupom ou gatilho; campanha evento sem gatilho ainda só libera
+// "novo gatilho" (precisa existir antes de qualquer cupom depender dele).
+function getCampanhaNovoOptions(cc: CrmCampanhaCoupon): { cupomEnabled: boolean; gatilhoEnabled: boolean } {
+  const lastNodeType: 'campanha' | 'gatilho' | 'cupom' =
+    cc.coupon_id || cc.extra_coupons.length > 0
+      ? 'cupom'
+      : cc.orientation === 'evento' && cc.trigger_criteria
+      ? 'gatilho'
+      : 'campanha'
+  return {
+    cupomEnabled: !(cc.orientation === 'evento' && lastNodeType === 'campanha'),
+    gatilhoEnabled: cc.orientation === 'evento' && lastNodeType !== 'gatilho',
+  }
+}
+
 // Chave-mestra de on/off do app — pill com bolinha deslizante, igual ao
 // modelo que o admin desenhou (ON: texto + bolinha à direita; OFF:
 // bolinha + texto à esquerda), em vez de um badge de texto "Ativo/Inativo".
@@ -745,6 +761,11 @@ export default function AdminCrm() {
         .find((cc) => cc.id === editingCampanhaId)
     : null
   const editingCampanhaSegment = editingCampanhaRow ? segments.find((s) => s.id === editingCampanhaRow.segment_id) : null
+  const campanhaNovoChooserCc = campanhaNovoChooserId
+    ? Object.values(campanhaCouponsBySegment)
+        .flat()
+        .find((cc) => cc.id === campanhaNovoChooserId)
+    : null
 
   const filteredBase = appliedFilter ? applyFilters(customers, appliedFilter, products) : customers
   const searched = query.trim()
@@ -2443,16 +2464,6 @@ export default function AdminCrm() {
                       {campanhas.map((cc) => {
                         const cCoupon = coupons.find((c) => c.id === cc.coupon_id)
                         const stale = isCampanhaStale(cc, s)
-                        // Nó no fim da cadeia desta campanha — decide o que o
-                        // toggle "+ Novo" pode oferecer (ver campanhaNovoChooserId).
-                        const lastNodeType: 'campanha' | 'gatilho' | 'cupom' =
-                          cc.coupon_id || cc.extra_coupons.length > 0
-                            ? 'cupom'
-                            : cc.orientation === 'evento' && cc.trigger_criteria
-                            ? 'gatilho'
-                            : 'campanha'
-                        const novoCupomEnabled = !(cc.orientation === 'evento' && lastNodeType === 'campanha')
-                        const novoGatilhoEnabled = cc.orientation === 'evento' && lastNodeType !== 'gatilho'
                         return (
                         <div key={cc.id} className="relative rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-3">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -2613,45 +2624,13 @@ export default function AdminCrm() {
                             </div>
                           ))}
 
-                          {campanhaNovoChooserId === cc.id ? (
-                            <div className="flex items-center gap-1.5 flex-shrink-0">
-                              <button
-                                type="button"
-                                disabled={!novoCupomEnabled}
-                                onClick={() => {
-                                  setCampanhaNovoChooserId(null)
-                                  openNewCampanhaExtraCoupon(cc)
-                                }}
-                                title={!novoCupomEnabled ? 'Defina o gatilho do evento primeiro' : undefined}
-                                className="px-2.5 py-2 rounded-xl border border-dashed border-purple-400/40 text-purple-300 text-[10px] font-semibold hover:bg-purple-500/10 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                              >
-                                Cupom exclusivo
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!novoGatilhoEnabled}
-                                onClick={() => {
-                                  setCampanhaNovoChooserId(null)
-                                  openEditCampanha(cc, 'gatilho')
-                                }}
-                                title={!novoGatilhoEnabled ? 'O gatilho só pode ser seguido de cupom' : undefined}
-                                className="px-2.5 py-2 rounded-xl border border-dashed border-cyan-400/40 text-cyan-300 text-[10px] font-semibold hover:bg-cyan-500/10 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                              >
-                                Gatilho de evento
-                              </button>
-                              <button type="button" onClick={() => setCampanhaNovoChooserId(null)} className="text-son-silver-dim hover:text-white">
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setCampanhaNovoChooserId(cc.id)}
-                              className="flex items-center gap-1 px-2.5 py-2 rounded-xl border border-dashed border-son-gold/40 text-son-gold text-[10px] font-semibold hover:bg-son-gold/10 flex-shrink-0"
-                            >
-                              <Plus className="w-3 h-3" /> Novo
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => setCampanhaNovoChooserId(cc.id)}
+                            className="flex items-center gap-1 px-2.5 py-2 rounded-xl border border-dashed border-son-gold/40 text-son-gold text-[10px] font-semibold hover:bg-son-gold/10 flex-shrink-0"
+                          >
+                            <Plus className="w-3 h-3" /> Novo
+                          </button>
 
                           <ToggleSwitch checked={!stale && cc.active} onClick={() => (stale ? setStaleDialogCampanha(cc) : toggleCampanhaActive(cc))} />
                         </div>
@@ -3221,6 +3200,66 @@ export default function AdminCrm() {
             </motion.div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {campanhaNovoChooserCc && (() => {
+          const cc = campanhaNovoChooserCc
+          const { cupomEnabled, gatilhoEnabled } = getCampanhaNovoOptions(cc)
+          return (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
+              onClick={() => setCampanhaNovoChooserId(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.92 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                className="glass rounded-2xl p-5 max-w-sm w-full my-8 space-y-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-white text-lg">Novo na cadeia</h3>
+                  <button type="button" onClick={() => setCampanhaNovoChooserId(null)} className="text-son-silver-dim hover:text-white">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <p className="text-xs text-son-silver-dim">O que você quer adicionar em seguida nesta campanha?</p>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    disabled={!cupomEnabled}
+                    onClick={() => {
+                      setCampanhaNovoChooserId(null)
+                      openNewCampanhaExtraCoupon(cc)
+                    }}
+                    title={!cupomEnabled ? 'Defina o gatilho do evento primeiro' : undefined}
+                    className="w-full flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-purple-400/40 text-purple-300 text-sm font-semibold hover:bg-purple-500/10 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  >
+                    <Gift className="w-4 h-4" /> Cupom exclusivo
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!gatilhoEnabled}
+                    onClick={() => {
+                      setCampanhaNovoChooserId(null)
+                      openEditCampanha(cc, 'gatilho')
+                    }}
+                    title={!gatilhoEnabled ? 'O gatilho só pode ser seguido de cupom' : undefined}
+                    className="w-full flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-cyan-400/40 text-cyan-300 text-sm font-semibold hover:bg-cyan-500/10 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  >
+                    <Crosshair className="w-4 h-4" /> Gatilho de evento
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )
+        })()}
       </AnimatePresence>
 
       <AnimatePresence>
