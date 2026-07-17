@@ -1,0 +1,107 @@
+// Vercel Edge Function — substitui o proxy de upload que vivia no backend
+// Rust (Railway). Recebe os bytes crus da imagem, confirma que quem está
+// mandando é um admin de verdade (via RPC sunset.admin_ping, mesma sessão
+// que o resto do app usa) e só então grava no Supabase Storage usando a
+// service_role key — que nunca sai daqui, o navegador nunca a vê.
+//
+// Runtime Edge: roda como função serverless na própria Vercel, sem servidor
+// nenhum pra manter no ar — sobe sozinha a cada deploy (não precisa de
+// nenhum passo manual além de configurar a env var abaixo).
+export const config = { runtime: 'edge' }
+
+const BUCKET = 'sunset-products'
+const MAX_BYTES = 10 * 1024 * 1024
+
+const EXT_BY_TYPE: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+}
+
+function json(body: unknown, status: number): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+}
+
+export default async function handler(req: Request): Promise<Response> {
+  if (req.method !== 'POST') {
+    return json({ error: 'method not allowed' }, 405)
+  }
+
+  const supabaseUrl = process.env.VITE_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !serviceKey) {
+    return json({ error: 'Supabase não configurado no servidor (faltam envs na Vercel).' }, 500)
+  }
+
+  const auth = req.headers.get('authorization') ?? ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  if (!token) {
+    return json({ error: 'Sessão de admin ausente.' }, 401)
+  }
+
+  // Valida a sessão de admin via RPC — sem isso qualquer um poderia usar
+  // essa rota pra escrever no bucket com a service_role key.
+  const pingRes = await fetch(`${supabaseUrl}/rest/v1/rpc/admin_ping`, {
+    method: 'POST',
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_token: token }),
+  })
+  if (!pingRes.ok) {
+    return json({ error: 'Sessão de admin inválida ou expirada — faça login novamente.' }, 401)
+  }
+
+  const contentType = req.headers.get('content-type') ?? 'application/octet-stream'
+  const ext = EXT_BY_TYPE[contentType]
+  if (!ext) {
+    return json({ error: `Tipo de arquivo não suportado: ${contentType}` }, 400)
+  }
+
+  const bytes = await req.arrayBuffer()
+  if (bytes.byteLength === 0) {
+    return json({ error: 'Arquivo vazio.' }, 400)
+  }
+  if (bytes.byteLength > MAX_BYTES) {
+    return json({ error: 'Arquivo grande demais (máx 10MB).' }, 413)
+  }
+
+  const filename = `${crypto.randomUUID()}.${ext}`
+  const uploadRes = await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${filename}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+      'Content-Type': contentType,
+      'x-upsert': 'true',
+    },
+    body: bytes,
+  })
+
+  if (!uploadRes.ok) {
+    const body = await uploadRes.text().catch(() => '')
+    const parsed = (() => {
+      try {
+        return JSON.parse(body)?.message as string | undefined
+      } catch {
+        return undefined
+      }
+    })()
+    const message =
+      uploadRes.status === 404
+        ? `Bucket "${BUCKET}" não existe no Supabase Storage.`
+        : uploadRes.status === 401 || uploadRes.status === 403
+          ? 'Supabase recusou a chave de serviço (SUPABASE_SERVICE_ROLE_KEY inválida ou sem permissão no Storage).'
+          : parsed || `Supabase Storage recusou o upload (HTTP ${uploadRes.status}).`
+    return json({ error: message }, 502)
+  }
+
+  return json({ url: `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${filename}` }, 200)
+}

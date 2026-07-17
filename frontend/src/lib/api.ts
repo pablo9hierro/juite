@@ -198,29 +198,21 @@ const remoteApi = {
           p_barcode: payload.barcode ?? null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_product', { p_token: adminToken(), p_id: id }),
-      // Upload de imagem passa pelo Rust (não pelo Supabase RPC): precisa da
-      // service_role key pra escrever no Storage, que não pode ir pro navegador.
+      // Upload de imagem vai direto pra Vercel Edge Function (frontend/api/upload-image.ts),
+      // que grava no Supabase Storage com a service_role key — não depende
+      // mais do backend Rust/Railway (só o WhatsApp gateway continua lá).
       uploadImage: async (file: File) => {
-        const url = `${API_BASE}/api/admin/products/upload-image`
-        const body = new FormData()
-        body.append('file', file)
+        const url = `/api/upload-image`
         let res: Response
         try {
           res = await fetch(url, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${adminToken()}` },
-            body,
+            headers: { Authorization: `Bearer ${adminToken()}`, 'Content-Type': file.type },
+            body: file,
           })
         } catch (networkErr) {
-          // fetch() falhou ANTES de virar resposta HTTP (backend fora do ar,
-          // CORS bloqueado, ou VITE_API_BASE_URL apontando pra localhost em
-          // produção) — sem isso virar ApiError, some como "Erro ao enviar
-          // a imagem." genérico em todo call site.
           console.error('[uploadImage] falha de rede ao chamar', url, networkErr)
-          const hint = url.includes('localhost')
-            ? 'O backend está configurado como localhost — isso nunca funciona em produção. Configure VITE_API_BASE_URL na Vercel com a URL pública do backend (Railway).'
-            : 'Não foi possível conectar ao backend. Verifique se ele está no ar (Railway) e se CORS libera este domínio.'
-          throw new ApiError(0, `Erro de conexão ao enviar a imagem: ${hint}`)
+          throw new ApiError(0, 'Erro de conexão ao enviar a imagem: não foi possível falar com a Vercel.')
         }
         if (!res.ok) {
           const rawText = await res.text().catch(() => '')
