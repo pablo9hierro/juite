@@ -650,11 +650,12 @@ const remoteApi = {
         }),
       // "Encerrar por evento" da campanha inteira (principal + extras) —
       // null limpa.
-      setEndCriteria: (id: string, endCriteria: CrmFilterCriteria | null) =>
+      setEndCriteria: (id: string, endCriteria: CrmFilterCriteria | null, description?: string) =>
         rpc<CrmCampanhaCoupon>('admin_set_campanha_end_criteria', {
           p_token: adminToken(),
           p_id: id,
           p_end_criteria: endCriteria,
+          p_end_description: description ?? null,
         }),
       // Desvincula o cupom principal (volta pra "aguardando cupom").
       deletePrimary: (id: string) => rpc<CrmCampanhaCoupon>('admin_delete_campanha_primary_coupon', { p_token: adminToken(), p_id: id }),

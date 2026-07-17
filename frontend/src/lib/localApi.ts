@@ -1164,6 +1164,7 @@ async function createCampanha(payload: {
     trigger_criteria: null,
     trigger_description: null,
     end_criteria: null,
+    end_description: null,
     message_template: '',
     uses_per_customer: 1,
     active: true,
@@ -1209,12 +1210,14 @@ async function setCampanhaGatilho(
 // "Encerrar por evento" da campanha inteira — null limpa.
 async function setCampanhaEndCriteria(
   id: string,
-  endCriteria: import('./types').CrmFilterCriteria | null
+  endCriteria: import('./types').CrmFilterCriteria | null,
+  description?: string
 ): Promise<import('./types').CrmCampanhaCoupon> {
   const db = loadDb()
   const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
   if (!row) throw new ApiError(404, 'campanha not found')
   row.end_criteria = endCriteria
+  row.end_description = description?.trim() || null
   saveDb(db)
   return { ...row, extra_coupons: campanhaExtraCoupons(db, row.id) }
 }

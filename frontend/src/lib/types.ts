@@ -141,6 +141,8 @@ export interface CrmCampanhaCoupon {
   // Critério "por evento" pra encerrar a campanha INTEIRA (principal +
   // extras) — mesmo mecanismo do gatilho, decoupled do segmento.
   end_criteria: CrmFilterCriteria | null
+  // Texto livre, só interno — anotação do admin sobre o gatilho de encerramento.
+  end_description?: string | null
   message_template: string
   uses_per_customer: number
   active: boolean

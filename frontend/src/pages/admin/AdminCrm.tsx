@@ -4,6 +4,7 @@ import { AlertTriangle, Ban, Cake, Crosshair, Gift, Layers, Loader2, Plus, Searc
 import Card from '../../components/ui/Card'
 import WhatsAppLink from '../../components/ui/WhatsAppLink'
 import ExpiryInput from '../../components/admin/ExpiryInput'
+import DateInput from '../../components/admin/DateInput'
 import ProductCategoryMultiSelect from '../../components/admin/ProductCategoryMultiSelect'
 import ProductDiscountList from '../../components/admin/ProductDiscountList'
 import { api, ApiError } from '../../lib/api'
@@ -537,6 +538,10 @@ export default function AdminCrm() {
   const [originalCampanhaCadastroForm, setOriginalCampanhaCadastroForm] = useState<{ name: string; description: string; starts_at: string; ends_at: string } | null>(null)
   const [savingCampanhaCadastro, setSavingCampanhaCadastro] = useState(false)
   const [campanhaCadastroError, setCampanhaCadastroError] = useState<string | null>(null)
+  // Como a campanha encerra: por data específica ou sem prazo definido (o
+  // encerramento "por evento" é orthogonal — configurado no subcard próprio
+  // "Gatilho de encerramento" — e pode coexistir com uma data aqui).
+  const [campanhaEndMode, setCampanhaEndMode] = useState<'data' | 'sem_prazo'>('sem_prazo')
 
   // "Gatilho de encerramento" — nó próprio na cadeia (igual o gatilho de
   // disparo, mas quando o critério bate a AÇÃO é desativar a campanha
@@ -544,6 +549,8 @@ export default function AdminCrm() {
   // 'gatilho_fim', mesmo popup/mecanismo do gatilho normal.
   const [campanhaEndCriteria, setCampanhaEndCriteria] = useState<FilterState>(EMPTY_FILTER)
   const [originalCampanhaEndCriteria, setOriginalCampanhaEndCriteria] = useState<FilterState>(EMPTY_FILTER)
+  const [campanhaEndDescription, setCampanhaEndDescription] = useState('')
+  const [originalCampanhaEndDescription, setOriginalCampanhaEndDescription] = useState('')
   const [savingCampanhaEnd, setSavingCampanhaEnd] = useState(false)
   const [campanhaEndSaveError, setCampanhaEndSaveError] = useState<string | null>(null)
   // "Novos Alvos (Opcional)" do gatilho de encerramento — mesma dinâmica do
@@ -943,8 +950,15 @@ export default function AdminCrm() {
     value: FilterState,
     onChange: (patch: Partial<FilterState>) => void,
     staleFields?: Set<keyof FilterState>,
-    onRemoveGroup?: (keys: (keyof FilterState)[]) => void
+    onRemoveGroup?: (keys: (keyof FilterState)[]) => void,
+    // 'segment' (padrão) mostra só os campos que vêm do segmento (ou já
+    // eram alvo antes) — 'extra' mostra só os campos adicionados depois via
+    // "Novos Alvos (Opcional)" (não estão no segmento). Usado pra renderizar
+    // os dois grupos em seções visuais separadas (alvos originais em cima,
+    // alvos novos embaixo do botão "+ Novos Alvos").
+    filterMode: 'segment' | 'extra' = 'segment'
   ) => {
+    const include = (inSeg: boolean, hasVal: boolean) => (filterMode === 'extra' ? !inSeg && hasVal : inSeg)
     // Bloco aparece se o SEGMENTO usa o campo (referência) OU se o
     // gatilho já tem um valor próprio nele — o segundo caso cobre "Novos
     // Alvos (Opcional)", onde o admin adiciona ao gatilho um campo que o
@@ -979,7 +993,7 @@ export default function AdminCrm() {
     const ring = (field: keyof FilterState) => (staleFields?.has(field) ? ' !border-2 !border-red-500' : '')
     const groupBorder = 'border border-white/10 rounded-xl p-3 space-y-2'
     const blocks: React.ReactNode[] = []
-    if (segmentCriteria.minOrders || value.minOrders) {
+    if (include(!!segmentCriteria.minOrders, !!value.minOrders)) {
       blocks.push(
         <div key="minOrders" className={groupBorder}>
           {fieldHeader(!!segmentCriteria.minOrders, ['minOrders', 'minOrdersDays'])}
@@ -992,7 +1006,7 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.minItems || value.minItems) {
+    if (include(!!segmentCriteria.minItems, !!value.minItems)) {
       blocks.push(
         <div key="minItems" className={groupBorder}>
           {fieldHeader(!!segmentCriteria.minItems, ['minItems', 'minItemsDays'])}
@@ -1005,7 +1019,7 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.spentBelowAmount || value.spentBelowAmount) {
+    if (include(!!segmentCriteria.spentBelowAmount, !!value.spentBelowAmount)) {
       blocks.push(
         <div key="spentBelow" className={groupBorder}>
           {fieldHeader(!!segmentCriteria.spentBelowAmount, ['spentBelowAmount', 'spentBelowDays'])}
@@ -1019,7 +1033,7 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.spentAboveAmount || value.spentAboveAmount) {
+    if (include(!!segmentCriteria.spentAboveAmount, !!value.spentAboveAmount)) {
       blocks.push(
         <div key="spentAbove" className={groupBorder}>
           {fieldHeader(!!segmentCriteria.spentAboveAmount, ['spentAboveAmount', 'spentAboveDays'])}
@@ -1033,7 +1047,7 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.frequencyDropPercent || value.frequencyDropPercent) {
+    if (include(!!segmentCriteria.frequencyDropPercent, !!value.frequencyDropPercent)) {
       blocks.push(
         <div key="frequencyDrop" className={groupBorder}>
           {fieldHeader(!!segmentCriteria.frequencyDropPercent, ['frequencyDropPercent'])}
@@ -1048,7 +1062,7 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.frequencyIncreasePercent || value.frequencyIncreasePercent) {
+    if (include(!!segmentCriteria.frequencyIncreasePercent, !!value.frequencyIncreasePercent)) {
       blocks.push(
         <div key="frequencyIncrease" className={groupBorder}>
           {fieldHeader(!!segmentCriteria.frequencyIncreasePercent, ['frequencyIncreasePercent'])}
@@ -1063,7 +1077,7 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.newCustomerDays || value.newCustomerDays) {
+    if (include(!!segmentCriteria.newCustomerDays, !!value.newCustomerDays)) {
       blocks.push(
         <div key="newCustomer" className={groupBorder}>
           {fieldHeader(!!segmentCriteria.newCustomerDays, ['newCustomerDays'])}
@@ -1071,7 +1085,7 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.maxDistanceKm || value.maxDistanceKm) {
+    if (include(!!segmentCriteria.maxDistanceKm, !!value.maxDistanceKm)) {
       blocks.push(
         <div key="maxDistance" className={groupBorder}>
           {fieldHeader(!!segmentCriteria.maxDistanceKm, ['maxDistanceKm'])}
@@ -1079,7 +1093,7 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.neighborhoods.length > 0 || value.neighborhoods.length > 0) {
+    if (include(segmentCriteria.neighborhoods.length > 0, value.neighborhoods.length > 0)) {
       blocks.push(
         <div key="neighborhoods" className={groupBorder}>
           {fieldHeader(segmentCriteria.neighborhoods.length > 0, ['neighborhoods'])}
@@ -1115,7 +1129,7 @@ export default function AdminCrm() {
         </div>
       )
     }
-    if (segmentCriteria.birthdayMonth || value.birthdayMonth) {
+    if (include(!!segmentCriteria.birthdayMonth, !!value.birthdayMonth)) {
       blocks.push(
         <div key="birthday" className={groupBorder}>
           {fieldHeader(!!segmentCriteria.birthdayMonth, ['birthdayMonth'])}
@@ -1135,7 +1149,8 @@ export default function AdminCrm() {
       )
     }
     const segmentHasRecurring = segmentCriteria.recurringProductIds.length > 0 || segmentCriteria.recurringCategoryIds.length > 0
-    if (segmentHasRecurring || value.recurringProductIds.length > 0 || value.recurringCategoryIds.length > 0) {
+    const valueHasRecurring = value.recurringProductIds.length > 0 || value.recurringCategoryIds.length > 0
+    if (include(segmentHasRecurring, valueHasRecurring)) {
       const recurringSelectionChanged = staleFields?.has('recurringProductIds') || staleFields?.has('recurringCategoryIds')
       blocks.push(
         <div key="recurring" className={groupBorder}>
@@ -1449,6 +1464,7 @@ export default function AdminCrm() {
       const form = { name: cc.name, description: cc.description ?? '', starts_at: cc.starts_at ?? '', ends_at: cc.ends_at ?? '' }
       setCampanhaCadastroForm(form)
       setOriginalCampanhaCadastroForm(form)
+      setCampanhaEndMode(cc.ends_at ? 'data' : 'sem_prazo')
       setCampanhaCadastroError(null)
       setEditingCampanhaId(cc.id)
       return
@@ -1467,6 +1483,8 @@ export default function AdminCrm() {
       const criteria = (cc.end_criteria as unknown as FilterState) ?? EMPTY_FILTER
       setCampanhaEndCriteria(criteria)
       setOriginalCampanhaEndCriteria(criteria)
+      setCampanhaEndDescription(cc.end_description ?? '')
+      setOriginalCampanhaEndDescription(cc.end_description ?? '')
       setCampanhaEndSaveError(null)
       setEditingCampanhaId(cc.id)
       return
@@ -1648,14 +1666,20 @@ export default function AdminCrm() {
   }
 
   const campanhaEndHasChanged =
-    !editingCampanhaId || JSON.stringify(campanhaEndCriteria) !== JSON.stringify(originalCampanhaEndCriteria)
+    !editingCampanhaId ||
+    JSON.stringify(campanhaEndCriteria) !== JSON.stringify(originalCampanhaEndCriteria) ||
+    campanhaEndDescription !== originalCampanhaEndDescription
 
   const saveGatilhoFim = async () => {
     if (!editingCampanhaId) return
     setCampanhaEndSaveError(null)
     setSavingCampanhaEnd(true)
     try {
-      const row = await api.admin.campanhaCoupons.setEndCriteria(editingCampanhaId, campanhaEndCriteria as unknown as CrmFilterCriteria)
+      const row = await api.admin.campanhaCoupons.setEndCriteria(
+        editingCampanhaId,
+        campanhaEndCriteria as unknown as CrmFilterCriteria,
+        campanhaEndDescription.trim() || undefined
+      )
       setEditingCampanhaId(null)
       loadCampanhaCoupons(row.segment_id)
     } catch (err) {
@@ -2679,13 +2703,15 @@ export default function AdminCrm() {
                             </>
                           )}
 
-                          <button
-                            type="button"
-                            onClick={() => setCampanhaNovoChooserId(cc.id)}
-                            className="flex items-center gap-1 px-2.5 py-2 rounded-xl border border-dashed border-son-gold/40 text-son-gold text-[10px] font-semibold hover:bg-son-gold/10 flex-shrink-0"
-                          >
-                            <Plus className="w-3 h-3" /> Novo
-                          </button>
+                          {!(cc.orientation === 'evento' && cc.end_criteria) && (
+                            <button
+                              type="button"
+                              onClick={() => setCampanhaNovoChooserId(cc.id)}
+                              className="btn-primary text-sm py-2.5 px-3 flex-shrink-0"
+                            >
+                              <Plus className="w-4 h-4" /> Novo
+                            </button>
+                          )}
 
                           <ToggleSwitch checked={!stale && cc.active} onClick={() => (stale ? setStaleDialogCampanha(cc) : toggleCampanhaActive(cc))} />
                         </div>
@@ -2865,25 +2891,54 @@ export default function AdminCrm() {
                       onChange={(e) => setCampanhaCadastroForm({ ...campanhaCadastroForm, description: e.target.value })}
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Data de início (opcional)</label>
-                      <input
-                        className="input-field"
-                        type="date"
-                        value={campanhaCadastroForm.starts_at}
-                        onChange={(e) => setCampanhaCadastroForm({ ...campanhaCadastroForm, starts_at: e.target.value })}
-                      />
+                  <div>
+                    <label className="label">Data de início (opcional)</label>
+                    <DateInput
+                      value={campanhaCadastroForm.starts_at}
+                      onChange={(starts_at) => setCampanhaCadastroForm({ ...campanhaCadastroForm, starts_at })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="label">Como esta campanha encerra</label>
+                    <div className="flex flex-wrap gap-3">
+                      <label className="flex items-center gap-1.5 text-sm text-son-silver">
+                        <input
+                          type="radio"
+                          name="campanha-end-mode"
+                          className="w-4 h-4 accent-son-pink"
+                          checked={campanhaEndMode === 'data'}
+                          onChange={() => setCampanhaEndMode('data')}
+                        />
+                        Data específica
+                      </label>
+                      <label className="flex items-center gap-1.5 text-sm text-son-silver">
+                        <input
+                          type="radio"
+                          name="campanha-end-mode"
+                          className="w-4 h-4 accent-son-pink"
+                          checked={campanhaEndMode === 'sem_prazo'}
+                          onChange={() => {
+                            setCampanhaEndMode('sem_prazo')
+                            setCampanhaCadastroForm({ ...campanhaCadastroForm, ends_at: '' })
+                          }}
+                        />
+                        Sem prazo definido
+                      </label>
                     </div>
-                    <div>
-                      <label className="label">Data de encerramento (opcional)</label>
-                      <input
-                        className="input-field"
-                        type="date"
+                    {campanhaEndMode === 'data' && (
+                      <DateInput
                         value={campanhaCadastroForm.ends_at}
-                        onChange={(e) => setCampanhaCadastroForm({ ...campanhaCadastroForm, ends_at: e.target.value })}
+                        onChange={(ends_at) => setCampanhaCadastroForm({ ...campanhaCadastroForm, ends_at })}
                       />
-                    </div>
+                    )}
+                    {editingCampanhaRow.orientation === 'evento' && (
+                      <label className="flex items-center gap-1.5 text-xs text-son-silver-dim">
+                        <input type="checkbox" checked={!!editingCampanhaRow.end_criteria} disabled className="w-3.5 h-3.5 accent-red-400 opacity-60" />
+                        {editingCampanhaRow.end_criteria
+                          ? 'Também encerra por evento (configurado no subcard "Gatilho de encerramento")'
+                          : 'Também pode encerrar por evento — configure no subcard "Gatilho de encerramento" da cadeia'}
+                      </label>
+                    )}
                   </div>
                   {campanhaCadastroError && <p className="error-msg">{campanhaCadastroError}</p>}
                   <button
@@ -2902,37 +2957,55 @@ export default function AdminCrm() {
                       (editingCampanhaRow.last_synced_segment_criteria as unknown as FilterState) ?? EMPTY_FILTER,
                       editingCampanhaSegment.filter_criteria as unknown as FilterState
                     )
+                    const segmentBlocks = renderTriggerFields(
+                      editingCampanhaSegment.filter_criteria as unknown as FilterState,
+                      gatilhoForm,
+                      (patch) => setGatilhoForm({ ...gatilhoForm, ...patch }),
+                      changedKeys,
+                      removeGatilhoField,
+                      'segment'
+                    )
+                    const extraBlocks = renderTriggerFields(
+                      editingCampanhaSegment.filter_criteria as unknown as FilterState,
+                      gatilhoForm,
+                      (patch) => setGatilhoForm({ ...gatilhoForm, ...patch }),
+                      changedKeys,
+                      removeGatilhoField,
+                      'extra'
+                    )
                     return (
-                      <div className="space-y-2">
-                        <label className="label">
-                          Alvos do gatilho{' '}
-                          {changedKeys.size > 0 && (
-                            <span className="text-red-400 font-normal">
-                              (o segmento mudou — ajuste ou confirme o(s) campo(s) destacado(s) em vermelho abaixo)
-                            </span>
-                          )}
-                        </label>
-                        {renderTriggerFields(
-                          editingCampanhaSegment.filter_criteria as unknown as FilterState,
-                          gatilhoForm,
-                          (patch) => setGatilhoForm({ ...gatilhoForm, ...patch }),
-                          changedKeys,
-                          removeGatilhoField
+                      <>
+                        <div className="space-y-2">
+                          <label className="label">
+                            Alvos do gatilho{' '}
+                            {changedKeys.size > 0 && (
+                              <span className="text-red-400 font-normal">
+                                (o segmento mudou — ajuste ou confirme o(s) campo(s) destacado(s) em vermelho abaixo)
+                              </span>
+                            )}
+                          </label>
+                          {segmentBlocks}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGatilhoExtraFilter(EMPTY_FILTER)
+                            setGatilhoExtraError(null)
+                            setGatilhoExtraOpen(true)
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-cyan-400/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/10 w-full justify-center"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Novos Alvos (Opcional)
+                        </button>
+                        {extraBlocks.length > 0 && (
+                          <div className="space-y-2">
+                            <label className="label">Novos alvos</label>
+                            {extraBlocks}
+                          </div>
                         )}
-                      </div>
+                      </>
                     )
                   })()}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setGatilhoExtraFilter(EMPTY_FILTER)
-                      setGatilhoExtraError(null)
-                      setGatilhoExtraOpen(true)
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-cyan-400/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/10 w-full justify-center"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Novos Alvos (Opcional)
-                  </button>
                   <div>
                     <label className="label">Descrição interna (opcional)</label>
                     <textarea
@@ -3046,33 +3119,67 @@ export default function AdminCrm() {
                   <p className="text-xs text-son-silver-dim">
                     Quando esses alvos baterem, a campanha inteira (gatilho + todos os cupons) é desativada automaticamente.
                   </p>
-                  {editingCampanhaSegment && (
-                    <div className="space-y-2">
-                      <label className="label">Alvos que encerram a campanha</label>
-                      {renderTriggerFields(
-                        editingCampanhaSegment.filter_criteria as unknown as FilterState,
-                        campanhaEndCriteria,
-                        (patch) => setCampanhaEndCriteria({ ...campanhaEndCriteria, ...patch }),
-                        undefined,
-                        (keys) => {
-                          const patch: Partial<FilterState> = {}
-                          for (const key of keys) (patch as Record<string, unknown>)[key] = EMPTY_FILTER[key]
-                          setCampanhaEndCriteria({ ...campanhaEndCriteria, ...patch })
-                        }
-                      )}
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCampanhaEndExtraFilter(EMPTY_FILTER)
-                      setCampanhaEndExtraError(null)
-                      setCampanhaEndExtraOpen(true)
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-red-400/40 text-red-300 text-xs font-semibold hover:bg-red-500/10 w-full justify-center"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Novos Alvos (Opcional)
-                  </button>
+                  {editingCampanhaSegment && (() => {
+                    const segmentBlocks = renderTriggerFields(
+                      editingCampanhaSegment.filter_criteria as unknown as FilterState,
+                      campanhaEndCriteria,
+                      (patch) => setCampanhaEndCriteria({ ...campanhaEndCriteria, ...patch }),
+                      undefined,
+                      (keys) => {
+                        const patch: Partial<FilterState> = {}
+                        for (const key of keys) (patch as Record<string, unknown>)[key] = EMPTY_FILTER[key]
+                        setCampanhaEndCriteria({ ...campanhaEndCriteria, ...patch })
+                      },
+                      'segment'
+                    )
+                    const extraBlocks = renderTriggerFields(
+                      editingCampanhaSegment.filter_criteria as unknown as FilterState,
+                      campanhaEndCriteria,
+                      (patch) => setCampanhaEndCriteria({ ...campanhaEndCriteria, ...patch }),
+                      undefined,
+                      (keys) => {
+                        const patch: Partial<FilterState> = {}
+                        for (const key of keys) (patch as Record<string, unknown>)[key] = EMPTY_FILTER[key]
+                        setCampanhaEndCriteria({ ...campanhaEndCriteria, ...patch })
+                      },
+                      'extra'
+                    )
+                    return (
+                      <>
+                        <div className="space-y-2">
+                          <label className="label">Alvos que encerram a campanha</label>
+                          {segmentBlocks}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCampanhaEndExtraFilter(EMPTY_FILTER)
+                            setCampanhaEndExtraError(null)
+                            setCampanhaEndExtraOpen(true)
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-red-400/40 text-red-300 text-xs font-semibold hover:bg-red-500/10 w-full justify-center"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Novos Alvos (Opcional)
+                        </button>
+                        {extraBlocks.length > 0 && (
+                          <div className="space-y-2">
+                            <label className="label">Novos alvos</label>
+                            {extraBlocks}
+                          </div>
+                        )}
+                      </>
+                    )
+                  })()}
+                  <div>
+                    <label className="label">Descrição interna (opcional)</label>
+                    <textarea
+                      className="input-field"
+                      rows={2}
+                      placeholder="Anotação só pra equipe, não aparece pro cliente"
+                      value={campanhaEndDescription}
+                      onChange={(e) => setCampanhaEndDescription(e.target.value)}
+                    />
+                  </div>
                   {campanhaEndSaveError && <p className="error-msg">{campanhaEndSaveError}</p>}
                   <button
                     onClick={saveGatilhoFim}
@@ -3649,33 +3756,55 @@ export default function AdminCrm() {
                         />
                         <Zap className="w-4 h-4 text-amber-400" /> Encerrar por evento
                       </label>
-                      {extraCouponEndEnabled && extraCouponSegment && (
-                        <div className="space-y-2">
-                          <label className="label">Alvos que encerram este cupom</label>
-                          {renderTriggerFields(
-                            extraCouponSegment.filter_criteria as unknown as FilterState,
-                            extraCouponEndCriteria,
-                            (patch) => setExtraCouponEndCriteria({ ...extraCouponEndCriteria, ...patch }),
-                            undefined,
-                            (keys) => {
-                              const patch: Partial<FilterState> = {}
-                              for (const key of keys) (patch as Record<string, unknown>)[key] = EMPTY_FILTER[key]
-                              setExtraCouponEndCriteria({ ...extraCouponEndCriteria, ...patch })
-                            }
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setExtraCouponEndExtraFilter(EMPTY_FILTER)
-                              setExtraCouponEndExtraError(null)
-                              setExtraCouponEndExtraOpen(true)
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-amber-400/40 text-amber-300 text-xs font-semibold hover:bg-amber-500/10 w-full justify-center"
-                          >
-                            <Plus className="w-3.5 h-3.5" /> Novos Alvos (Opcional)
-                          </button>
-                        </div>
-                      )}
+                      {extraCouponEndEnabled && extraCouponSegment && (() => {
+                        const segmentBlocks = renderTriggerFields(
+                          extraCouponSegment.filter_criteria as unknown as FilterState,
+                          extraCouponEndCriteria,
+                          (patch) => setExtraCouponEndCriteria({ ...extraCouponEndCriteria, ...patch }),
+                          undefined,
+                          (keys) => {
+                            const patch: Partial<FilterState> = {}
+                            for (const key of keys) (patch as Record<string, unknown>)[key] = EMPTY_FILTER[key]
+                            setExtraCouponEndCriteria({ ...extraCouponEndCriteria, ...patch })
+                          },
+                          'segment'
+                        )
+                        const extraBlocks = renderTriggerFields(
+                          extraCouponSegment.filter_criteria as unknown as FilterState,
+                          extraCouponEndCriteria,
+                          (patch) => setExtraCouponEndCriteria({ ...extraCouponEndCriteria, ...patch }),
+                          undefined,
+                          (keys) => {
+                            const patch: Partial<FilterState> = {}
+                            for (const key of keys) (patch as Record<string, unknown>)[key] = EMPTY_FILTER[key]
+                            setExtraCouponEndCriteria({ ...extraCouponEndCriteria, ...patch })
+                          },
+                          'extra'
+                        )
+                        return (
+                          <div className="space-y-2">
+                            <label className="label">Alvos que encerram este cupom</label>
+                            {segmentBlocks}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExtraCouponEndExtraFilter(EMPTY_FILTER)
+                                setExtraCouponEndExtraError(null)
+                                setExtraCouponEndExtraOpen(true)
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-amber-400/40 text-amber-300 text-xs font-semibold hover:bg-amber-500/10 w-full justify-center"
+                            >
+                              <Plus className="w-3.5 h-3.5" /> Novos Alvos (Opcional)
+                            </button>
+                            {extraBlocks.length > 0 && (
+                              <div className="space-y-2">
+                                <label className="label">Novos alvos</label>
+                                {extraBlocks}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </div>
                   )
                 })()}
