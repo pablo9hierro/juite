@@ -7,6 +7,7 @@ import ExpiryInput from '../../components/admin/ExpiryInput'
 import DateInput from '../../components/admin/DateInput'
 import ProductCategoryMultiSelect from '../../components/admin/ProductCategoryMultiSelect'
 import ProductDiscountList from '../../components/admin/ProductDiscountList'
+import ToggleSwitch from '../../components/admin/ToggleSwitch'
 import { api, ApiError } from '../../lib/api'
 import type {
   CampanhaOrientation,
@@ -336,26 +337,6 @@ function getCampanhaNovoOptions(cc: CrmCampanhaCoupon): { cupomEnabled: boolean;
     // não pode ter dois (edita o existente em vez de criar outro).
     gatilhoFimEnabled: cc.orientation === 'evento' && !cc.end_criteria,
   }
-}
-
-// Chave-mestra de on/off do app — pill com bolinha deslizante, igual ao
-// modelo que o admin desenhou (ON: texto + bolinha à direita; OFF:
-// bolinha + texto à esquerda), em vez de um badge de texto "Ativo/Inativo".
-function ToggleSwitch({ checked, onClick }: { checked: boolean; onClick: (e: React.MouseEvent) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center w-[4.5rem] h-7 px-1 rounded-full border transition-colors duration-200 flex-shrink-0 ${
-        checked ? 'justify-end bg-emerald-500/15 border-emerald-400/60' : 'justify-start bg-white/5 border-white/20'
-      }`}
-    >
-      <span className={`flex items-center gap-1.5 ${checked ? 'flex-row-reverse' : ''}`}>
-        <span className={`w-5 h-5 rounded-full flex-shrink-0 ${checked ? 'bg-emerald-400' : 'bg-son-silver-dim'}`} />
-        <span className={`text-[10px] font-bold ${checked ? 'text-emerald-300' : 'text-son-silver-dim'}`}>{checked ? 'ON' : 'OFF'}</span>
-      </span>
-    </button>
-  )
 }
 
 type ProductDiscountMode = 'nenhum' | 'flat' | 'produto'

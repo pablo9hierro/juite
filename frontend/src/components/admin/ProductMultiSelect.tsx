@@ -64,7 +64,7 @@ export default function ProductMultiSelect({
                 className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-son-silver hover:bg-son-surface-light text-left"
               >
                 <span className="truncate">{p.name}</span>
-                {p.barcode && <span className="text-xs text-son-silver-dim font-mono flex-shrink-0">{p.barcode}</span>}
+                {p.barcode && <span className="text-xs text-son-silver-dim font-mono flex-shrink-0 max-w-[140px] truncate">{p.barcode}</span>}
               </button>
             ))}
           </div>

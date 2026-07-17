@@ -4,6 +4,7 @@ import Card from '../../components/ui/Card'
 import ExpiryInput from '../../components/admin/ExpiryInput'
 import ProductMultiSelect from '../../components/admin/ProductMultiSelect'
 import ProductDiscountList from '../../components/admin/ProductDiscountList'
+import ToggleSwitch from '../../components/admin/ToggleSwitch'
 import { api, ApiError } from '../../lib/api'
 import type { DiscountType, Product, ProductDiscount, Promotion, PromotionType } from '../../lib/types'
 
@@ -126,6 +127,7 @@ export default function AdminPromocoes() {
 
   const [promotions, setPromotions] = useState<Promotion[]>([])
   const [promotionsLoading, setPromotionsLoading] = useState(true)
+  const [promotionChooserOpen, setPromotionChooserOpen] = useState(false)
   const [showPromotionForm, setShowPromotionForm] = useState(false)
   const [promotionForm, setPromotionForm] = useState<PromotionForm>(EMPTY_PROMOTION_FORM)
   const [editingPromotionId, setEditingPromotionId] = useState<string | null>(null)
@@ -163,9 +165,16 @@ export default function AdminPromocoes() {
     }
   }
 
-  const openNewPromotion = () => {
+  // Escolher o tipo é o PRIMEIRO passo, num toggle separado — só depois
+  // disso abre o formulário de verdade, já dedicado àquele tipo (sem tabs
+  // pra trocar depois, evita o formulário misturar campo de um tipo com
+  // estado deixado do outro).
+  const openPromotionChooser = () => setPromotionChooserOpen(true)
+
+  const startNewPromotion = (type: PromotionType) => {
+    setPromotionChooserOpen(false)
     setEditingPromotionId(null)
-    setPromotionForm(EMPTY_PROMOTION_FORM)
+    setPromotionForm({ ...EMPTY_PROMOTION_FORM, promotion_type: type })
     setPromotionError(null)
     setShowPromotionForm(true)
   }
@@ -258,7 +267,7 @@ export default function AdminPromocoes() {
 
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-black">Promoções</h1>
-        <button onClick={openNewPromotion} className="btn-primary text-sm py-2 px-4">
+        <button onClick={openPromotionChooser} className="btn-primary text-sm py-2 px-4">
           <Plus className="w-4 h-4" /> Nova promoção
         </button>
       </div>
@@ -308,14 +317,7 @@ export default function AdminPromocoes() {
                 </div>
               </button>
               <div className="flex items-center justify-between mt-3">
-                <button
-                  onClick={() => togglePromotionActive(p)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                    p.active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/10 text-son-silver-dim'
-                  }`}
-                >
-                  {p.active ? 'Ativa' : 'Inativa'}
-                </button>
+                <ToggleSwitch checked={p.active ?? true} onClick={() => togglePromotionActive(p)} />
                 <div className="flex items-center gap-3">
                   <button onClick={() => openEditPromotion(p)} className="text-xs font-semibold text-son-silver-dim hover:text-white">
                     Editar
@@ -330,15 +332,45 @@ export default function AdminPromocoes() {
         </div>
       )}
 
+      {promotionChooserOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass rounded-2xl p-5 max-w-sm w-full space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-white text-lg">Nova promoção</h3>
+              <button onClick={() => setPromotionChooserOpen(false)} className="text-son-silver-dim hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-son-silver-dim">Qual tipo de promoção você quer criar?</p>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => startNewPromotion('kit')}
+                className="w-full text-left px-4 py-3 rounded-xl border border-dashed border-son-gold/40 text-son-gold text-sm font-semibold hover:bg-son-gold/10"
+              >
+                Kit (pacote fechado)
+                <span className="block text-xs font-normal text-son-silver-dim mt-0.5">
+                  Cliente leva todos os itens juntos ou não compra nada — desconto único sobre o total.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => startNewPromotion('selfie_service')}
+                className="w-full text-left px-4 py-3 rounded-xl border border-dashed border-son-pink/40 text-son-pink text-sm font-semibold hover:bg-son-pink/10"
+              >
+                Selfie service (cliente monta o carrinho)
+                <span className="block text-xs font-normal text-son-silver-dim mt-0.5">
+                  Cliente escolhe entre os produtos da promoção — cada um com seu próprio desconto.
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showPromotionForm && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
-          onClick={() => {
-            setShowPromotionForm(false)
-            setEditingPromotionId(null)
-          }}
-        >
-          <div className="glass rounded-2xl p-6 max-w-2xl w-full my-8" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-white">{editingPromotionId ? 'Editar promoção' : 'Nova promoção'}</h3>
               <button
@@ -397,19 +429,14 @@ export default function AdminPromocoes() {
               </div>
               <div>
                 <label className="label">Tipo de promoção</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {(['kit', 'selfie_service'] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setPromotionForm({ ...promotionForm, promotion_type: t })}
-                      className={`py-2.5 rounded-xl border text-xs font-medium transition-all ${
-                        promotionForm.promotion_type === t ? 'sunset-bg text-white border-transparent' : 'bg-son-surface border-white/10 text-son-silver'
-                      }`}
-                    >
-                      {PROMOTION_TYPE_LABEL[t]}
-                    </button>
-                  ))}
+                <div
+                  className={`py-2.5 px-3 rounded-xl border text-xs font-medium ${
+                    promotionForm.promotion_type === 'kit'
+                      ? 'border-son-gold/40 text-son-gold bg-son-gold/10'
+                      : 'border-son-pink/40 text-son-pink bg-son-pink/10'
+                  }`}
+                >
+                  {PROMOTION_TYPE_LABEL[promotionForm.promotion_type]}
                 </div>
                 <p className="text-xs text-son-silver-dim mt-1.5">
                   {promotionForm.promotion_type === 'kit'
