@@ -84,6 +84,26 @@ async function request<T>(
   return res.json() as Promise<T>
 }
 
+// Pix (frontend/api/pix-*.ts) roda como Edge Function na própria Vercel —
+// path relativo, nunca passa por API_BASE (Railway).
+async function callVercelPixApi(path: string, orderId: string): Promise<Order> {
+  let res: Response
+  try {
+    res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_id: orderId }),
+    })
+  } catch {
+    throw new ApiError(0, 'Não foi possível conectar ao servidor de pagamento. Tente novamente em instantes.')
+  }
+  const body = await res.json().catch(() => null)
+  if (!res.ok) {
+    throw new ApiError(res.status, body?.error || `Erro ${res.status} ao processar o pagamento.`)
+  }
+  return body as Order
+}
+
 function adminToken() {
   return useAdminAuth.getState().token ?? undefined
 }
@@ -119,14 +139,11 @@ const remoteApi = {
     create: supabasePublicApi.orders.create,
     get: supabasePublicApi.orders.get,
     track: supabasePublicApi.orders.track,
-    // Pix ainda depende do backend Rust (precisa da chave secreta da
-    // AbacatePay) até virar uma Supabase Edge Function.
-    createPixPayment: (id: string) =>
-      request<Order>(`/api/orders/${id}/create-pix-payment`, { method: 'POST' }),
-    refreshPayment: (id: string) =>
-      request<Order>(`/api/orders/${id}/refresh-payment`, { method: 'POST' }),
-    simulatePixPaid: (id: string) =>
-      request<Order>(`/api/orders/${id}/simulate-pix-paid`, { method: 'POST' }),
+    // Pix roda via Vercel Edge Function (frontend/api/pix-*.ts) direto no
+    // Supabase — não depende mais do backend Rust/Railway.
+    createPixPayment: (id: string) => callVercelPixApi('/api/pix-create', id),
+    refreshPayment: (id: string) => callVercelPixApi('/api/pix-check', id),
+    simulatePixPaid: (id: string) => callVercelPixApi('/api/pix-simulate', id),
     // Público — dispara logo após o checkout, avisando que o pedido chegou.
     notifyCreated: (orderId: string) =>
       request<void>('/api/orders/notify-created', {

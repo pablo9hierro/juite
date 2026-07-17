@@ -205,6 +205,10 @@ async fn main() -> anyhow::Result<()> {
             post(routes::public::simulate_pix_paid),
         )
         .route("/api/orders/notify-created", post(routes::public::notify_order_created))
+        .route(
+            "/api/orders/{id}/notify-payment-received",
+            post(routes::public::notify_payment_received),
+        )
         .route("/api/pdv/notify-sale", post(routes::public::notify_pdv_sale))
         // Rota real entre dois pontos (Google Routes com fallback OSRM) —
         // usado tanto pela navegação do motoboy quanto pelo acompanhamento

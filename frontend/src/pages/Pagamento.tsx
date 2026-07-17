@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Check, Copy, Loader2, PartyPopper } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { QRCodeSVG } from 'qrcode.react'
 import SiteHeader from '../components/layout/SiteHeader'
 import { api } from '../lib/api'
 import type { Order } from '../lib/types'
@@ -31,8 +32,8 @@ export default function Pagamento() {
     api.orders.get(orderId).then(async (o) => {
       // Nada cria a cobrança Pix antes disso (nem o checkout, nem a RPC de
       // criar pedido) — na primeira vez que essa tela abre pra um pedido
-      // Pix sem QR ainda, gera a cobrança de verdade agora.
-      if (o.payment_method === 'pix' && o.payment_status !== 'pago' && !o.pix_qr_base64) {
+      // Pix sem cobrança ainda, gera de verdade agora.
+      if (o.payment_method === 'pix' && o.payment_status !== 'pago' && !o.pix_copia_cola) {
         try {
           o = await api.orders.createPixPayment(orderId)
         } catch {
@@ -106,8 +107,8 @@ export default function Pagamento() {
             <p className="text-son-silver-dim text-sm mb-6">Escaneie o QR code ou copie o código abaixo.</p>
 
             <div className="bg-white rounded-2xl p-4 inline-block mb-6">
-              {order.pix_qr_base64 ? (
-                <img src={order.pix_qr_base64} alt="QR Code Pix" className="w-56 h-56" />
+              {order.pix_copia_cola ? (
+                <QRCodeSVG value={order.pix_copia_cola} size={224} />
               ) : (
                 <div className="w-56 h-56 flex items-center justify-center text-gray-400 text-sm">QR indisponível</div>
               )}

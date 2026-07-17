@@ -136,6 +136,27 @@ pub async fn notify_pdv_sale(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Só manda o WhatsApp de "pagamento confirmado" pra esse pedido — chamada
+/// pela Vercel Edge Function depois que ELA já confirmou o pagamento no
+/// Supabase (o Pix em si saiu do Rust/Railway, mas o envio de WhatsApp via
+/// Evolution API continua aqui, de propósito).
+pub async fn notify_payment_received(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let Some(order) = fetch_order_row(&state.pool, &id).await? else {
+        return Err(AppError::NotFound("order not found".to_string()));
+    };
+
+    let digits = whatsapp::digits_only(&order.customer_whatsapp);
+    let msg = format!(
+        "Recebemos seu pagamento! Seu pedido #{} já está sendo preparado. 🌇",
+        short_id(&order.id)
+    );
+    whatsapp::notify(&state, &state.evolution_instance, &digits, &msg);
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn refresh_payment(
     State(state): State<AppState>,
     Path(id): Path<String>,
