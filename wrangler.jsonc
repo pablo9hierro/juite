@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sunset-tabas-api",
+  "compatibility_date": "2026-07-18",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "frontend"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}
