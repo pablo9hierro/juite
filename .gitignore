@@ -11,6 +11,7 @@ whatsapp-gateway/node_modules/
 whatsapp-gateway/.env
 whatsapp-gateway/.wwebjs_auth/
 whatsapp-gateway/.wwebjs_cache/
+worker/.wrangler/
 
 # Env
 .env
