@@ -1,11 +1,13 @@
 // Distância em linha reta é calculada aqui mesmo (client-side, de graça).
-// A rota real pelas ruas passa pelo NOSSO backend (/api/route) em vez de
-// bater direto no OSRM ou na Google — o backend decide qual das duas usar
+// A rota real pelas ruas passa por um Cloudflare Worker (/api/route) em vez
+// de bater direto no OSRM ou na Google — o Worker decide qual das duas usar
 // (Google Routes quando GOOGLE_ROUTES_API_KEY estiver configurada, OSRM
 // como fallback gratuito enquanto isso não acontece) sem expor nenhuma
-// chave no navegador.
-import { API_BASE } from '../api'
+// chave no navegador. Primeira rota migrada do backend Rust (Railway) pra
+// serverless — ver worker/src/index.ts.
 import type { Ponto, Rota } from './tipos'
+
+const WORKER_BASE = import.meta.env.VITE_WORKER_BASE_URL || 'https://sunset-tabas-api.mulekinrx1v9.workers.dev'
 
 // Distância em LINHA RETA entre dois pontos (fórmula de Haversine). Zero
 // requisição — é só matemática, funciona offline. Mesma fórmula usada no
@@ -23,7 +25,7 @@ export function distanciaKm(a: Ponto, b: Ponto): number {
 // km/min. NÃO usada pro cálculo do frete (esse usa linha reta, calculado
 // direto no banco).
 export async function calcularRota(de: Ponto, ate: Ponto): Promise<Rota> {
-  const r = await fetch(`${API_BASE}/api/route`, {
+  const r = await fetch(`${WORKER_BASE}/api/route`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ de, ate }),
