@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { Loader2, Lock } from 'lucide-react'
+import { Loader2, Lock, Users } from 'lucide-react'
 import Logo from '../../components/ui/Logo'
 import { api, ApiError } from '../../lib/api'
 import { useAdminAuth } from '../../store/adminAuth'
@@ -60,13 +60,20 @@ export default function AdminLogin() {
             <label className="label">Senha</label>
             <input className="input-field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
-          {error && <p className="error-msg">{error}</p>}
+          {error && (
+            <div>
+              <p className="error-msg">{error}</p>
+              <p className="text-xs text-son-silver-dim mt-1">
+                É motoboy ou vendedor? Essa tela é só pro admin — use o botão abaixo.
+              </p>
+            </div>
+          )}
           <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Entrar
           </button>
-          <Link to="/funcionarios/login" className="block text-center text-xs text-son-silver-dim hover:text-white">
-            É motoboy ou vendedor? Entrar aqui
+          <Link to="/funcionarios/login" className="btn-secondary w-full flex items-center justify-center gap-2 text-sm">
+            <Users className="w-4 h-4" /> Sou vendedor ou motoboy
           </Link>
         </div>
       </form>

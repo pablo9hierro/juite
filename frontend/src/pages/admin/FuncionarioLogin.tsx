@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { Loader2, Store, Truck } from 'lucide-react'
+import { Loader2, Lock, Store, Truck } from 'lucide-react'
 import Logo from '../../components/ui/Logo'
 import { api, ApiError } from '../../lib/api'
 import { useAdminAuth } from '../../store/adminAuth'
@@ -88,7 +88,15 @@ export default function FuncionarioLogin() {
             <label className="label">Senha</label>
             <input className="input-field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
-          {error && <p className="error-msg">{error}</p>}
+          {error && (
+            <div>
+              <p className="error-msg">{error}</p>
+              <p className="text-xs text-son-silver-dim mt-1">
+                Confira se a aba certa ({role === 'vendedor' ? 'Vendedor' : 'Motoboy'}) está selecionada acima, e se o
+                e-mail/senha são os mesmos cadastrados pelo admin em Funcionários.
+              </p>
+            </div>
+          )}
           <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Entrar
@@ -96,8 +104,8 @@ export default function FuncionarioLogin() {
           <p className="text-center text-xs text-son-silver-dim">
             Esqueceu a senha? Peça pro admin ver/redefinir em Funcionários.
           </p>
-          <Link to="/admin/login" className="block text-center text-xs text-son-silver-dim hover:text-white">
-            É admin? Entrar aqui
+          <Link to="/admin/login" className="btn-secondary w-full flex items-center justify-center gap-2 text-sm">
+            <Lock className="w-4 h-4" /> Sou admin
           </Link>
         </div>
       </form>
