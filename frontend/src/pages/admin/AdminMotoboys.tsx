@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Check, Loader2, MapPinned, Plus, Save, Store, Trash2, Truck, Wallet, X } from 'lucide-react'
 import Card from '../../components/ui/Card'
+import { useConfirmDialog } from '../../components/admin/useConfirmDialog'
 import { api, ApiError } from '../../lib/api'
 import type { Motoboy, PaymentMethod, Vendedor } from '../../lib/types'
 
@@ -97,6 +98,7 @@ function FreteSettingsCard() {
 }
 
 export default function AdminMotoboys() {
+  const { askConfirm, confirmDialogElement } = useConfirmDialog()
   const [tab, setTab] = useState<'motoboys' | 'vendedores'>('motoboys')
 
   const [motoboys, setMotoboys] = useState<Motoboy[]>([])
@@ -143,11 +145,11 @@ export default function AdminMotoboys() {
     }
   }
 
-  const remove = async (id: string) => {
-    if (!confirm('Remover este motoboy?')) return
-    await api.admin.motoboys.delete(id)
-    load()
-  }
+  const remove = (id: string) =>
+    askConfirm('Remover este motoboy?', async () => {
+      await api.admin.motoboys.delete(id)
+      load()
+    })
 
   const toggleActive = async (m: Motoboy) => {
     await api.admin.motoboys.update(m.id, { active: !m.active })
@@ -202,11 +204,11 @@ export default function AdminMotoboys() {
     }
   }
 
-  const removeVendedor = async (id: string) => {
-    if (!confirm('Remover este vendedor?')) return
-    await api.admin.vendedores.delete(id)
-    loadVendedores()
-  }
+  const removeVendedor = (id: string) =>
+    askConfirm('Remover este vendedor?', async () => {
+      await api.admin.vendedores.delete(id)
+      loadVendedores()
+    })
 
   const toggleVendedorActive = async (v: Vendedor) => {
     await api.admin.vendedores.update(v.id, {
@@ -513,6 +515,7 @@ export default function AdminMotoboys() {
           </div>
         </div>
       )}
+      {confirmDialogElement}
     </div>
   )
 }

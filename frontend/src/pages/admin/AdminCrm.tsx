@@ -8,6 +8,7 @@ import DateInput from '../../components/admin/DateInput'
 import ProductCategoryMultiSelect from '../../components/admin/ProductCategoryMultiSelect'
 import ProductDiscountList from '../../components/admin/ProductDiscountList'
 import ToggleSwitch from '../../components/admin/ToggleSwitch'
+import { useConfirmDialog } from '../../components/admin/useConfirmDialog'
 import { api, ApiError } from '../../lib/api'
 import type {
   CampanhaOrientation,
@@ -446,10 +447,7 @@ export default function AdminCrm() {
   const [categories, setCategories] = useState<Category[]>([])
   const [query, setQuery] = useState('')
 
-  // Diálogo de confirmação (substitui window.confirm nativo) — mesmo
-  // padrão de popup usado no resto da página.
-  const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null)
-  const askConfirm = (message: string, onConfirm: () => void) => setConfirmDialog({ message, onConfirm })
+  const { askConfirm, confirmDialogElement } = useConfirmDialog()
 
   // Popup com a lista de clientes de um segmento (clicando em "N cliente(s)").
   const [customerListSegment, setCustomerListSegment] = useState<CrmSegment | null>(null)
@@ -3939,43 +3937,7 @@ export default function AdminCrm() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {confirmDialog && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="glass rounded-2xl p-6 max-w-sm w-full"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <p className="text-white font-semibold mb-5">{confirmDialog.message}</p>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setConfirmDialog(null)} className="btn-secondary flex-1">
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    confirmDialog.onConfirm()
-                    setConfirmDialog(null)
-                  }}
-                  className="flex-1 rounded-2xl bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 transition-all"
-                >
-                  Remover
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {confirmDialogElement}
 
       <AnimatePresence>
         {customerListSegment && (

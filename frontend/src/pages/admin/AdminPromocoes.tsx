@@ -4,6 +4,7 @@ import Card from '../../components/ui/Card'
 import ExpiryInput from '../../components/admin/ExpiryInput'
 import ProductDiscountList from '../../components/admin/ProductDiscountList'
 import ToggleSwitch from '../../components/admin/ToggleSwitch'
+import { useConfirmDialog } from '../../components/admin/useConfirmDialog'
 import { api, ApiError } from '../../lib/api'
 import type { Category, Product, ProductDiscount, Promotion } from '../../lib/types'
 
@@ -109,6 +110,7 @@ function HeroImageCard() {
 }
 
 export default function AdminPromocoes() {
+  const { askConfirm, confirmDialogElement } = useConfirmDialog()
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
 
@@ -161,10 +163,20 @@ export default function AdminPromocoes() {
 
   const openEditPromotion = (p: Promotion) => {
     setEditingPromotionId(p.id)
+    // category_id não é persistido em product_discounts (o backend só
+    // conhece linha por produto) — re-tageia aqui pra tela de edição
+    // reconstruir o agrupamento "Categoria: X", cruzando com a categoria
+    // ATUAL de cada produto contra as regras de categoria da promoção.
+    const categoryRuleByCategory = new Map((p.category_discounts ?? []).map((cd) => [cd.category_id, cd]))
+    const productDiscounts = (p.product_discounts ?? []).map((d) => {
+      const product = products.find((prod) => prod.id === d.product_id)
+      const rule = product?.category_id ? categoryRuleByCategory.get(product.category_id) : undefined
+      return rule ? { ...d, category_id: rule.category_id } : d
+    })
     setPromotionForm({
       title: p.title,
       image_url: p.image_url,
-      productDiscounts: p.product_discounts ?? [],
+      productDiscounts,
       active: p.active ?? true,
       starts_at: p.starts_at ?? '',
       expires_at: p.expires_at ?? '',
@@ -185,12 +197,24 @@ export default function AdminPromocoes() {
     }
     setSavingPromotion(true)
     try {
+      // Produto entrou na lista via "categoria inteira" (tag category_id só
+      // existe no client) — manda também a regra por categoria, pra um
+      // produto novo (ou recategorizado) DEPOIS de salvar a promoção entrar
+      // em promoção sozinho via trigger no backend, sem precisar reabrir
+      // essa promoção pra reeditar.
+      const categoryDiscountsMap = new Map<string, { category_id: string; discount_type: 'percent' | 'fixed'; discount_value: number }>()
+      for (const d of promotionForm.productDiscounts) {
+        if (d.category_id && !categoryDiscountsMap.has(d.category_id)) {
+          categoryDiscountsMap.set(d.category_id, { category_id: d.category_id, discount_type: d.discount_type, discount_value: d.discount_value })
+        }
+      }
       const payload = {
         title: promotionForm.title,
         image_url: promotionForm.image_url,
         product_ids: promotionForm.productDiscounts.map((d) => d.product_id),
         promotion_type: 'selfie_service' as const,
         product_discounts: promotionForm.productDiscounts,
+        category_discounts: categoryDiscountsMap.size > 0 ? Array.from(categoryDiscountsMap.values()) : undefined,
         starts_at: promotionForm.starts_at || undefined,
         expires_at: promotionForm.expires_at || undefined,
       }
@@ -228,11 +252,11 @@ export default function AdminPromocoes() {
     loadPromotions()
   }
 
-  const removePromotion = async (id: string) => {
-    if (!confirm('Remover esta promoção?')) return
-    await api.admin.promotions.delete(id)
-    loadPromotions()
-  }
+  const removePromotion = (id: string) =>
+    askConfirm('Remover esta promoção?', async () => {
+      await api.admin.promotions.delete(id)
+      loadPromotions()
+    })
 
   return (
     <div>
@@ -403,6 +427,7 @@ export default function AdminPromocoes() {
           </div>
         </div>
       )}
+      {confirmDialogElement}
     </div>
   )
 }

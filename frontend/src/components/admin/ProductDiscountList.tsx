@@ -33,7 +33,6 @@ export default function ProductDiscountList({
   onChange: (discounts: ProductDiscount[]) => void
 }) {
   const [query, setQuery] = useState('')
-  const [categoryQuery, setCategoryQuery] = useState('')
   const [infoProduct, setInfoProduct] = useState<Product | null>(null)
   const [categoryProducts, setCategoryProducts] = useState<{ name: string; products: Product[] } | null>(null)
 
@@ -49,19 +48,15 @@ export default function ProductDiscountList({
   })
 
   const selectedProductIds = new Set(discounts.map((d) => d.product_id))
+  const selectedCategoryIds = new Set(categoryGroups.map((g) => g.categoryId))
+  const q = query.trim().toLowerCase()
   const matches =
-    query.trim().length > 0
-      ? products
-          .filter(
-            (p) =>
-              !selectedProductIds.has(p.id) &&
-              (p.name.toLowerCase().includes(query.trim().toLowerCase()) || (p.barcode && p.barcode.includes(query.trim())))
-          )
-          .slice(0, 8)
+    q.length > 0
+      ? products.filter((p) => !selectedProductIds.has(p.id) && (p.name.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(q)))).slice(0, 6)
       : []
   const categoryMatches =
-    categories && categoryQuery.trim().length > 0
-      ? categories.filter((c) => c.name.toLowerCase().includes(categoryQuery.trim().toLowerCase())).slice(0, 8)
+    categories && q.length > 0
+      ? categories.filter((c) => !selectedCategoryIds.has(c.id) && c.name.toLowerCase().includes(q)).slice(0, 4)
       : []
 
   const addProduct = (id: string) => {
@@ -73,7 +68,7 @@ export default function ProductDiscountList({
       .filter((p) => p.category_id === categoryId && !selectedProductIds.has(p.id))
       .map((p) => ({ product_id: p.id, discount_type: 'percent' as DiscountType, discount_value: 0, category_id: categoryId }))
     if (newOnes.length > 0) onChange([...discounts, ...newOnes])
-    setCategoryQuery('')
+    setQuery('')
   }
   const removeProduct = (id: string) => onChange(discounts.filter((d) => d.product_id !== id))
   const removeCategory = (categoryId: string) => onChange(discounts.filter((d) => d.category_id !== categoryId))
@@ -173,15 +168,32 @@ export default function ProductDiscountList({
         <Search className="w-4 h-4 text-son-silver-dim absolute left-3 top-1/2 -translate-y-1/2" />
         <input
           className="input-field pl-9"
-          placeholder="Buscar produto por nome ou código de barras..."
+          placeholder={categories ? 'Produtos e/ou Categorias' : 'Buscar produto por nome ou código de barras...'}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        {matches.length > 0 && (
-          <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-son-surface border border-white/10 rounded-xl overflow-hidden shadow-lg max-h-48 overflow-y-auto">
+        {(categoryMatches.length > 0 || matches.length > 0) && (
+          <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-son-surface border border-white/10 rounded-xl overflow-hidden shadow-lg max-h-56 overflow-y-auto">
+            {categoryMatches.map((c) => (
+              <button
+                key={`cat-${c.id}`}
+                type="button"
+                onClick={() => addCategory(c.id)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-son-silver hover:bg-son-surface-light text-left"
+              >
+                <Tag className="w-3.5 h-3.5 text-son-gold flex-shrink-0" />
+                <span className="truncate flex-1">
+                  <span className="text-son-silver-dim">Categoria: </span>
+                  {c.name}
+                </span>
+                <span className="text-xs text-son-silver-dim flex-shrink-0">
+                  {products.filter((p) => p.category_id === c.id).length} produto(s)
+                </span>
+              </button>
+            ))}
             {matches.map((p) => (
               <button
-                key={p.id}
+                key={`prod-${p.id}`}
                 type="button"
                 onClick={() => addProduct(p.id)}
                 className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-son-silver hover:bg-son-surface-light text-left"
@@ -193,35 +205,6 @@ export default function ProductDiscountList({
           </div>
         )}
       </div>
-
-      {categories && (
-        <div className="relative mt-2">
-          <Tag className="w-4 h-4 text-son-silver-dim absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            className="input-field pl-9"
-            placeholder="...ou adicionar uma categoria inteira"
-            value={categoryQuery}
-            onChange={(e) => setCategoryQuery(e.target.value)}
-          />
-          {categoryMatches.length > 0 && (
-            <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-son-surface border border-white/10 rounded-xl overflow-hidden shadow-lg max-h-48 overflow-y-auto">
-              {categoryMatches.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => addCategory(c.id)}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-son-silver hover:bg-son-surface-light text-left"
-                >
-                  <span className="truncate">{c.name}</span>
-                  <span className="text-xs text-son-silver-dim flex-shrink-0">
-                    {products.filter((p) => p.category_id === c.id).length} produto(s)
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {categoryProducts && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">

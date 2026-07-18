@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Barcode, ImagePlus, Loader2, Package, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import BarcodePreview from '../../components/admin/BarcodePreview'
+import { useConfirmDialog } from '../../components/admin/useConfirmDialog'
 import { api, ApiError } from '../../lib/api'
 import type { Category, Product } from '../../lib/types'
 
@@ -30,6 +31,7 @@ export default function AdminProdutos() {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { askConfirm, confirmDialogElement } = useConfirmDialog()
 
   const load = () => {
     setLoading(true)
@@ -83,11 +85,11 @@ export default function AdminProdutos() {
     }
   }
 
-  const remove = async (id: string) => {
-    if (!confirm('Remover este produto?')) return
-    await api.admin.products.delete(id)
-    load()
-  }
+  const remove = (id: string) =>
+    askConfirm('Remover este produto?', async () => {
+      await api.admin.products.delete(id)
+      load()
+    })
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -301,6 +303,7 @@ export default function AdminProdutos() {
           </div>
         </div>
       )}
+      {confirmDialogElement}
     </div>
   )
 }

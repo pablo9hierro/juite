@@ -106,7 +106,7 @@ export default function Banner() {
   return (
     <main className="min-h-screen bg-son-black text-white">
       <SiteHeader />
-      <div className="max-w-xl mx-auto px-5 sm:px-10 pb-32">
+      <div className="max-w-xl mx-auto px-5 sm:px-10 pb-56">
         <img src={promotion.image_url} alt={promotion.title} className="w-full aspect-[2/1] object-cover rounded-2xl mb-4" />
         <h1 className="text-2xl font-black mb-1">{promotion.title}</h1>
         <p className="text-xs text-son-silver-dim mb-5">

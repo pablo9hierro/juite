@@ -500,6 +500,7 @@ const remoteApi = {
         starts_at?: string
         expires_at?: string
         product_discounts?: ProductDiscount[]
+        category_discounts?: { category_id: string; discount_type: 'percent' | 'fixed'; discount_value: number }[]
       }) =>
         rpc<Promotion>('admin_create_promotion', {
           p_token: adminToken(),
@@ -514,6 +515,7 @@ const remoteApi = {
           p_starts_at: payload.starts_at || null,
           p_expires_at: payload.expires_at || null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
+          p_category_discounts: payload.category_discounts && payload.category_discounts.length > 0 ? payload.category_discounts : null,
         }),
       update: (
         id: string,
@@ -530,6 +532,7 @@ const remoteApi = {
           starts_at?: string
           expires_at?: string
           product_discounts?: ProductDiscount[]
+          category_discounts?: { category_id: string; discount_type: 'percent' | 'fixed'; discount_value: number }[]
         }
       ) =>
         rpc<Promotion>('admin_update_promotion', {
@@ -547,6 +550,7 @@ const remoteApi = {
           p_starts_at: payload.starts_at || null,
           p_expires_at: payload.expires_at || null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
+          p_category_discounts: payload.category_discounts && payload.category_discounts.length > 0 ? payload.category_discounts : null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_promotion', { p_token: adminToken(), p_id: id }),
     },

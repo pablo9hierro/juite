@@ -322,18 +322,28 @@ export default function Catalogo() {
               🔥 Promoção
             </button>
           )}
-          {categories.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setCategoryFilter(c.id)}
-              className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                categoryFilter === c.id ? 'sunset-bg text-white' : 'bg-son-surface border border-white/5 text-son-silver hover:bg-son-surface-light'
-              }`}
-            >
-              {categoriesWithPromo.has(c.id) && '🔥 '}
-              {c.name}
-            </button>
-          ))}
+          {categories.map((c) => {
+            const hasPromo = categoriesWithPromo.has(c.id)
+            const active = categoryFilter === c.id
+            return (
+              <button
+                key={c.id}
+                onClick={() => setCategoryFilter(c.id)}
+                className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  hasPromo
+                    ? active
+                      ? 'bg-orange-500 text-white font-bold'
+                      : 'bg-orange-500/10 border border-orange-500/40 text-orange-400 hover:bg-orange-500/20 font-bold'
+                    : active
+                      ? 'sunset-bg text-white'
+                      : 'bg-son-surface border border-white/5 text-son-silver hover:bg-son-surface-light'
+                }`}
+              >
+                {hasPromo && '🔥 '}
+                {c.name}
+              </button>
+            )
+          })}
         </div>
 
         {loading ? (

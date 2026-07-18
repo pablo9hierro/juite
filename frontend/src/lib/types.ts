@@ -184,6 +184,11 @@ export interface Promotion {
   shipping_discount_type: DiscountType | null
   shipping_discount_value: number | null
   product_discounts?: ProductDiscount[]
+  // Regras "categoria inteira" (produto novo/recategorizado na categoria
+  // entra em promoção sozinho, via trigger no backend) — usado só pra
+  // reconstruir a tag category_id de product_discounts ao reabrir a
+  // promoção pra editar.
+  category_discounts?: { category_id: string; discount_type: DiscountType; discount_value: number }[]
   active?: boolean
   starts_at: string | null
   expires_at: string | null
