@@ -36,7 +36,7 @@ export default function MotoboyLayout() {
     }
   }, [token, role])
 
-  if (!token) return <Navigate to="/admin/login" state={{ from: location }} replace />
+  if (!token) return <Navigate to="/funcionarios/login" state={{ from: location }} replace />
   // Mesma sessão de admin/vendedor caiu numa rota que não é dele — manda de
   // volta pro dashboard certo em vez de deslogar (espelha a guarda inversa
   // em AdminLayout).
@@ -44,7 +44,7 @@ export default function MotoboyLayout() {
 
   const handleLogout = () => {
     logout()
-    navigate('/admin/login')
+    navigate('/funcionarios/login')
   }
 
   return (

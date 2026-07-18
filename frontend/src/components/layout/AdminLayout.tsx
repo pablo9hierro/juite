@@ -13,13 +13,14 @@ import {
 import Logo from '../ui/Logo'
 import { useAdminAuth } from '../../store/adminAuth'
 
-// Vendedor usa essa MESMA tela (mesmo layout, login, sidebar) só que
-// enxergando um dashboard próprio: Pedidos + PDV + Financeiro (só a parte
-// de vendas de balcão dele) — sem acesso a Produtos/Funcionários/Promoções/
-// CRM/Configurações, que continuam exclusivos do admin. O resto do menu
-// nem aparece pra ele, e a guarda de rota abaixo bloqueia acesso direto
-// por URL também (defesa em profundidade: cada RPC admin-only já rejeita
-// o token de vendedor sozinha, isso aqui é só pra não mostrar tela quebrada).
+// Vendedor usa esse MESMO layout/sidebar (login separado, em
+// /funcionarios/login) só que enxergando um dashboard próprio: Pedidos +
+// PDV + Financeiro (só a parte de vendas de balcão dele) — sem acesso a
+// Produtos/Funcionários/Promoções/CRM/Configurações, que continuam
+// exclusivos do admin. O resto do menu nem aparece pra ele, e a guarda de
+// rota abaixo bloqueia acesso direto por URL também (defesa em
+// profundidade: cada RPC admin-only já rejeita o token de vendedor
+// sozinha, isso aqui é só pra não mostrar tela quebrada).
 const NAV_ITEMS = [
   { href: '/admin/pedidos', label: 'Pedidos', icon: ClipboardList, roles: ['admin', 'vendedor'] },
   { href: '/admin/pdv', label: 'PDV', icon: ShoppingCart, roles: ['admin', 'vendedor'] },
@@ -38,8 +39,8 @@ export default function AdminLayout() {
 
   if (!token) return <Navigate to="/admin/login" state={{ from: location }} replace />
 
-  // Motoboy loga na mesma tela mas mora numa árvore de rotas totalmente
-  // separada (/admin/motoboy, ver App.tsx + MotoboyLayout) — se um token de
+  // Motoboy mora numa árvore de rotas totalmente separada (/admin/motoboy,
+  // ver App.tsx + MotoboyLayout) — se um token de
   // motoboy cair aqui (ex: digitou /admin/produtos direto na barra), manda
   // pro dashboard dele em vez de cair num loop (nenhum NAV_ITEMS aceita
   // 'motoboy', então allowedPaths ficaria vazio pra sempre).

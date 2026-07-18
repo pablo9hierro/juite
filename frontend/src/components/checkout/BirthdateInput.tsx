@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react'
+
 const MONTHS = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
@@ -8,12 +10,39 @@ function daysInMonth(month: number, year: number): number {
   return new Date(year || 2000, month, 0).getDate()
 }
 
+function parse(value: string): [number | undefined, number | undefined, number | undefined] {
+  if (!value) return [undefined, undefined, undefined]
+  const [y, m, d] = value.split('-').map(Number)
+  return [y, m, d]
+}
+
 // Value/onChange sempre em yyyy-mm-dd (formato que o backend espera) — só a
 // APRESENTAÇÃO é dia/mês/ano, via 3 selects em vez do <input type="date">
 // nativo (cujo formato/calendário segue o locale do navegador, não o
 // nosso — ficava em mm/dd/yyyy mesmo com o site em pt-BR).
+//
+// Dia/mês/ano moram em estado local (não só derivados de `value`): como só
+// emitimos onChange pro pai quando os 3 estão preenchidos, se a seleção
+// fosse 100% controlada por `value` cada escolha parcial (ex: só o dia)
+// disparava onChange('') e o próprio componente re-renderizava com os 3
+// selects vazios de novo — a data nunca ficava selecionada. `lastEmitted`
+// distingue "o pai ecoou o que eu acabei de mandar" (ignora) de "o pai
+// resetou/carregou um valor por fora" (aí sim resincroniza os selects).
 export default function BirthdateInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [year, month, day] = value ? value.split('-').map(Number) : [undefined, undefined, undefined]
+  const initial = parse(value)
+  const [year, setYear] = useState<number | undefined>(initial[0])
+  const [month, setMonth] = useState<number | undefined>(initial[1])
+  const [day, setDay] = useState<number | undefined>(initial[2])
+  const lastEmitted = useRef(value)
+
+  useEffect(() => {
+    if (value === lastEmitted.current) return
+    lastEmitted.current = value
+    const [y, m, d] = parse(value)
+    setYear(y)
+    setMonth(m)
+    setDay(d)
+  }, [value])
 
   const thisYear = new Date().getFullYear()
   const years: number[] = []
@@ -22,15 +51,16 @@ export default function BirthdateInput({ value, onChange }: { value: string; onC
   const maxDay = daysInMonth(month ?? 0, year ?? 0)
   const days = Array.from({ length: maxDay }, (_, i) => i + 1)
 
-  const emit = (nextDay?: number, nextMonth?: number, nextYear?: number) => {
-    const d = nextDay ?? day
-    const m = nextMonth ?? month
-    const y = nextYear ?? year
-    if (!d || !m || !y) {
-      onChange('')
-      return
-    }
-    onChange(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
+  const commit = (nextDay: number | undefined, nextMonth: number | undefined, nextYear: number | undefined) => {
+    setDay(nextDay)
+    setMonth(nextMonth)
+    setYear(nextYear)
+    const next =
+      nextDay && nextMonth && nextYear
+        ? `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(nextDay).padStart(2, '0')}`
+        : ''
+    lastEmitted.current = next
+    onChange(next)
   }
 
   const selectClass =
@@ -41,7 +71,7 @@ export default function BirthdateInput({ value, onChange }: { value: string; onC
       <select
         className={selectClass}
         value={day ?? ''}
-        onChange={(e) => emit(e.target.value ? Number(e.target.value) : undefined, undefined, undefined)}
+        onChange={(e) => commit(e.target.value ? Number(e.target.value) : undefined, month, year)}
         aria-label="Dia"
       >
         <option value="">Dia</option>
@@ -58,7 +88,7 @@ export default function BirthdateInput({ value, onChange }: { value: string; onC
           const m = e.target.value ? Number(e.target.value) : undefined
           // Se o dia escolhido não existe no novo mês (ex: 31 de fevereiro), ajusta.
           const clampedDay = day && m ? Math.min(day, daysInMonth(m, year ?? thisYear)) : day
-          emit(clampedDay, m, undefined)
+          commit(clampedDay, m, year)
         }}
         aria-label="Mês"
       >
@@ -72,7 +102,7 @@ export default function BirthdateInput({ value, onChange }: { value: string; onC
       <select
         className={selectClass}
         value={year ?? ''}
-        onChange={(e) => emit(undefined, undefined, e.target.value ? Number(e.target.value) : undefined)}
+        onChange={(e) => commit(day, month, e.target.value ? Number(e.target.value) : undefined)}
         aria-label="Ano"
       >
         <option value="">Ano</option>

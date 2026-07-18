@@ -11,6 +11,7 @@ import BannerCheckout from './pages/BannerCheckout'
 import Pagamento from './pages/Pagamento'
 import Consultar from './pages/Consultar'
 import AdminLogin from './pages/admin/AdminLogin'
+import FuncionarioLogin from './pages/admin/FuncionarioLogin'
 import AdminPedidos from './pages/admin/AdminPedidos'
 import AdminProdutos from './pages/admin/AdminProdutos'
 import AdminMotoboys from './pages/admin/AdminMotoboys'
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/consultar" element={<Consultar />} />
 
         <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/funcionarios/login" element={<FuncionarioLogin />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="/admin/pedidos" replace />} />
           <Route path="pedidos" element={<AdminPedidos />} />
@@ -73,11 +75,10 @@ export default function App() {
           <Route path="conta" element={<AdminSenha />} />
         </Route>
 
-        {/* Motoboy loga na MESMA tela de admin/vendedor (/admin/login) e cai
-            no próprio dashboard em /admin/motoboy — padrão que deve se
-            repetir em qualquer site futuro criado a partir desse esqueleto.
-            Redirects abaixo cobrem quem ainda tem o link antigo salvo. */}
-        <Route path="/motoboy/login" element={<Navigate to="/admin/login" replace />} />
+        {/* Motoboy loga em /funcionarios/login e cai no próprio dashboard em
+            /admin/motoboy. Redirect abaixo cobre quem ainda tem o link
+            antigo salvo (a rota costumava apontar pro login do admin). */}
+        <Route path="/motoboy/login" element={<Navigate to="/funcionarios/login" replace />} />
         <Route path="/motoboy/*" element={<Navigate to="/admin/motoboy" replace />} />
         <Route path="/admin/motoboy" element={<MotoboyLayout />}>
           <Route index element={<MotoboyFila />} />

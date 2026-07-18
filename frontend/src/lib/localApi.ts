@@ -704,6 +704,13 @@ async function payMotoboy(id: string, paymentMethod: PaymentMethod): Promise<imp
   return settlement
 }
 
+async function getMotoboyPassword(id: string): Promise<string | null> {
+  const db = loadDb()
+  const motoboy = db.motoboys.find((m) => m.id === id)
+  if (!motoboy) throw new ApiError(404, 'motoboy not found')
+  return motoboy.password ?? null
+}
+
 async function deleteMotoboy(id: string): Promise<void> {
   const db = loadDb()
   const idx = db.motoboys.findIndex((m) => m.id === id)
@@ -779,6 +786,13 @@ async function updateVendedor(
   if (payload.password) vendedor.password = payload.password
   saveDb(db)
   return stripVendedorPassword(vendedor)
+}
+
+async function getVendedorPassword(id: string): Promise<string | null> {
+  const db = loadDb()
+  const vendedor = (db.vendedores ?? []).find((v) => v.id === id)
+  if (!vendedor) throw new ApiError(404, 'vendedor not found')
+  return vendedor.password ?? null
 }
 
 async function deleteVendedor(id: string): Promise<void> {
@@ -2219,6 +2233,7 @@ export const localApi = {
       create: createMotoboy,
       update: updateMotoboy,
       delete: deleteMotoboy,
+      getPassword: getMotoboyPassword,
       pending: motoboyPending,
       pay: payMotoboy,
     },
@@ -2227,6 +2242,7 @@ export const localApi = {
       create: createVendedor,
       update: updateVendedor,
       delete: deleteVendedor,
+      getPassword: getVendedorPassword,
     },
     coupons: {
       list: adminListCoupons,

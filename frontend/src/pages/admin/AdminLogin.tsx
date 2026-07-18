@@ -1,14 +1,19 @@
 import { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Loader2, Lock } from 'lucide-react'
 import Logo from '../../components/ui/Logo'
 import { api, ApiError } from '../../lib/api'
 import { useAdminAuth } from '../../store/adminAuth'
 
+// Login exclusivo do admin — não tenta mais vendedor/motoboy em cascata
+// (isso causava logins acidentais na conta admin: o campo de e-mail vinha
+// pré-preenchido com o e-mail do admin e, se a senha digitada por um
+// vendedor/motoboy batesse por coincidência com a senha do admin, o login
+// "colava" na conta errada). Vendedor/motoboy logam em /funcionarios/login.
 export default function AdminLogin() {
   const { token, role, login } = useAdminAuth()
   const navigate = useNavigate()
-  const [email, setEmail] = useState('pablo2@gmail.com')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -27,25 +32,9 @@ export default function AdminLogin() {
     setError(null)
     setLoading(true)
     try {
-      // Mesma tela pros três papéis — tenta admin primeiro (mais comum),
-      // depois vendedor, depois motoboy, só avançando se as credenciais
-      // não baterem no papel anterior, pra não vazar qual deles um e-mail
-      // digitado errado pertence a.
-      try {
-        const res = await api.auth.adminLogin(email, password)
-        login(res.token, res.name, 'admin')
-        navigate('/admin/pedidos')
-      } catch {
-        try {
-          const res = await api.auth.vendedorLogin(email, password)
-          login(res.token, res.name, 'vendedor')
-          navigate('/admin/pdv')
-        } catch {
-          const res = await api.auth.motoboyLogin(email, password)
-          login(res.token, res.name, 'motoboy')
-          navigate('/admin/motoboy')
-        }
-      }
+      const res = await api.auth.adminLogin(email, password)
+      login(res.token, res.name, 'admin')
+      navigate('/admin/pedidos')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erro ao entrar.')
     } finally {
@@ -65,7 +54,7 @@ export default function AdminLogin() {
         <div className="space-y-4">
           <div>
             <label className="label">E-mail</label>
-            <input className="input-field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <input className="input-field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
           </div>
           <div>
             <label className="label">Senha</label>
@@ -76,6 +65,9 @@ export default function AdminLogin() {
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Entrar
           </button>
+          <Link to="/funcionarios/login" className="block text-center text-xs text-son-silver-dim hover:text-white">
+            É motoboy ou vendedor? Entrar aqui
+          </Link>
         </div>
       </form>
     </main>

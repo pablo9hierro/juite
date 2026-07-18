@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, Loader2, MapPinned, Plus, Save, Store, Trash2, Truck, Wallet, X } from 'lucide-react'
+import { Check, Eye, Loader2, MapPinned, Pencil, Plus, Save, Store, Trash2, Truck, Wallet, X } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import { useConfirmDialog } from '../../components/admin/useConfirmDialog'
 import { api, ApiError } from '../../lib/api'
@@ -105,7 +105,23 @@ export default function AdminMotoboys() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY_MOTOBOY_FORM)
+  const [editingMotoboy, setEditingMotoboy] = useState<Motoboy | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // Ver a senha atual (não é um reset) — só o admin acessa essa tela, e
+  // funcionário nenhum tem tela própria de "trocar senha": quem define/
+  // reseta/mostra a senha de um motoboy ou vendedor é exclusivamente o
+  // admin, aqui.
+  const [passwordPopup, setPasswordPopup] = useState<{ name: string; password: string | null; loading: boolean } | null>(null)
+  const viewPassword = async (kind: 'motoboy' | 'vendedor', id: string, name: string) => {
+    setPasswordPopup({ name, password: null, loading: true })
+    try {
+      const password = kind === 'motoboy' ? await api.admin.motoboys.getPassword(id) : await api.admin.vendedores.getPassword(id)
+      setPasswordPopup({ name, password, loading: false })
+    } catch {
+      setPasswordPopup({ name, password: null, loading: false })
+    }
+  }
 
   const [payingMotoboy, setPayingMotoboy] = useState<Motoboy | null>(null)
   const [pendingAmount, setPendingAmount] = useState<number | null>(null)
@@ -118,6 +134,7 @@ export default function AdminMotoboys() {
   const [vendedoresLoading, setVendedoresLoading] = useState(true)
   const [showVendedorForm, setShowVendedorForm] = useState(false)
   const [vendedorForm, setVendedorForm] = useState(EMPTY_VENDEDOR_FORM)
+  const [editingVendedor, setEditingVendedor] = useState<Vendedor | null>(null)
   const [savingVendedor, setSavingVendedor] = useState(false)
 
   const load = () => {
@@ -133,11 +150,27 @@ export default function AdminMotoboys() {
     loadVendedores()
   }, [])
 
+  const openNewMotoboy = () => {
+    setEditingMotoboy(null)
+    setForm(EMPTY_MOTOBOY_FORM)
+    setShowForm(true)
+  }
+  const openEditMotoboy = (m: Motoboy) => {
+    setEditingMotoboy(m)
+    setForm({ name: m.name, phone: m.phone, email: m.email, password: '', whatsapp: m.whatsapp ?? '' })
+    setShowForm(true)
+  }
+
   const save = async () => {
     setSaving(true)
     try {
-      await api.admin.motoboys.create(form)
+      if (editingMotoboy) {
+        await api.admin.motoboys.update(editingMotoboy.id, { ...form, active: editingMotoboy.active })
+      } else {
+        await api.admin.motoboys.create(form)
+      }
       setShowForm(false)
+      setEditingMotoboy(null)
       setForm(EMPTY_MOTOBOY_FORM)
       load()
     } finally {
@@ -186,17 +219,43 @@ export default function AdminMotoboys() {
     }
   }
 
+  const openNewVendedor = () => {
+    setEditingVendedor(null)
+    setVendedorForm(EMPTY_VENDEDOR_FORM)
+    setShowVendedorForm(true)
+  }
+  const openEditVendedor = (v: Vendedor) => {
+    setEditingVendedor(v)
+    setVendedorForm({
+      name: v.name,
+      email: v.email,
+      password: '',
+      commission_active: v.commission_active,
+      commission_percent: v.commission_percent != null ? String(v.commission_percent) : '',
+    })
+    setShowVendedorForm(true)
+  }
+
   const saveVendedor = async () => {
     setSavingVendedor(true)
     try {
-      await api.admin.vendedores.create({
+      const payload = {
         name: vendedorForm.name,
         email: vendedorForm.email,
-        password: vendedorForm.password,
         commission_active: vendedorForm.commission_active,
         commission_percent: vendedorForm.commission_active ? Number(vendedorForm.commission_percent) : undefined,
-      })
+      }
+      if (editingVendedor) {
+        await api.admin.vendedores.update(editingVendedor.id, {
+          ...payload,
+          active: editingVendedor.active,
+          password: vendedorForm.password || undefined,
+        })
+      } else {
+        await api.admin.vendedores.create({ ...payload, password: vendedorForm.password })
+      }
       setShowVendedorForm(false)
+      setEditingVendedor(null)
       setVendedorForm(EMPTY_VENDEDOR_FORM)
       loadVendedores()
     } finally {
@@ -226,7 +285,7 @@ export default function AdminMotoboys() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-black">Cadastrar funcionários</h1>
         <button
-          onClick={() => (tab === 'motoboys' ? setShowForm(true) : setShowVendedorForm(true))}
+          onClick={() => (tab === 'motoboys' ? openNewMotoboy() : openNewVendedor())}
           className="btn-primary text-sm py-2 px-4"
         >
           <Plus className="w-4 h-4" /> {tab === 'motoboys' ? 'Novo motoboy' : 'Novo vendedor'}
@@ -276,6 +335,21 @@ export default function AdminMotoboys() {
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
+                    onClick={() => viewPassword('motoboy', m.id, m.name)}
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-son-silver-dim hover:text-white transition-colors"
+                    aria-label={`Ver senha de ${m.name}`}
+                    title="Ver senha atual"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => openEditMotoboy(m)}
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-son-silver-dim hover:text-white transition-colors"
+                    aria-label={`Editar ${m.name}`}
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => openPay(m)}
                     className="w-8 h-8 flex items-center justify-center rounded-full bg-son-pink/15 text-son-pink hover:bg-son-pink/25 transition-colors"
                     aria-label={`Pagar ${m.name}`}
@@ -323,6 +397,21 @@ export default function AdminMotoboys() {
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
+                    onClick={() => viewPassword('vendedor', v.id, v.name)}
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-son-silver-dim hover:text-white transition-colors"
+                    aria-label={`Ver senha de ${v.name}`}
+                    title="Ver senha atual"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => openEditVendedor(v)}
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-son-silver-dim hover:text-white transition-colors"
+                    aria-label={`Editar ${v.name}`}
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => toggleVendedorActive(v)}
                     className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
                       v.active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/10 text-son-silver-dim'
@@ -343,7 +432,7 @@ export default function AdminMotoboys() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
           <div className="glass rounded-2xl p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white">Novo motoboy</h3>
+              <h3 className="font-bold text-white">{editingMotoboy ? 'Editar motoboy' : 'Novo motoboy'}</h3>
               <button onClick={() => setShowForm(false)} className="text-son-silver-dim hover:text-white">
                 <X className="w-5 h-5" />
               </button>
@@ -366,7 +455,7 @@ export default function AdminMotoboys() {
                 <input className="input-field" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
               </div>
               <div>
-                <label className="label">Senha</label>
+                <label className="label">Senha{editingMotoboy && ' (deixe em branco pra manter a atual)'}</label>
                 <input
                   className="input-field"
                   type="password"
@@ -390,7 +479,7 @@ export default function AdminMotoboys() {
         >
           <div className="glass rounded-2xl p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white">Novo vendedor</h3>
+              <h3 className="font-bold text-white">{editingVendedor ? 'Editar vendedor' : 'Novo vendedor'}</h3>
               <button onClick={() => setShowVendedorForm(false)} className="text-son-silver-dim hover:text-white">
                 <X className="w-5 h-5" />
               </button>
@@ -414,7 +503,7 @@ export default function AdminMotoboys() {
                 />
               </div>
               <div>
-                <label className="label">Senha</label>
+                <label className="label">Senha{editingVendedor && ' (deixe em branco pra manter a atual)'}</label>
                 <input
                   className="input-field"
                   type="password"
@@ -447,7 +536,8 @@ export default function AdminMotoboys() {
                 </div>
               )}
               <p className="text-xs text-son-silver-dim">
-                O vendedor loga na mesma tela do admin (/admin/login), mas só enxerga PDV e Financeiro (suas vendas).
+                O vendedor loga em /funcionarios/login (login próprio, separado do admin), mas só enxerga PDV e
+                Financeiro (suas vendas).
               </p>
               <button onClick={saveVendedor} disabled={savingVendedor} className="btn-primary w-full mt-2">
                 {savingVendedor ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -511,6 +601,35 @@ export default function AdminMotoboys() {
                   <p className="text-sm text-son-silver-dim text-center">Nada pendente pra pagar agora.</p>
                 )}
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {passwordPopup && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setPasswordPopup(null)}
+        >
+          <div className="glass rounded-2xl p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-white">Senha de {passwordPopup.name}</h3>
+              <button onClick={() => setPasswordPopup(null)} className="text-son-silver-dim hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {passwordPopup.loading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="w-5 h-5 animate-spin text-son-pink" />
+              </div>
+            ) : passwordPopup.password ? (
+              <p className="text-center font-mono text-lg tracking-wide bg-son-surface-light rounded-xl py-3">
+                {passwordPopup.password}
+              </p>
+            ) : (
+              <p className="text-sm text-son-silver-dim text-center">
+                Nenhuma senha salva pra visualizar ainda — edite e defina uma senha nova pra poder vê-la depois.
+              </p>
             )}
           </div>
         </div>

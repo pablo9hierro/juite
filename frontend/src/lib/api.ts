@@ -107,10 +107,10 @@ async function callVercelPixApi(path: string, orderId: string): Promise<Order> {
 function adminToken() {
   return useAdminAuth.getState().token ?? undefined
 }
-// admin, vendedor e motoboy compartilham a mesma sessão (useAdminAuth) desde
-// que motoboy passou a logar em /admin/login também — motoboyToken() existe
-// só pra deixar claro, nos call sites abaixo, que o token está indo pra uma
-// rota de motoboy.
+// admin, vendedor e motoboy compartilham a mesma sessão (useAdminAuth), só
+// logam em telas separadas (/admin/login pro admin, /funcionarios/login pra
+// vendedor/motoboy) — motoboyToken() existe só pra deixar claro, nos call
+// sites abaixo, que o token está indo pra uma rota de motoboy.
 function motoboyToken() {
   return useAdminAuth.getState().token ?? undefined
 }
@@ -277,6 +277,10 @@ const remoteApi = {
           p_whatsapp: payload.whatsapp ?? null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_motoboy', { p_token: adminToken(), p_id: id }),
+      // null = nunca teve senha definida depois dessa feature existir (conta
+      // criada antes da migration) — a UI trata como "defina uma senha nova
+      // pra poder visualizar".
+      getPassword: (id: string) => rpc<string | null>('admin_get_motoboy_password', { p_token: adminToken(), p_id: id }),
       pending: (id: string) => rpc<MotoboyPending>('admin_motoboy_pending', { p_token: adminToken(), p_id: id }),
       pay: (id: string, paymentMethod: PaymentMethod) =>
         rpc<MotoboySettlement>('admin_pay_motoboy', {
@@ -324,6 +328,7 @@ const remoteApi = {
           p_commission_percent: payload.commission_percent ?? null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_vendedor', { p_token: adminToken(), p_id: id }),
+      getPassword: (id: string) => rpc<string | null>('admin_get_vendedor_password', { p_token: adminToken(), p_id: id }),
     },
     coupons: {
       list: () => rpc<Coupon[]>('admin_list_coupons', { p_token: adminToken() }),
