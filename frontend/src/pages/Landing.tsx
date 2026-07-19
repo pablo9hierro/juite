@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, Bike, MapPin, MessageCircle, Ticket, Zap } from 'lucide-react'
+import { ArrowRight, TicketPercent } from 'lucide-react'
 import heroBanner from '../assets/hero-banner.png'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
+import QrScanMock from '../components/landing/QrScanMock'
+import LiveTrackingMapMock from '../components/landing/LiveTrackingMapMock'
+import WhatsAppBubbleIcon from '../components/landing/WhatsAppBubbleIcon'
 import { api } from '../lib/api'
 import type { Promotion, StoreStatus } from '../lib/types'
 import { getStoreOpenState } from '../lib/storeHours'
@@ -35,32 +38,41 @@ function BannerCarousel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slides.length])
 
-  const containerClass = 'relative z-10 mx-6 sm:mx-10 mt-3 sm:mt-4 rounded-2xl overflow-hidden shadow-lg shadow-black/40'
+  const containerClass =
+    'relative z-10 mx-6 sm:mx-10 mt-3 sm:mt-4 rounded-2xl overflow-hidden shadow-[0_20px_50px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/5'
   const safeIndex = index % slides.length
   const current = slides[safeIndex]
 
   return (
     <div className={`${containerClass} aspect-[2/1]`}>
       <AnimatePresence mode="wait" initial={false}>
-        <motion.button
+        <motion.div
           key={current.kind === 'hero' ? 'hero' : current.promotion.id}
-          type="button"
-          onClick={() => {
-            if (current.kind === 'promotion') navigate(`/banner?promocao=${current.promotion.id}`)
-          }}
-          initial={{ opacity: 0, scale: 1.08 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.97 }}
-          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-          className="absolute inset-0 w-full h-full text-left"
-          aria-label={current.kind === 'promotion' ? current.promotion.title : 'Sunset Tabas'}
+          initial={{ x: '100%', opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: '-100%', opacity: 0 }}
+          transition={{ duration: 0.6, ease: [0.65, 0, 0.35, 1] }}
+          className="absolute inset-0"
         >
-          <img
-            src={current.kind === 'hero' ? heroUrl ?? heroBanner : current.promotion.image_url}
-            alt=""
-            className="w-full h-full object-cover block"
-          />
-        </motion.button>
+          {/* Pulsação leve e contínua — sinaliza "isso é clicável" sem
+              depender de hover (a maioria de quem visita está no celular). */}
+          <motion.button
+            type="button"
+            onClick={() => {
+              if (current.kind === 'promotion') navigate(`/banner?promocao=${current.promotion.id}`)
+            }}
+            animate={{ scale: [1, 1.015, 1] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+            className="absolute inset-0 w-full h-full text-left"
+            aria-label={current.kind === 'promotion' ? current.promotion.title : 'Sunset Tabas'}
+          >
+            <img
+              src={current.kind === 'hero' ? heroUrl ?? heroBanner : current.promotion.image_url}
+              alt=""
+              className="w-full h-full object-cover block"
+            />
+          </motion.button>
+        </motion.div>
       </AnimatePresence>
       {slides.length > 1 && (
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
@@ -72,35 +84,6 @@ function BannerCarousel() {
           ))}
         </div>
       )}
-    </div>
-  )
-}
-
-// Mock ilustrativo (não é mapa de verdade) — um motoboy deslizando por uma
-// rua estilizada até um pin de destino, em loop, só pra dar vida ao card de
-// rastreio ao vivo.
-function MotoboyMapMock() {
-  return (
-    <div className="relative h-20 rounded-xl bg-black/20 border border-white/5 overflow-hidden mt-4">
-      <svg viewBox="0 0 200 80" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
-        <path
-          d="M 8 62 C 40 62, 50 30, 85 30 C 115 30, 125 15, 185 15"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeDasharray="6 6"
-          strokeLinecap="round"
-          className="text-white/15"
-        />
-      </svg>
-      <MapPin className="w-4 h-4 text-son-pink absolute -translate-x-1/2 -translate-y-full" style={{ left: '93%', top: '19%' }} />
-      <motion.div
-        className="absolute -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full sunset-bg flex items-center justify-center shadow-[0_0_10px_rgba(224,138,58,0.7)]"
-        animate={{ left: ['4%', '25%', '42%', '62%', '92%'], top: ['77%', '44%', '37%', '21%', '19%'] }}
-        transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.6 }}
-      >
-        <Bike className="w-3 h-3 text-white" />
-      </motion.div>
     </div>
   )
 }
@@ -174,28 +157,31 @@ export default function Landing() {
         </motion.div>
       </section>
 
-      <section className="relative z-10 max-w-5xl mx-auto px-6 sm:px-10 pb-24 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <section className="relative z-10 max-w-2xl mx-auto px-6 sm:px-10 pb-24 flex flex-col gap-4">
         {[
           {
-            icon: Zap,
             title: 'Pix na hora, entrega com agilidade',
-            desc: 'Pague no Pix e receba na sua casa rapidinho — confirmação automática, sem enrolação.',
+            desc: 'Pague no Pix e receba na sua casa em minutos — confirmação automática, sem esperar ninguém aprovar nada na mão.',
+            graphic: <QrScanMock />,
           },
           {
-            icon: MessageCircle,
-            title: 'Atualizações direto no seu WhatsApp',
-            desc: 'Confirmado, pronto, saiu pra entrega — você acompanha cada etapa sem precisar ficar recarregando a tela.',
-          },
-          {
-            icon: MapPin,
             title: 'Acompanhe a entrega em tempo real',
             desc: 'Assim que seu pedido sai, você vê o trajeto do motoboy no mapa, ao vivo, até chegar na sua porta.',
-            mock: true,
+            graphic: <LiveTrackingMapMock />,
           },
           {
-            icon: Ticket,
+            title: 'Atualizações direto no seu WhatsApp',
+            desc: 'Confirmado, pronto, saiu pra entrega — você acompanha cada etapa sem precisar ficar recarregando a tela.',
+            graphic: <WhatsAppBubbleIcon />,
+          },
+          {
             title: 'Cupons exclusivos de fidelidade',
             desc: 'Participe das campanhas e ganhe cupons de desconto e de frete grátis só pra quem já é nosso cliente.',
+            graphic: (
+              <div className="w-24 h-24 flex-shrink-0 rounded-xl bg-son-gold/10 border border-son-gold/30 flex items-center justify-center">
+                <TicketPercent className="w-10 h-10 text-son-gold" strokeWidth={1.5} />
+              </div>
+            ),
           },
         ].map((f, i) => (
           <motion.div
@@ -204,16 +190,13 @@ export default function Landing() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: i * 0.08 }}
-            className="glass rounded-2xl p-6 text-left"
+            className="glass rounded-2xl p-5 sm:p-6 text-left flex items-center gap-4 sm:gap-5 shadow-[10px_16px_30px_-8px_rgba(0,0,0,0.65)]"
           >
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="w-8 h-8 rounded-lg sunset-bg flex items-center justify-center flex-shrink-0">
-                <f.icon className="w-4 h-4 text-white" />
-              </span>
-              <h3 className="font-bold text-white">{f.title}</h3>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-bold text-white mb-1.5">{f.title}</h3>
+              <p className="text-sm text-son-silver-dim">{f.desc}</p>
             </div>
-            <p className="text-sm text-son-silver-dim">{f.desc}</p>
-            {f.mock && <MotoboyMapMock />}
+            {f.graphic}
           </motion.div>
         ))}
       </section>
