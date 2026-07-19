@@ -311,14 +311,12 @@ a {
   -webkit-backdrop-filter: blur(10px);
 }
 
-/* From Uiverse.io (dashboard "Income" card) — reproduzido fiel à
-   referência: borda em gradiente animado (era arco-íris magenta/roxo/
-   ciano, virou dourado/laranja/âmbar do site), valor com efeito de
-   "digitando" (typewriter puro em CSS), badge de variação, gráfico de 7
-   barras com bounce contínuo, tags e botão. Conteúdo adaptado pro
-   programa de fidelidade em vez de um dashboard financeiro genérico. */
+/* From Uiverse.io (dashboard "Income" card) — só a parte de cima
+   (heading + valor "digitando" + badge + comparação) ficou; tags,
+   gráfico de barras e botão foram removidos a pedido. Borda em
+   gradiente animado recolorida pro dourado/laranja do site (era
+   arco-íris magenta/roxo/ciano). */
 .sunset-income-card {
-  --sunset-income-shadow-bar: -5px -5px 9px rgba(58, 36, 16, 0.45), 5px 5px 9px rgba(20, 20, 20, 0.6);
   border-radius: 16px;
   padding: 10px;
   width: 320px;
@@ -434,96 +432,6 @@ a {
   color: var(--color-son-silver);
   text-shadow: 4px 4px 3px rgba(0, 0, 0, 0.65);
   letter-spacing: 1px;
-}
-.sunset-income-tags {
-  display: flex;
-  margin-bottom: 8px;
-  justify-content: flex-end;
-  color: var(--color-son-silver);
-  font-size: 12px;
-  font-weight: 500;
-  gap: 4px;
-  text-shadow: 2px 3px 3px rgba(0, 0, 0, 0.65);
-}
-.sunset-income-tags span {
-  padding: 3px 10px;
-  background-color: rgba(77, 44, 28, 0.45);
-  border-radius: 3px;
-}
-.sunset-income-chart {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  width: 100%;
-  height: 140px;
-  padding: 10px;
-  border-radius: 12px;
-}
-.sunset-income-bar {
-  width: 20px;
-  font-size: 15px;
-  background: var(--color-son-orange);
-  color: var(--color-son-black);
-  border-radius: 4px 4px 0 0;
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  position: relative;
-  transform-origin: bottom;
-  animation: sunset-income-ripple 7.5s ease-in-out infinite;
-  box-shadow: var(--sunset-income-shadow-bar);
-}
-.sunset-income-bar.is-white {
-  background: var(--color-son-silver);
-}
-@keyframes sunset-income-ripple {
-  0%,
-  100% {
-    transform: scaleY(0.6);
-  }
-  25% {
-    transform: scaleY(1.1);
-  }
-  50% {
-    transform: scaleY(0.8);
-  }
-  75% {
-    transform: scaleY(1.2);
-  }
-}
-.sunset-income-pr-day {
-  position: absolute;
-  top: -25px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #fff;
-}
-.sunset-income-pr-day.is-red {
-  color: var(--color-son-orange);
-}
-.sunset-income-bar-label {
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.65);
-  font-size: 12px;
-}
-.sunset-income-card .sunset-income-more-button {
-  font-size: 16px;
-  padding: 12px;
-  border-radius: 10px;
-  color: var(--color-son-black);
-  border: 0;
-  width: 100%;
-  margin-top: 10px;
-  outline: none;
-  background-color: var(--color-son-silver);
-  box-shadow: var(--sunset-income-shadow-bar);
-  transition: ease all 0.3s;
-  cursor: pointer;
-}
-.sunset-income-card .sunset-income-more-button:hover {
-  transform: translateY(-3px);
-}
-.sunset-income-card .sunset-income-more-button:active {
-  transform: scale(0.9);
 }
 
 /* From Uiverse.io by ashwin_5681 — esteira infinita (itens absolutos que

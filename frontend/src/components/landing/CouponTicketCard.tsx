@@ -1,20 +1,9 @@
-// Uiverse.io by (dashboard "Income" card) — reproduzido fiel à
-// referência (mesma estrutura: borda em gradiente animado, valor com
-// efeito de "digitando", badge de variação, gráfico de 7 barras com
-// bounce contínuo, tags, botão), só recolorido pro dourado/laranja do
-// site (era um arco-íris magenta/roxo/ciano) e com o conteúdo adaptado
-// pro programa de fidelidade em vez de um dashboard financeiro genérico.
+// Uiverse.io by (dashboard "Income" card) — só a parte de cima
+// (heading + valor com efeito de "digitando" + badge + comparação)
+// fica; tags, gráfico de barras e botão foram removidos a pedido.
+// Recolorido pro dourado/laranja do site (era um arco-íris magenta/
+// roxo/ciano), conteúdo adaptado pro programa de fidelidade.
 export default function CouponTicketCard() {
-  const days = [
-    { label: 'D', height: 30, delay: '0.2s', pct: '5%', white: true },
-    { label: 'S', height: 80, delay: '0.4s', pct: '-1,7%', white: false },
-    { label: 'T', height: 50, delay: '0.6s', pct: '2,3%', white: true },
-    { label: 'Q', height: 85, delay: '0.8s', pct: '-3,8%', white: false },
-    { label: 'Q', height: 70, delay: '1s', pct: '6,3%', white: true },
-    { label: 'S', height: 80, delay: '1.2s', pct: '-2,3%', white: false },
-    { label: 'S', height: 60, delay: '1.4s', pct: '2,0%', white: true },
-  ]
-
   return (
     <div className="sunset-income-card">
       <div className="sunset-income-bg-custom">
@@ -39,25 +28,6 @@ export default function CouponTicketCard() {
         </div>
         <div className="sunset-income-compare">Comparado a R$ 1.687 gastos no mês passado</div>
       </div>
-      <div className="sunset-income-tags">
-        <span>Ver histórico</span>
-        <span>Detalhes</span>
-      </div>
-      <div className="sunset-income-chart">
-        {days.map((d, i) => (
-          <div
-            key={i}
-            className={`sunset-income-bar ${d.white ? 'is-white' : ''}`}
-            style={{ height: `${d.height}px`, animationDelay: d.delay }}
-          >
-            <div className={`sunset-income-pr-day ${!d.white ? 'is-red' : ''}`}>{d.pct}</div>
-            <div className="sunset-income-bar-label">{d.label}</div>
-          </div>
-        ))}
-      </div>
-      <button type="button" className="sunset-income-more-button">
-        Ver mais cupons
-      </button>
     </div>
   )
 }
