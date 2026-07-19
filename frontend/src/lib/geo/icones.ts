@@ -9,14 +9,6 @@ const BIKE_SVG =
   '<path d="M5.5 17.5h5l2-6h4.5M14.5 8.5h3l1 3"/>' +
   '<circle cx="15" cy="6" r="1.2" fill="#fff" stroke="none"/></svg>'
 
-function pinSvg(size: number) {
-  return (
-    `<svg width="${size}" height="${size}" viewBox="0 0 24 24">` +
-    '<path d="M12 2C7.6 2 4 5.6 4 10c0 6 8 12 8 12s8-6 8-12c0-4.4-3.6-8-8-8z" fill="#e0447a"/>' +
-    '<circle cx="12" cy="10" r="3" fill="#fff"/></svg>'
-  )
-}
-
 // Badge redondo com a moto sempre em pé + setinha por cima que gira com o
 // heading — girar o ícone inteiro deixaria a moto de cabeça pra baixo em
 // certas direções. counterRotation: quando o mapa em volta está
@@ -37,13 +29,20 @@ export function motoDivIcon(heading: number | null, size = 36, counterRotation =
 }
 
 // counterRotation: quando o mapa em volta está rotacionado (trava de GPS
-// ou gesto manual), passa o ângulo oposto aqui pro pino continuar sempre
-// em pé na tela em vez de girar junto com o mapa.
+// ou gesto manual), cancela isso aqui pro efeito continuar centralizado em
+// vez de girar junto com o mapa (mesma ideia do motoDivIcon).
+//
+// Efeito "sunset-dest-ping" (.sunset-dest-ping no index.css) — anel que
+// pulsa saindo do centro (Uiverse by JaydipPrajapati1910, só o estilo/
+// motion, recolorido pro rosa do site). Trocado de tamanho pra caber num
+// marcador de mapa pequeno sem competir com o resto da tela — a
+// referência original tem 44.8px, aqui é proporcional ao `size` pedido.
 export function destDivIcon(size = 30, counterRotation = 0) {
+  const ping = Math.round(size * 0.78)
   return L.divIcon({
     className: 'icone-limpo',
-    html: `<div style="filter:drop-shadow(0 2px 3px rgba(0,0,0,.45));transform:rotate(${counterRotation}deg);transition:transform .1s">${pinSvg(size)}</div>`,
+    html: `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;transform:rotate(${counterRotation}deg);transition:transform .1s"><div class="sunset-dest-ping" style="--s:${ping}px"></div></div>`,
     iconSize: [size, size],
-    iconAnchor: [size / 2, size * 0.917],
+    iconAnchor: [size / 2, size / 2],
   })
 }

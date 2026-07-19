@@ -6,7 +6,8 @@ import heroBanner from '../assets/hero-banner.png'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
 import LiveTrackingMapMock from '../components/landing/LiveTrackingMapMock'
-import CouponShineIcon from '../components/landing/CouponShineIcon'
+import CouponTicketCard from '../components/landing/CouponTicketCard'
+import LandingWhatsAppCard from '../components/landing/LandingWhatsAppCard'
 import { api } from '../lib/api'
 import type { Promotion, StoreStatus } from '../lib/types'
 import { getStoreOpenState } from '../lib/storeHours'
@@ -79,6 +80,7 @@ function BannerCarousel() {
           </motion.button>
         ))}
       </motion.div>
+      <div className="sunset-banner-sweep" />
       {slides.length > 1 && (
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
           {slides.map((s, i) => (
@@ -147,20 +149,20 @@ export default function Landing() {
           transition={{ duration: 0.6 }}
           className="flex flex-wrap justify-center gap-2 mt-10"
         >
-          <span className="sunset-shine-badge">
-            <span className="sunset-shine-badge-inner px-4 py-2 text-xs sm:text-sm font-bold text-son-gold">
-              SUNSET • Desde 2023
+          {[
+            { text: 'SUNSET • Desde 2023', bold: true },
+            { text: '🔥 Experiência, vibe e essência' },
+            { text: '📍 R. Rosa de Paula Barbosa, 16 - José Américo de Almeida. João Pessoa - PB' },
+            { text: '👇 A vibe começa aqui' },
+          ].map((b) => (
+            <span key={b.text} className="sunset-shine-badge">
+              <span
+                className={`sunset-shine-badge-inner px-4 py-2 text-xs sm:text-sm ${b.bold ? 'font-bold' : 'font-medium'} text-son-gold`}
+              >
+                {b.text}
+              </span>
             </span>
-          </span>
-          <span className="sunset-sweep-badge px-4 py-2 rounded-full glass text-xs sm:text-sm font-medium text-son-silver">
-            🔥 Experiência, vibe e essência
-          </span>
-          <span className="px-4 py-2 rounded-full glass text-xs sm:text-sm font-medium text-son-silver">
-            📍 R. Rosa de Paula Barbosa, 16 - José Américo de Almeida. João Pessoa - PB
-          </span>
-          <span className="px-4 py-2 rounded-full glass text-xs sm:text-sm font-semibold text-son-gold">
-            👇 A vibe começa aqui
-          </span>
+          ))}
         </motion.div>
       </section>
 
@@ -172,9 +174,14 @@ export default function Landing() {
             graphic: <LiveTrackingMapMock />,
           },
           {
+            title: 'Atualizações direto no seu WhatsApp',
+            desc: 'Confirmado, pronto, saiu pra entrega — você acompanha cada etapa sem precisar ficar recarregando a tela.',
+            graphic: <LandingWhatsAppCard />,
+          },
+          {
             title: 'Cupons exclusivos de fidelidade',
             desc: 'Participe das campanhas e ganhe cupons de desconto e de frete grátis só pra quem já é nosso cliente.',
-            graphic: <CouponShineIcon />,
+            graphic: <CouponTicketCard />,
           },
         ].map((f, i) => (
           <motion.div

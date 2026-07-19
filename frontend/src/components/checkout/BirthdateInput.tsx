@@ -63,8 +63,12 @@ export default function BirthdateInput({ value, onChange }: { value: string; onC
     onChange(next)
   }
 
+  // Visual "dial mecânico" (Uiverse by dexter-st, "combination lock") por
+  // cima do <select> nativo — só a moldura muda, o comportamento/valor
+  // continua 100% o <select> de sempre (mesma correção do bug de data que
+  // não registrava, intacta).
   const selectClass =
-    'input-field appearance-none cursor-pointer'
+    'sunset-dial-select input-field appearance-none cursor-pointer'
 
   return (
     <div className="grid grid-cols-[1fr_1.4fr_1.1fr] gap-2">

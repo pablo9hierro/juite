@@ -13,7 +13,7 @@ export default function CartFab() {
       className="fixed bottom-6 right-6 z-40 w-16 h-16 rounded-full flex items-center justify-center bg-son-surface border border-white/10 glow hover:scale-105 transition-transform"
       aria-label="Ver sacola"
     >
-      <ShoppingBag className="w-6 h-6 text-son-pink" />
+      <ShoppingBag className="sunset-cart-icon w-6 h-6 text-son-pink" />
       {count > 0 && (
         <span className="absolute -top-1.5 -right-1.5 w-6 h-6 flex items-center justify-center text-xs font-bold sunset-bg text-white rounded-full shadow-md shadow-black/40">
           {count}

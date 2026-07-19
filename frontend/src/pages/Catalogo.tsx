@@ -157,7 +157,7 @@ export default function Catalogo() {
         className="bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex flex-col hover:border-son-pink/30 transition-colors"
       >
         <Link to={`/produto/${product.id}`} className="flex flex-col flex-1">
-          <div className="aspect-square bg-son-surface-light flex items-center justify-center overflow-hidden">
+          <div className="sunset-card-open-img aspect-square bg-son-surface-light flex items-center justify-center overflow-hidden">
             {product.image_url ? (
               <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
             ) : (
@@ -281,7 +281,12 @@ export default function Catalogo() {
         </div>
         <p className="text-son-silver-dim text-sm mb-4">Escolha os produtos e finalize seu pedido.</p>
 
-        <div className="relative mb-6" ref={searchBoxRef}>
+        {/* From Uiverse.io by devkatyall — cores trocadas pra paleta sunset.
+            O fundo opaco do input some (!bg-transparent) pra deixar o
+            gradiente/feixe preto do .sunset-search-trigger aparecer atrás
+            do texto; a faixa "abre" no hover (PC) ou ao focar a busca no
+            celular (reaproveita o searchOpen que já existia). */}
+        <div className={`sunset-search-trigger relative mb-6 rounded-2xl ${searchOpen ? 'is-open' : ''}`} ref={searchBoxRef}>
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-son-silver-dim pointer-events-none" />
           <input
             ref={searchInputRef}
@@ -289,7 +294,7 @@ export default function Catalogo() {
             onChange={(e) => setSearch(e.target.value)}
             onFocus={() => setSearchOpen(true)}
             placeholder="Buscar produto..."
-            className="input-field pl-10 pr-10"
+            className="input-field pl-10 pr-10 !bg-transparent"
           />
           {search && (
             <button
@@ -424,7 +429,7 @@ export default function Catalogo() {
             ))}
           </div>
         ) : view === 'grid' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="catalogo-grid grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {sortedFiltered.map((product, i) => (
               <GridCard key={product.id} product={product} i={i} />
             ))}
