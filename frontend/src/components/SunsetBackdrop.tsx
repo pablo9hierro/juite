@@ -23,8 +23,8 @@ function PalmTree({ x, y, scale = 1, flip = false }: { x: number; y: number; sca
 
 export default function SunsetBackdrop() {
   return (
-    <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none" aria-hidden="true">
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMax slice">
+    <div className="fixed inset-0 -z-10 overflow-hidden bg-son-black pointer-events-none" aria-hidden="true">
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid meet">
         <defs>
           <linearGradient id="bdSky" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#081912" />
@@ -56,8 +56,8 @@ export default function SunsetBackdrop() {
         </g>
       </svg>
       <div className="absolute inset-x-0 top-8 sm:top-12 flex flex-col items-center text-center px-4">
-        <span className="sunset-text text-4xl sm:text-6xl font-black tracking-tight opacity-70">Sunset Tabas</span>
-        <span className="text-son-silver-dim text-xs sm:text-sm font-semibold tracking-[0.3em] uppercase mt-1 opacity-50">
+        <span className="sunset-text text-4xl sm:text-6xl font-black tracking-tight">Sunset Tabas</span>
+        <span className="text-son-silver-dim text-xs sm:text-sm font-semibold tracking-[0.3em] uppercase mt-1">
           tabacaria
         </span>
       </div>

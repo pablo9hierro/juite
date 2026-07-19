@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
@@ -12,15 +12,12 @@ import { api } from '../lib/api'
 import type { Promotion, StoreStatus } from '../lib/types'
 import { getStoreOpenState } from '../lib/storeHours'
 
-const CAROUSEL_INTERVAL_MS = 2000
-
 type Slide = { kind: 'hero' } | { kind: 'promotion'; promotion: Promotion }
 
 function BannerCarousel() {
   const navigate = useNavigate()
   const [heroUrl, setHeroUrl] = useState<string | null>(null)
   const [promotions, setPromotions] = useState<Promotion[]>([])
-  const [index, setIndex] = useState(0)
 
   useEffect(() => {
     api.siteSettings.get().then((s) => setHeroUrl(s.hero_image_url)).catch(() => setHeroUrl(null))
@@ -31,66 +28,40 @@ function BannerCarousel() {
   // cadastradas — só depois ele desliza pras promoções, em loop.
   const slides: Slide[] = [{ kind: 'hero' }, ...promotions.map((p) => ({ kind: 'promotion' as const, promotion: p }))]
 
-  useEffect(() => {
-    if (slides.length < 2) return
-    const timer = setInterval(() => setIndex((i) => (i + 1) % slides.length), CAROUSEL_INTERVAL_MS)
-    return () => clearInterval(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slides.length])
-
   const containerClass =
     'relative z-10 mx-6 sm:mx-10 mt-3 sm:mt-4 rounded-2xl overflow-hidden shadow-[0_20px_50px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/5'
-  const safeIndex = index % slides.length
 
   return (
     <div className={`${containerClass} aspect-[2/1]`}>
-      {/* Trilho clássico de carrossel: TODOS os slides ficam lado a lado
-          num flex row, e o que anima é só o deslocamento horizontal do
-          trilho inteiro (translateX de -N*100%) — um empurra o outro pra
-          fora enquanto o próximo entra, sempre na mesma direção (esquerda).
-          Trocar de slide via key/AnimatePresence (mount/unmount) tinha essa
-          armadilha: se o slide de saída não tivesse terminado de desmontar
-          antes do novo montar, o corte ficava seco em vez de deslizar — o
-          trilho não tem esse problema porque nada desmonta, só translada. */}
-      <motion.div
-        className="flex h-full"
-        animate={{ x: `-${safeIndex * 100}%` }}
-        transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
+      {/* Uiverse.io by ashwin_5681 — esteira infinita reproduzida fiel à
+          referência (mesma técnica: itens absolutos com --width/--quantity/
+          --position escalonando o animation-delay pra ficarem sempre em
+          fila), 3x mais lenta que a referência (30s em vez de 10s).
+          Substitui o antigo trilho paginado por índice/timer. */}
+      <div
+        className="sunset-banner-slider"
+        style={{ '--width': '82%', '--height': '100%', '--quantity': slides.length } as CSSProperties}
       >
-        {slides.map((s) => (
-          <motion.button
-            key={s.kind === 'hero' ? 'hero' : s.promotion.id}
-            type="button"
-            onClick={() => {
-              if (s.kind === 'promotion') navigate(`/banner?promocao=${s.promotion.id}`)
-            }}
-            // Pulsação leve e contínua — sinaliza "isso é clicável" sem
-            // depender de hover (a maioria de quem visita está no celular).
-            animate={{ scale: [1, 1.015, 1] }}
-            transition={{ scale: { duration: 2.2, repeat: Infinity, ease: 'easeInOut' } }}
-            className="relative h-full text-left flex-shrink-0"
-            style={{ width: '100%' }}
-            aria-label={s.kind === 'promotion' ? s.promotion.title : 'Sunset Tabas'}
-          >
-            <img
-              src={s.kind === 'hero' ? heroUrl ?? heroBanner : s.promotion.image_url}
-              alt=""
-              className="w-full h-full object-cover block"
-            />
-          </motion.button>
-        ))}
-      </motion.div>
-      <div className="sunset-banner-sweep" />
-      {slides.length > 1 && (
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
+        <div className="sunset-banner-slider-list">
           {slides.map((s, i) => (
-            <span
+            <button
               key={s.kind === 'hero' ? 'hero' : s.promotion.id}
-              className={`w-1.5 h-1.5 rounded-full ${i === safeIndex ? 'bg-white' : 'bg-white/40'}`}
-            />
+              type="button"
+              onClick={() => {
+                if (s.kind === 'promotion') navigate(`/banner?promocao=${s.promotion.id}`)
+              }}
+              className="sunset-banner-slider-item"
+              style={{ '--position': i + 1 } as CSSProperties}
+              aria-label={s.kind === 'promotion' ? s.promotion.title : 'Sunset Tabas'}
+            >
+              <div className="sunset-banner-slider-card">
+                <img src={s.kind === 'hero' ? heroUrl ?? heroBanner : s.promotion.image_url} alt="" />
+              </div>
+            </button>
           ))}
         </div>
-      )}
+      </div>
+      <div className="sunset-banner-sweep" />
     </div>
   )
 }
