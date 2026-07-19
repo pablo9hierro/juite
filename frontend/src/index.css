@@ -43,19 +43,23 @@
    baixo, só DEPOIS o contrast tem "sobra" pra separar de verdade (mesma
    conta, mas com brightness 3.5: o cinza da rua sobe pra ~147/255, bem
    visível, e o fundo continua ~0, preto solido). */
-.leaflet-tile-pane {
+/* O filter mora nos TILES individuais (.leaflet-tile), não no pane pai —
+   com zoomSnap:0 (zoom contínuo, usado em todo mapa deste app), cada frame
+   do gesto de pinça reescala o PANE inteiro via transform pra simular o
+   zoom fracionário (os tiles de verdade só existem em zoom inteiro; o
+   fracionário é a textura atual esticada/encolhida). Isolar o pane na
+   própria camada de composição (tentativa anterior, will-change+translateZ
+   nele) não bastava: o filter continuava sendo recalculado a cada frame
+   EM CIMA desse escalonamento contínuo, e com brightness(3.5) — bem
+   extremo — qualquer artefato de reamostragem durante o scale virava um
+   branco estourado por cima do mapa inteiro até o dedo soltar (aí sim o
+   Leaflet assenta no zoom final e troca pelos tiles de verdade). Com o
+   filter já "assado" em cada tile ANTES do pane escalar, o gesto só
+   estica um bitmap já filtrado — escala pura, sem recalcular filter em
+   cada frame. */
+.leaflet-tile-pane .leaflet-tile {
   filter: brightness(3.5) contrast(1.6) saturate(1.4);
-  /* Ao dar pinça (zoom), o Leaflet reposiciona cada tile <img> com o
-     PRÓPRIO transform dele (translate3d), mesmo sem animação — é assim
-     que ele sempre posicionou tiles, pra evitar reflow. Como o filter
-     está no pane PAI, esse transform constante nos filhos durante o
-     gesto força o navegador a re-rasterizar a camada filtrada em vez de
-     só mover uma textura já pronta — mesma classe de bug do
-     filter+transform que já resolvemos no wrapper de rotação, só que
-     essa vem de dentro do próprio Leaflet, não do nosso CSS. Isola o
-     pane na própria camada de composição pra cortar isso pela raiz. */
   will-change: filter;
-  transform: translateZ(0);
 }
 
 /* Atribuição do OSM/CARTO é obrigatória pelos termos de uso dos tiles

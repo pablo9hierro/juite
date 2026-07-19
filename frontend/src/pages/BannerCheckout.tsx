@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CreditCard, Home, Loader2, MapPin, QrCode, Sparkles, Tag, Wallet } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
+import PageTransition from '../components/layout/PageTransition'
 import LocationPicker from '../components/checkout/LocationPicker'
 import BirthdateInput from '../components/checkout/BirthdateInput'
 import { api, ApiError } from '../lib/api'
@@ -188,7 +189,7 @@ export default function BannerCheckout() {
           do checkout comum, pra nunca confundir os dois fluxos. */}
       <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[36rem] h-[36rem] rounded-full bg-son-orange/20 blur-[140px] pointer-events-none" />
       <SiteHeader />
-      <div className="max-w-xl mx-auto px-5 sm:px-10 pb-24 relative">
+      <PageTransition className="max-w-xl mx-auto px-5 sm:px-10 pb-24 relative">
         <div className="flex items-center gap-2 mb-1">
           <Sparkles className="w-5 h-5 text-orange-400" />
           <h1 className="text-2xl sm:text-3xl font-black">Checkout da promoção</h1>
@@ -386,7 +387,7 @@ export default function BannerCheckout() {
             Finalizar pedido
           </button>
         </div>
-      </div>
+      </PageTransition>
     </main>
   )
 }

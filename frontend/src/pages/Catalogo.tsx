@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { LayoutGrid, List, Loader2, Minus, Package, Plus, Search, X } from 'lucide-react'
 import { motion } from 'framer-motion'
 import SiteHeader from '../components/layout/SiteHeader'
+import PageTransition from '../components/layout/PageTransition'
 import { api } from '../lib/api'
 import type { Category, Product } from '../lib/types'
 import type { PromotionalProduct } from '../lib/supabasePublicApi'
@@ -37,7 +38,9 @@ export default function Catalogo() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [promos, setPromos] = useState<PromotionalProduct[]>([])
+  const [salesCounts, setSalesCounts] = useState<{ product_id: string; sold_count: number }[]>([])
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [sortBy, setSortBy] = useState<'padrao' | 'menor_preco' | 'maior_preco' | 'mais_vendido' | 'alfabetica'>('padrao')
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -48,11 +51,12 @@ export default function Catalogo() {
   const searchBoxRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    Promise.all([api.products.list(), api.categories.list(), api.coupons.listPromotionalProducts()])
-      .then(([p, c, promo]) => {
+    Promise.all([api.products.list(), api.categories.list(), api.coupons.listPromotionalProducts(), api.products.salesCounts()])
+      .then(([p, c, promo, sales]) => {
         setProducts(p)
         setCategories(c)
         setPromos(promo)
+        setSalesCounts(sales)
       })
       .finally(() => setLoading(false))
   }, [])
@@ -87,19 +91,45 @@ export default function Catalogo() {
     return products.filter((p) => p.category_id === categoryFilter)
   }, [products, categoryFilter, isPromo, promoByProduct])
 
+  const salesByProduct = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const s of salesCounts) map.set(s.product_id, s.sold_count)
+    return map
+  }, [salesCounts])
+
+  const sortedFiltered = useMemo(() => {
+    if (sortBy === 'padrao') return filtered
+    const arr = [...filtered]
+    switch (sortBy) {
+      case 'menor_preco':
+        arr.sort((a, b) => a.price - b.price)
+        break
+      case 'maior_preco':
+        arr.sort((a, b) => b.price - a.price)
+        break
+      case 'mais_vendido':
+        arr.sort((a, b) => (salesByProduct.get(b.id) ?? 0) - (salesByProduct.get(a.id) ?? 0))
+        break
+      case 'alfabetica':
+        arr.sort((a, b) => a.name.localeCompare(b.name))
+        break
+    }
+    return arr
+  }, [filtered, sortBy, salesByProduct])
+
   // Na categoria "Promoção" os itens continuam separados por categoria
   // original (Lanches, Bebidas...), só a lista de exibição é filtrada.
   const promoGroups = useMemo(() => {
     if (!isPromo) return []
     const byId = new Map(categories.map((c) => [c.id, c.name]))
     const groups = new Map<string, Product[]>()
-    for (const p of filtered) {
+    for (const p of sortedFiltered) {
       const label = (p.category_id && byId.get(p.category_id)) || 'Sem categoria'
       if (!groups.has(label)) groups.set(label, [])
       groups.get(label)!.push(p)
     }
     return [...groups.entries()]
-  }, [isPromo, filtered, categories])
+  }, [isPromo, sortedFiltered, categories])
 
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -229,7 +259,7 @@ export default function Catalogo() {
   return (
     <main className="min-h-screen bg-son-black text-white">
       <SiteHeader />
-      <div className="max-w-6xl mx-auto px-5 sm:px-10 pb-16">
+      <PageTransition className="max-w-6xl mx-auto px-5 sm:px-10 pb-16">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-2xl sm:text-3xl font-black">Catálogo</h1>
           <div className="flex items-center gap-1 bg-son-surface border border-white/10 rounded-xl p-1">
@@ -346,6 +376,23 @@ export default function Catalogo() {
           })}
         </div>
 
+        {!loading && filtered.length > 0 && (
+          <div className="flex justify-end mb-4">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="input-field w-auto py-2 text-xs appearance-none cursor-pointer pr-8"
+              aria-label="Ordenar produtos"
+            >
+              <option value="padrao">Ordenar por...</option>
+              <option value="menor_preco">Menor preço</option>
+              <option value="maior_preco">Maior preço</option>
+              <option value="mais_vendido">Mais vendido</option>
+              <option value="alfabetica">Alfabética (A-Z)</option>
+            </select>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex justify-center py-20">
             <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
@@ -378,18 +425,18 @@ export default function Catalogo() {
           </div>
         ) : view === 'grid' ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filtered.map((product, i) => (
+            {sortedFiltered.map((product, i) => (
               <GridCard key={product.id} product={product} i={i} />
             ))}
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {filtered.map((product, i) => (
+            {sortedFiltered.map((product, i) => (
               <ListCard key={product.id} product={product} i={i} />
             ))}
           </div>
         )}
-      </div>
+      </PageTransition>
     </main>
   )
 }

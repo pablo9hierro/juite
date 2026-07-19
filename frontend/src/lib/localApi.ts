@@ -134,6 +134,16 @@ async function getProduct(id: string): Promise<Product> {
   return productDto(db, p)
 }
 
+async function productSalesCounts(): Promise<{ product_id: string; sold_count: number }[]> {
+  const db = loadDb()
+  const counts = new Map<string, number>()
+  for (const o of db.orders) {
+    if (o.payment_status !== 'pago') continue
+    for (const item of o.items) counts.set(item.product_id, (counts.get(item.product_id) ?? 0) + item.quantity)
+  }
+  return Array.from(counts, ([product_id, sold_count]) => ({ product_id, sold_count }))
+}
+
 async function createOrder(payload: {
   customer_name: string
   customer_whatsapp: string
@@ -2196,7 +2206,7 @@ async function trackDeliveryPositionLocal(orderId: string): Promise<DeliveryPosi
 
 export const localApi = {
   categories: { list: listCategoriesPublic },
-  products: { list: listProducts, get: getProduct },
+  products: { list: listProducts, get: getProduct, salesCounts: productSalesCounts },
   shippingSettings: { get: getShippingSettings },
   siteSettings: { get: getSiteSettings },
   storeStatus: { get: getStoreStatus },

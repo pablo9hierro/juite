@@ -76,9 +76,7 @@ export default function ProdutoDetalhe() {
         <h1 className="text-2xl sm:text-3xl font-black">{product.name}</h1>
         <p className="sunset-text text-2xl font-bold mt-2">{currency(product.price)}</p>
         {product.description && <p className="text-son-silver mt-4 leading-relaxed">{product.description}</p>}
-        <p className="text-xs text-son-silver-dim mt-2">
-          {outOfStock ? 'Sem estoque no momento' : `${product.quantity} em estoque`}
-        </p>
+        {outOfStock && <p className="text-xs text-son-silver-dim mt-2">Sem estoque no momento</p>}
 
         <div className="mt-8 flex items-center gap-4">
           {outOfStock ? (

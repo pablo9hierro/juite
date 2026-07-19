@@ -4,6 +4,7 @@ import { Check, Copy, Loader2, PartyPopper } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { QRCodeSVG } from 'qrcode.react'
 import SiteHeader from '../components/layout/SiteHeader'
+import PageTransition from '../components/layout/PageTransition'
 import { api } from '../lib/api'
 import type { Order } from '../lib/types'
 
@@ -91,7 +92,7 @@ export default function Pagamento() {
   return (
     <main className="min-h-screen bg-son-black text-white">
       <SiteHeader />
-      <div className="max-w-md mx-auto px-5 sm:px-10 pb-20 text-center">
+      <PageTransition className="max-w-md mx-auto px-5 sm:px-10 pb-20 text-center">
         {paid ? (
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="py-10">
             <PartyPopper className="w-14 h-14 text-son-gold mx-auto mb-4" />
@@ -133,7 +134,7 @@ export default function Pagamento() {
             </button>
           </>
         )}
-      </div>
+      </PageTransition>
     </main>
   )
 }

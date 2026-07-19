@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Bike, MapPin, MessageCircle, Ticket, Zap } from 'lucide-react'
 import heroBanner from '../assets/hero-banner.png'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
@@ -48,10 +48,10 @@ function BannerCarousel() {
           onClick={() => {
             if (current.kind === 'promotion') navigate(`/banner?promocao=${current.promotion.id}`)
           }}
-          initial={{ x: '100%', opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: '-100%', opacity: 0 }}
-          transition={{ duration: 0.5, ease: 'easeInOut' }}
+          initial={{ opacity: 0, scale: 1.08 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.97 }}
+          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
           className="absolute inset-0 w-full h-full text-left"
           aria-label={current.kind === 'promotion' ? current.promotion.title : 'Sunset Tabas'}
         >
@@ -72,6 +72,35 @@ function BannerCarousel() {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// Mock ilustrativo (não é mapa de verdade) — um motoboy deslizando por uma
+// rua estilizada até um pin de destino, em loop, só pra dar vida ao card de
+// rastreio ao vivo.
+function MotoboyMapMock() {
+  return (
+    <div className="relative h-20 rounded-xl bg-black/20 border border-white/5 overflow-hidden mt-4">
+      <svg viewBox="0 0 200 80" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
+        <path
+          d="M 8 62 C 40 62, 50 30, 85 30 C 115 30, 125 15, 185 15"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeDasharray="6 6"
+          strokeLinecap="round"
+          className="text-white/15"
+        />
+      </svg>
+      <MapPin className="w-4 h-4 text-son-pink absolute -translate-x-1/2 -translate-y-full" style={{ left: '93%', top: '19%' }} />
+      <motion.div
+        className="absolute -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full sunset-bg flex items-center justify-center shadow-[0_0_10px_rgba(224,138,58,0.7)]"
+        animate={{ left: ['4%', '25%', '42%', '62%', '92%'], top: ['77%', '44%', '37%', '21%', '19%'] }}
+        transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.6 }}
+      >
+        <Bike className="w-3 h-3 text-white" />
+      </motion.div>
     </div>
   )
 }
@@ -145,11 +174,29 @@ export default function Landing() {
         </motion.div>
       </section>
 
-      <section className="relative z-10 max-w-5xl mx-auto px-6 sm:px-10 pb-24 grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <section className="relative z-10 max-w-5xl mx-auto px-6 sm:px-10 pb-24 grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[
-          { title: 'Catálogo completo', desc: 'Grade ou lista, do seu jeito, com estoque em tempo real.' },
-          { title: 'Pix instantâneo', desc: 'QR code na hora, sem precisar sair da conversa.' },
-          { title: 'Rastreio pelo WhatsApp', desc: 'Saiba exatamente quando seu pedido sai para entrega.' },
+          {
+            icon: Zap,
+            title: 'Pix na hora, entrega com agilidade',
+            desc: 'Pague no Pix e receba na sua casa rapidinho — confirmação automática, sem enrolação.',
+          },
+          {
+            icon: MessageCircle,
+            title: 'Atualizações direto no seu WhatsApp',
+            desc: 'Confirmado, pronto, saiu pra entrega — você acompanha cada etapa sem precisar ficar recarregando a tela.',
+          },
+          {
+            icon: MapPin,
+            title: 'Acompanhe a entrega em tempo real',
+            desc: 'Assim que seu pedido sai, você vê o trajeto do motoboy no mapa, ao vivo, até chegar na sua porta.',
+            mock: true,
+          },
+          {
+            icon: Ticket,
+            title: 'Cupons exclusivos de fidelidade',
+            desc: 'Participe das campanhas e ganhe cupons de desconto e de frete grátis só pra quem já é nosso cliente.',
+          },
         ].map((f, i) => (
           <motion.div
             key={f.title}
@@ -159,8 +206,14 @@ export default function Landing() {
             transition={{ duration: 0.5, delay: i * 0.08 }}
             className="glass rounded-2xl p-6 text-left"
           >
-            <h3 className="font-bold text-white mb-1.5">{f.title}</h3>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="w-8 h-8 rounded-lg sunset-bg flex items-center justify-center flex-shrink-0">
+                <f.icon className="w-4 h-4 text-white" />
+              </span>
+              <h3 className="font-bold text-white">{f.title}</h3>
+            </div>
             <p className="text-sm text-son-silver-dim">{f.desc}</p>
+            {f.mock && <MotoboyMapMock />}
           </motion.div>
         ))}
       </section>

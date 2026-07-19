@@ -35,6 +35,14 @@ export const supabasePublicApi = {
       if (error || !data) throw new ApiError(404, 'product not found')
       return toProduct(data)
     },
+    // Buscado à parte da lista normal de produtos — só usado pra ordenar
+    // por "mais vendido" no catálogo, não afeta o resto (ver
+    // sunset_catalogo_ordenacao.sql).
+    salesCounts: async () => {
+      const { data, error } = await supabase.rpc('product_sales_counts')
+      if (error) throw new ApiError(400, error.message)
+      return (data ?? []) as { product_id: string; sold_count: number }[]
+    },
   },
   shippingSettings: {
     get: async () =>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, Minus, Package, Plus, X } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
+import PageTransition from '../components/layout/PageTransition'
 import { api } from '../lib/api'
 import type { DiscountType, Product, Promotion } from '../lib/types'
 import { useBannerCart } from '../store/bannerCart'
@@ -106,7 +107,7 @@ export default function Banner() {
   return (
     <main className="min-h-screen bg-son-black text-white">
       <SiteHeader />
-      <div className="max-w-xl mx-auto px-5 sm:px-10 pb-56">
+      <PageTransition className="max-w-xl mx-auto px-5 sm:px-10 pb-56">
         <img src={promotion.image_url} alt={promotion.title} className="w-full aspect-[2/1] object-cover rounded-2xl mb-4" />
         <h1 className="text-2xl font-black mb-1">{promotion.title}</h1>
         <p className="text-xs text-son-silver-dim mb-5">
@@ -177,7 +178,7 @@ export default function Banner() {
             )
           })}
         </div>
-      </div>
+      </PageTransition>
 
       <div className="fixed bottom-0 left-0 right-0 bg-son-surface border-t border-white/10 px-5 sm:px-10 py-4">
         <div className="max-w-xl mx-auto">

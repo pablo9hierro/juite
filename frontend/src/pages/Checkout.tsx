@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CreditCard, Gift, Home, Loader2, MapPin, QrCode, Tag, Wallet } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
+import PageTransition from '../components/layout/PageTransition'
 import LocationPicker from '../components/checkout/LocationPicker'
 import BirthdateInput from '../components/checkout/BirthdateInput'
 import { api, ApiError } from '../lib/api'
@@ -126,9 +127,12 @@ export default function Checkout() {
 
   // Assim que um produto em promoção entra no carrinho, o cupom dele é
   // aplicado sozinho — não compete com um cupom já digitado/detectado.
+  // Só entra aqui quem tem cupom de verdade por trás (coupon_code
+  // preenchido) — promoção selfie_service sem cupom (coupon_code vazio)
+  // é resolvida direto por catalogPromoItemDiscounts, mais abaixo.
   useEffect(() => {
     if (appliedCoupon) return
-    const match = lines.find((l) => promoByProduct.has(l.product.id))
+    const match = lines.find((l) => promoByProduct.get(l.product.id)?.coupon_code)
     if (!match) return
     const promo = promoByProduct.get(match.product.id)!
     if (autoPromoCode === promo.coupon_code) return
@@ -210,7 +214,27 @@ export default function Checkout() {
   }
   const couponDiscountTotal = couponProductDiscount + couponShippingDiscount
 
-  const discountAmount = Math.min(Math.max(promotionProductDiscount + couponProductDiscount, 0), subtotal)
+  // Produto com desconto vindo de promoção selfie_service definida em
+  // /promoções (coupon_code vem vazio de list_promotional_products — não
+  // tem cupom de verdade por trás) vale em QUALQUER checkout, não só
+  // quando o cliente veio do banner — aplica direto aqui, sem depender de
+  // validar cupom nenhum. Mesma lógica do create_order (ver
+  // sunset_promocao_desconto_global_catalogo.sql). Item com cupom REAL
+  // (coupon_code preenchido) continua indo pelo fluxo de auto-aplicar
+  // cupom acima, não duplica aqui.
+  const catalogPromoItemDiscounts = new Map<string, number>()
+  let catalogPromoProductDiscount = 0
+  for (const l of lines) {
+    const promo = promoByProduct.get(l.product.id)
+    if (!promo || promo.coupon_code) continue
+    const lineTotal = l.product.price * l.item.quantity
+    const lineDiscount =
+      promo.discount_type === 'percent' ? (lineTotal * promo.discount_value) / 100 : Math.min(promo.discount_value * l.item.quantity, lineTotal)
+    catalogPromoItemDiscounts.set(l.product.id, lineDiscount)
+    catalogPromoProductDiscount += lineDiscount
+  }
+
+  const discountAmount = Math.min(Math.max(promotionProductDiscount + couponProductDiscount + catalogPromoProductDiscount, 0), subtotal)
   const shippingDiscount = Math.min(Math.max(promotionShippingDiscount + couponShippingDiscount, 0), shippingPrice)
   const total = subtotal - discountAmount + shippingPrice - shippingDiscount
 
@@ -295,7 +319,7 @@ export default function Checkout() {
   return (
     <main className="min-h-screen bg-son-black text-white">
       <SiteHeader />
-      <div className="max-w-xl mx-auto px-5 sm:px-10 pb-24">
+      <PageTransition className="max-w-xl mx-auto px-5 sm:px-10 pb-24">
         <h1 className="text-2xl sm:text-3xl font-black mb-6">Checkout</h1>
 
         {promotionError && <p className="error-msg mb-4">{promotionError}</p>}
@@ -540,10 +564,14 @@ export default function Checkout() {
             {lines.map((l) => {
               const lineTotal = l.product.price * l.item.quantity
               const pd = appliedCoupon?.kind === 'produto' ? appliedCoupon.product_discounts?.find((p) => p.product_id === l.product.id) : undefined
-              if (pd) {
-                const lineDiscount = couponItemDiscounts.get(l.product.id) ?? 0
+              const catalogPromo = !pd ? promoByProduct.get(l.product.id) : undefined
+              const isCatalogPromoItem = catalogPromo && !catalogPromo.coupon_code
+              if (pd || isCatalogPromoItem) {
+                const lineDiscount = pd ? couponItemDiscounts.get(l.product.id) ?? 0 : catalogPromoItemDiscounts.get(l.product.id) ?? 0
                 const finalTotal = Math.max(lineTotal - lineDiscount, 0)
-                const discountText = pd.discount_type === 'percent' ? `-${pd.discount_value}%` : `-${currency(pd.discount_value)}`
+                const discountType = pd ? pd.discount_type : catalogPromo!.discount_type
+                const discountValue = pd ? pd.discount_value : catalogPromo!.discount_value
+                const discountText = discountType === 'percent' ? `-${discountValue}%` : `-${currency(discountValue)}`
                 return (
                   <div key={l.product.id} className="flex justify-between items-baseline text-xs pl-3 gap-2">
                     <span className="truncate pr-2 text-orange-400">
@@ -608,7 +636,7 @@ export default function Checkout() {
             Finalizar pedido
           </button>
         </div>
-      </div>
+      </PageTransition>
     </main>
   )
 }
