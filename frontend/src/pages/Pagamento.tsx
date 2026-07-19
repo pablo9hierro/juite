@@ -72,7 +72,7 @@ export default function Pagamento() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-son-black/85 text-white flex items-center justify-center">
+      <main className="min-h-screen text-white flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
       </main>
     )
@@ -80,7 +80,7 @@ export default function Pagamento() {
 
   if (!order) {
     return (
-      <main className="min-h-screen bg-son-black/85 text-white">
+      <main className="min-h-screen text-white">
         <SiteHeader />
         <p className="text-center text-son-silver-dim py-20">Pedido não encontrado.</p>
       </main>
@@ -90,7 +90,7 @@ export default function Pagamento() {
   const paid = order.payment_status === 'pago'
 
   return (
-    <main className="min-h-screen bg-son-black/85 text-white">
+    <main className="min-h-screen text-white">
       <SiteHeader />
       <PageTransition className="max-w-md mx-auto px-5 sm:px-10 pb-20 text-center">
         {paid ? (

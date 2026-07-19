@@ -27,41 +27,37 @@ function BannerCarousel() {
   // Imagem inicial é sempre a primeira do carrossel — mesmo com promoções
   // cadastradas — só depois ele desliza pras promoções, em loop.
   const slides: Slide[] = [{ kind: 'hero' }, ...promotions.map((p) => ({ kind: 'promotion' as const, promotion: p }))]
-
-  const containerClass =
-    'relative z-10 mx-6 sm:mx-10 mt-3 sm:mt-4 rounded-2xl overflow-hidden shadow-[0_20px_50px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/5'
+  const n = slides.length
 
   return (
-    <div className={`${containerClass} aspect-[2/1]`}>
-      {/* Uiverse.io by ashwin_5681 — esteira infinita reproduzida fiel à
-          referência (mesma técnica: itens absolutos com --width/--quantity/
-          --position escalonando o animation-delay pra ficarem sempre em
-          fila), 3x mais lenta que a referência (30s em vez de 10s).
-          Substitui o antigo trilho paginado por índice/timer. */}
-      <div
-        className="sunset-banner-slider"
-        style={{ '--width': '82%', '--height': '100%', '--quantity': slides.length } as CSSProperties}
-      >
-        <div className="sunset-banner-slider-list">
-          {slides.map((s, i) => (
-            <button
-              key={s.kind === 'hero' ? 'hero' : s.promotion.id}
-              type="button"
-              onClick={() => {
-                if (s.kind === 'promotion') navigate(`/banner?promocao=${s.promotion.id}`)
-              }}
-              className="sunset-banner-slider-item"
-              style={{ '--position': i + 1 } as CSSProperties}
-              aria-label={s.kind === 'promotion' ? s.promotion.title : 'Sunset Tabas'}
-            >
-              <div className="sunset-banner-slider-card">
-                <img src={s.kind === 'hero' ? heroUrl ?? heroBanner : s.promotion.image_url} alt="" />
-              </div>
-            </button>
-          ))}
-        </div>
+    <div className="relative z-10 flex justify-center py-6">
+      {/* Uiverse.io by musashi-13 — anel 3D giratório reproduzido fiel à
+          referência (mesmo perspective/rotateY/translateZ, mesma pulsação
+          de brilho, mesma pausa no hover). O ângulo entre cards e o delay
+          da pulsação, que na referência eram fixos por nth-child (10
+          cards), viram calculados aqui (360°/n e 20s/n), já que o número
+          de slides muda com as promoções cadastradas. */}
+      <div className="sunset-3d-carousel" style={{ '--quantity': n } as CSSProperties}>
+        {slides.map((s, i) => (
+          <button
+            key={s.kind === 'hero' ? 'hero' : s.promotion.id}
+            type="button"
+            onClick={() => {
+              if (s.kind === 'promotion') navigate(`/banner?promocao=${s.promotion.id}`)
+            }}
+            className="sunset-3d-carousel-item"
+            style={
+              {
+                transform: `translate(-50%, -50%) rotateY(${(360 / n) * i}deg) translateZ(150px)`,
+                '--delay': `${-(i * (20 / n))}s`,
+              } as CSSProperties
+            }
+            aria-label={s.kind === 'promotion' ? s.promotion.title : 'Sunset Tabas'}
+          >
+            <img src={s.kind === 'hero' ? heroUrl ?? heroBanner : s.promotion.image_url} alt="" />
+          </button>
+        ))}
       </div>
-      <div className="sunset-banner-sweep" />
     </div>
   )
 }
@@ -84,7 +80,7 @@ export default function Landing() {
           {openState?.reason || 'Fora do nosso horário de funcionamento — volte mais tarde!'}
         </div>
       )}
-      <main className={`min-h-screen bg-son-black/85 text-white overflow-hidden relative ${closed ? 'grayscale' : ''}`}>
+      <main className={`min-h-screen text-white overflow-hidden relative ${closed ? 'grayscale' : ''}`}>
       <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-son-orange/20 blur-[120px]" />
       <div className="absolute top-20 -right-40 w-96 h-96 rounded-full bg-son-purple/25 blur-[120px]" />
       <div className="absolute bottom-0 left-1/3 w-80 h-80 rounded-full bg-son-pink/15 blur-[120px]" />

@@ -298,7 +298,7 @@ export default function Catalogo() {
   }
 
   return (
-    <main className="min-h-screen bg-son-black/85 text-white">
+    <main className="min-h-screen text-white">
       <SiteHeader />
       <PageTransition className="max-w-6xl mx-auto px-5 sm:px-10 pb-16">
         <div className="flex items-center justify-between mb-1">

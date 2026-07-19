@@ -87,7 +87,7 @@ export default function Banner() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-son-black/85 text-white flex items-center justify-center">
+      <main className="min-h-screen text-white flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
       </main>
     )
@@ -95,7 +95,7 @@ export default function Banner() {
 
   if (error || !promotion) {
     return (
-      <main className="min-h-screen bg-son-black/85 text-white">
+      <main className="min-h-screen text-white">
         <SiteHeader />
         <div className="max-w-xl mx-auto px-5 sm:px-10 py-16 text-center">
           <p className="error-msg inline-block">{error ?? 'Promoção não encontrada.'}</p>
@@ -105,7 +105,7 @@ export default function Banner() {
   }
 
   return (
-    <main className="min-h-screen bg-son-black/85 text-white">
+    <main className="min-h-screen text-white">
       <SiteHeader />
       <PageTransition className="max-w-xl mx-auto px-5 sm:px-10 pb-56">
         <img src={promotion.image_url} alt={promotion.title} className="w-full aspect-[2/1] object-cover rounded-2xl mb-4" />

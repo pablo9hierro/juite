@@ -30,7 +30,7 @@ export default function Carrinho() {
   const total = lines.reduce((sum, l) => sum + l.product.price * l.item.quantity, 0)
 
   return (
-    <main className="min-h-screen bg-son-black/85 text-white">
+    <main className="min-h-screen text-white">
       <SiteHeader />
       <PageTransition className="max-w-2xl mx-auto px-5 sm:px-10 pb-20">
         <h1 className="text-2xl sm:text-3xl font-black mb-6 flex items-center gap-2">

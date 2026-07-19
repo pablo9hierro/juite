@@ -165,7 +165,7 @@ export default function BannerCheckout() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-son-black/85 text-white flex items-center justify-center">
+      <main className="min-h-screen text-white flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
       </main>
     )
@@ -173,7 +173,7 @@ export default function BannerCheckout() {
 
   if (loadError || !promotion) {
     return (
-      <main className="min-h-screen bg-son-black/85 text-white">
+      <main className="min-h-screen text-white">
         <SiteHeader />
         <div className="max-w-xl mx-auto px-5 sm:px-10 py-16 text-center">
           <p className="error-msg inline-block">{loadError}</p>
@@ -183,7 +183,7 @@ export default function BannerCheckout() {
   }
 
   return (
-    <main className="min-h-screen bg-son-black/85 text-white relative overflow-hidden">
+    <main className="min-h-screen text-white relative overflow-hidden">
       {/* Layout próprio do checkout de banner: fundo com glow laranja/roxo
           fixo no topo, cartão de promoção destacado — visualmente diferente
           do checkout comum, pra nunca confundir os dois fluxos. */}
