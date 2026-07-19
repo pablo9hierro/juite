@@ -244,6 +244,107 @@ a {
   scrollbar-width: none;
 }
 
+/* From Uiverse.io by umerhassaan — cores/gradiente trocados pra paleta
+   sunset (era cinza/azul). Roda sempre (não só no :hover): o site é
+   majoritariamente acessado no celular, que não tem hover. O "padding: 2px"
+   no wrapper + a cor sólida no filho de dentro é o que faz o gradiente
+   animado do ::before aparecer só como uma BORDA fina, não preencher tudo. */
+.sunset-shine-badge {
+  position: relative;
+  display: inline-block;
+  border-radius: 100px;
+  padding: 2px;
+  overflow: hidden;
+  isolation: isolate;
+}
+.sunset-shine-badge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 400%;
+  height: 100%;
+  background: linear-gradient(115deg, var(--color-son-gold), var(--color-son-orange), var(--color-son-pink));
+  background-size: 25% 100%;
+  animation: sunset-shine-slide 2.5s linear infinite;
+  translate: -5% 0%;
+  transition: translate 0.25s ease-out;
+}
+.sunset-shine-badge:hover::before {
+  translate: 0% 0%;
+}
+@keyframes sunset-shine-slide {
+  to {
+    transform: translateX(-25%);
+  }
+}
+.sunset-shine-badge-inner {
+  position: relative;
+  display: block;
+  border-radius: 100px;
+  height: 100%;
+  background: rgba(15, 43, 29, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* From Uiverse.io by KhelVers — cores trocadas pra paleta sunset (era
+   ciano/azul neon). Cartão "flutuando" com brilho quente por dentro/fora,
+   pro card de login não ficar tão seco quanto um glass panel comum. */
+@keyframes sunset-login-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(8px);
+  }
+}
+.sunset-login-card {
+  position: relative;
+  animation: sunset-login-float 3s ease-in-out infinite;
+  border: 3px solid rgba(255, 210, 61, 0.45);
+  background: rgba(15, 43, 29, 0.55);
+  box-shadow:
+    0 0 60px 0 rgba(224, 138, 58, 0.35) inset,
+    0 0 24px rgba(255, 210, 61, 0.3);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* From Uiverse.io by elijahgummer — era um botão preto "Star on GitHub"
+   com um feixe de luz varrendo na diagonal só no :hover; aqui vira loop
+   automático (mobile não tem hover) e as cores viram a paleta sunset. Só
+   pegamos o efeito de luz varrendo — o resto do markup original (ícone de
+   estrela, contador) era conteúdo específico de GitHub, sem equivalente
+   aqui. */
+.sunset-sweep-badge {
+  position: relative;
+  overflow: hidden;
+  border-radius: 100px;
+  isolation: isolate;
+}
+.sunset-sweep-badge::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: -3rem;
+  height: 8rem;
+  width: 2rem;
+  transform: translateX(3rem) rotate(12deg);
+  background: rgba(255, 255, 255, 0.22);
+  animation: sunset-sweep 3.5s ease-in-out infinite;
+}
+@keyframes sunset-sweep {
+  0%,
+  15% {
+    transform: translateX(3rem) rotate(12deg);
+  }
+  55%,
+  100% {
+    transform: translateX(-10rem) rotate(12deg);
+  }
+}
+
 /* "Typing…" bubble on the WhatsApp FAB: each dot hops up-and-down 3 times in
    a quick burst (via animation-delay staggering the same keyframes per dot),
    then sits still for the rest of a 4s cycle before looping. */

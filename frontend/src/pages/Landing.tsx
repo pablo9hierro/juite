@@ -147,10 +147,12 @@ export default function Landing() {
           transition={{ duration: 0.6 }}
           className="flex flex-wrap justify-center gap-2 mt-10"
         >
-          <span className="px-4 py-2 rounded-full glass text-xs sm:text-sm font-bold text-son-gold">
-            SUNSET • Desde 2023
+          <span className="sunset-shine-badge">
+            <span className="sunset-shine-badge-inner px-4 py-2 text-xs sm:text-sm font-bold text-son-gold">
+              SUNSET • Desde 2023
+            </span>
           </span>
-          <span className="px-4 py-2 rounded-full glass text-xs sm:text-sm font-medium text-son-silver">
+          <span className="sunset-sweep-badge px-4 py-2 rounded-full glass text-xs sm:text-sm font-medium text-son-silver">
             🔥 Experiência, vibe e essência
           </span>
           <span className="px-4 py-2 rounded-full glass text-xs sm:text-sm font-medium text-son-silver">

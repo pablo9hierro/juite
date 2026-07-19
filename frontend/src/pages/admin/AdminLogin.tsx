@@ -44,7 +44,7 @@ export default function AdminLogin() {
 
   return (
     <main className="min-h-screen bg-son-black text-white flex items-center justify-center px-5">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm glass rounded-2xl p-8">
+      <form onSubmit={handleSubmit} className="sunset-login-card w-full max-w-sm rounded-2xl p-8">
         <div className="text-center mb-6">
           <Logo size="lg" />
           <p className="text-son-silver-dim text-sm mt-2 flex items-center justify-center gap-1.5">
