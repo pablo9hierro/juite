@@ -145,11 +145,6 @@ export default function Landing() {
             desc: 'Confirmado, pronto, saiu pra entrega — você acompanha cada etapa sem precisar ficar recarregando a tela.',
             graphic: <LandingWhatsAppCard />,
           },
-          {
-            title: 'Cupons exclusivos de fidelidade',
-            desc: 'Participe das campanhas e ganhe cupons de desconto e de frete grátis só pra quem já é nosso cliente.',
-            graphic: <CouponTicketCard />,
-          },
         ].map((f, i) => (
           <motion.div
             key={f.title}
@@ -166,6 +161,25 @@ export default function Landing() {
             {f.graphic}
           </motion.div>
         ))}
+
+        {/* Card de fidelidade é grande (320px, com gráfico) — não cabe
+            lado a lado com texto como os outros dois, por isso fica numa
+            seção própria, empilhada. */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.16 }}
+          className="glass rounded-2xl p-3 text-left flex flex-col gap-3 items-center shadow-[8px_10px_20px_-6px_rgba(0,0,0,0.6)]"
+        >
+          <div className="w-full">
+            <h3 className="text-sm font-bold text-white mb-0.5">Cupons exclusivos de fidelidade</h3>
+            <p className="text-xs text-son-silver-dim leading-snug">
+              Participe das campanhas e ganhe cupons de desconto e de frete grátis só pra quem já é nosso cliente.
+            </p>
+          </div>
+          <CouponTicketCard />
+        </motion.div>
       </section>
       </main>
     </>

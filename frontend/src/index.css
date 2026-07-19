@@ -311,231 +311,219 @@ a {
   -webkit-backdrop-filter: blur(10px);
 }
 
-/* From Uiverse.io by dexter-st ("coupon in a slot") — vira o gráfico do
-   card de cupom da landing. É INTERAÇÃO (tap no celular / hover no PC),
-   não loop automático — o próprio pedido pediu assim, diferente do resto
-   dos badges. `@media (hover: hover)` restringe o :hover só a quem tem
-   mouse de verdade, pra não ficar "hover preso" depois de um toque em
-   tela sensível ao toque. O estado "puxado" no toque é controlado via
-   classe .is-open (React state), não :focus/:active. */
-.sunset-coupon-slot {
+/* From Uiverse.io (dashboard "Income" card) — reproduzido fiel à
+   referência: borda em gradiente animado (era arco-íris magenta/roxo/
+   ciano, virou dourado/laranja/âmbar do site), valor com efeito de
+   "digitando" (typewriter puro em CSS), badge de variação, gráfico de 7
+   barras com bounce contínuo, tags e botão. Conteúdo adaptado pro
+   programa de fidelidade em vez de um dashboard financeiro genérico. */
+.sunset-income-card {
+  --sunset-income-shadow-bar: -5px -5px 9px rgba(58, 36, 16, 0.45), 5px 5px 9px rgba(20, 20, 20, 0.6);
+  border-radius: 16px;
+  padding: 10px;
+  width: 320px;
+  max-width: 100%;
+  background: var(--color-son-black);
   position: relative;
-  width: 100px;
-  height: 130px;
-  flex-shrink: 0;
+  user-select: none;
+}
+.sunset-income-card::before,
+.sunset-income-card::after {
+  content: '';
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  border-radius: 16px;
+  background: linear-gradient(45deg, #ffd23d, #ffb703, #e08a3a, #fff3d0, #d5aa45, #b57c27, #d5aa45, #e08a3a, #ffb703, #ffd23d);
+  background-size: 400%;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  animation: sunset-income-steam 40s linear infinite;
+}
+@keyframes sunset-income-steam {
+  0% {
+    background-position: 0 0;
+  }
+  50% {
+    background-position: 400% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+.sunset-income-card::after {
+  filter: blur(20px);
+}
+.sunset-income-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.sunset-income-tag {
+  fill: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 25px;
+  width: 25px;
+  box-shadow: 4px 4px 3px rgba(0, 0, 0, 0.65);
+}
+.sunset-income-bg-custom {
+  background: linear-gradient(to right, #3a2410, #020202);
+  padding: 18px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  box-shadow: inset -5px -5px 9px rgba(58, 36, 16, 0.5), inset 5px 5px 9px rgba(20, 20, 20, 0.6);
+}
+.sunset-income-card .sunset-income-heading {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--color-son-silver);
+  text-shadow: 4px 4px 3px rgba(0, 0, 0, 0.65);
+}
+.sunset-income-amount {
+  font-size: 32px;
+  font-weight: bold;
+  margin: 10px 0;
+  line-height: 1.2;
+  color: #fff;
+  text-shadow: 4px 4px 3px rgba(0, 0, 0, 0.65);
+  display: inline-flex;
+  align-items: center;
+}
+.sunset-income-typing {
   overflow: hidden;
+  white-space: nowrap;
+  border-right: 3px solid #fff;
+  display: inline-block;
+  animation: sunset-income-typing 8s steps(20) infinite, sunset-income-blink 1.2s step-end infinite;
+}
+@keyframes sunset-income-typing {
+  0% {
+    width: 0;
+  }
+  40% {
+    width: 128px;
+  }
+  60% {
+    width: 128px;
+  }
+  100% {
+    width: 0;
+  }
+}
+@keyframes sunset-income-blink {
+  50% {
+    border-color: transparent;
+  }
+}
+.sunset-income-main-pr {
+  font-size: 14px;
+  color: var(--color-son-orange);
+  margin-left: 6px;
+  font-weight: 500;
+  background: rgba(224, 138, 58, 0.25);
+  border-radius: 5px;
+  padding: 2px 4px;
+}
+.sunset-income-compare {
+  font-size: 12px;
+  color: var(--color-son-silver);
+  text-shadow: 4px 4px 3px rgba(0, 0, 0, 0.65);
+  letter-spacing: 1px;
+}
+.sunset-income-tags {
+  display: flex;
+  margin-bottom: 8px;
+  justify-content: flex-end;
+  color: var(--color-son-silver);
+  font-size: 12px;
+  font-weight: 500;
+  gap: 4px;
+  text-shadow: 2px 3px 3px rgba(0, 0, 0, 0.65);
+}
+.sunset-income-tags span {
+  padding: 3px 10px;
+  background-color: rgba(77, 44, 28, 0.45);
+  border-radius: 3px;
+}
+.sunset-income-chart {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  width: 100%;
+  height: 140px;
+  padding: 10px;
+  border-radius: 12px;
+}
+.sunset-income-bar {
+  width: 20px;
+  font-size: 15px;
+  background: var(--color-son-orange);
+  color: var(--color-son-black);
+  border-radius: 4px 4px 0 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  position: relative;
+  transform-origin: bottom;
+  animation: sunset-income-ripple 7.5s ease-in-out infinite;
+  box-shadow: var(--sunset-income-shadow-bar);
+}
+.sunset-income-bar.is-white {
+  background: var(--color-son-silver);
+}
+@keyframes sunset-income-ripple {
+  0%,
+  100% {
+    transform: scaleY(0.6);
+  }
+  25% {
+    transform: scaleY(1.1);
+  }
+  50% {
+    transform: scaleY(0.8);
+  }
+  75% {
+    transform: scaleY(1.2);
+  }
+}
+.sunset-income-pr-day {
+  position: absolute;
+  top: -25px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+.sunset-income-pr-day.is-red {
+  color: var(--color-son-orange);
+}
+.sunset-income-bar-label {
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.65);
+  font-size: 12px;
+}
+.sunset-income-card .sunset-income-more-button {
+  font-size: 16px;
+  padding: 12px;
+  border-radius: 10px;
+  color: var(--color-son-black);
+  border: 0;
+  width: 100%;
+  margin-top: 10px;
+  outline: none;
+  background-color: var(--color-son-silver);
+  box-shadow: var(--sunset-income-shadow-bar);
+  transition: ease all 0.3s;
   cursor: pointer;
 }
-.sunset-coupon-ticket {
-  position: absolute;
-  inset: 0;
-  transform: translateY(-2.6rem);
-  animation: sunset-coupon-wiggle 2.75s ease infinite;
-  transition: transform 0.5s ease;
+.sunset-income-card .sunset-income-more-button:hover {
+  transform: translateY(-3px);
 }
-@media (hover: hover) {
-  .sunset-coupon-slot:hover .sunset-coupon-ticket {
-    transform: translateY(2.7rem) !important;
-    animation-play-state: paused;
-  }
-}
-.sunset-coupon-slot.is-open .sunset-coupon-ticket {
-  transform: translateY(2.7rem);
-  animation-play-state: paused;
-}
-@keyframes sunset-coupon-wiggle {
-  8%,
-  27% {
-    transform: translateY(-2.6rem);
-  }
-  20% {
-    transform: translateY(-2.3rem);
-  }
-}
-
-/* From Uiverse.io by dexter-st (ticket holográfico com bordas
-   perforadas) — reproduzido fiel à referência: mesma estrutura de grid
-   (header/body/footer), mesma máscara de picote/corte, mesmo filtro SVG
-   #sunsetTicketBump (feTurbulence + feSpecularLighting + fePointLight +
-   feComposite + feBlend, igual ao original), mesmos elementos "notes" e
-   "symbol". Só a cor do degradê holográfico muda (era magenta/ciano/
-   azul neon, virou dourado/laranja/bronze do site) e o tamanho, reduzido
-   de 180x320 pra caber no slot do card da landing. */
-.sunset-holo-ticket {
-  --width: 100px;
-  --height: 178px;
-  --perforation-size: 7px;
-  --cutouts-adjust: 39px;
-
-  position: relative;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 0.4rem;
-  width: var(--width);
-  height: var(--height);
-  padding: var(--perforation-size) 0;
-  font-family: var(--font-sans);
-  user-select: none;
-  overflow: hidden;
-  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.2)) drop-shadow(0 4px 3px rgba(0, 0, 0, 0.2)) drop-shadow(0 10px 9px rgba(0, 0, 0, 0.15));
-  animation: sunset-holo-hover 3s ease infinite;
-  will-change: transform, filter;
-}
-@keyframes sunset-holo-hover {
-  50% {
-    filter: drop-shadow(0 4px 3px rgba(0, 0, 0, 0.12)) drop-shadow(0 8px 7px rgba(0, 0, 0, 0.12)) drop-shadow(0 16px 14px rgba(0, 0, 0, 0.1));
-    transform: translateY(-4px) scale(1.02);
-  }
-}
-.sunset-holo-ticket-filter {
-  position: absolute;
-}
-.sunset-holo-ticket-bg {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background-color: #fff;
-  filter: url(#sunsetTicketBump);
-  mask:
-    radial-gradient(circle at 50% 0, #fff0 calc(var(--perforation-size) - 3px), #000 calc(var(--perforation-size) - 2.3px)),
-    radial-gradient(circle at 50% 100%, #fff0 calc(var(--perforation-size) - 3px), #000 calc(var(--perforation-size) - 2.3px)),
-    radial-gradient(circle 5px at left center, #000 98%, #0000 100%),
-    radial-gradient(circle 5px at right center, #000 98%, #0000 100%),
-    repeating-linear-gradient(90deg, #000 6px, #000 9px, #0000 10px, #0000 14px);
-  mask-repeat: repeat-x, repeat-x, no-repeat, no-repeat, repeat-x;
-  mask-size:
-    calc(var(--perforation-size) * 2) 100%,
-    calc(var(--perforation-size) * 2) 100%,
-    10px 10px,
-    10px 10px,
-    6px 2px;
-  mask-position:
-    calc(0.5 * var(--perforation-size)) top,
-    calc(0.5 * var(--perforation-size)) bottom,
-    left var(--cutouts-adjust),
-    right var(--cutouts-adjust),
-    0 calc(var(--cutouts-adjust) + 4px);
-  mask-composite: intersect, exclude, add, add;
-}
-.sunset-holo-ticket-holographic {
-  background-image: linear-gradient(to bottom, rgba(255, 210, 61, 0.55), 90%, rgba(0, 0, 0, 0.15)),
-    conic-gradient(
-      at 60% 50%,
-      #ccc,
-      #ffd23d,
-      #e08a3a,
-      #ddd,
-      #b57c27,
-      #fff3d0,
-      #b57c27,
-      #ffd23d,
-      #0002,
-      #b57c27,
-      #ddd,
-      #fff3d0,
-      #ccc
-    );
-}
-.sunset-holo-ticket-holographic::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(circle at 70% 20%, #ffd23d, #0000), repeating-radial-gradient(circle at 30% 80%, #fff, #e08a3a 24px, #eeeeee 70px);
-  mix-blend-mode: color-burn;
-}
-.sunset-holo-ticket-holographic::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(to bottom, rgba(255, 210, 61, 0.33), rgba(224, 138, 58, 0.8), rgba(181, 124, 39, 0.8), rgba(255, 210, 61, 0.33));
-  mix-blend-mode: difference;
-  animation: sunset-holo-bg-pos 3s ease-in-out infinite alternate;
-  background-position: 0 0;
-  background-size: 100% 300%;
-  background-repeat: repeat;
-}
-@keyframes sunset-holo-bg-pos {
-  to {
-    background-position: 0 280px;
-  }
-}
-.sunset-holo-ticket-header {
-  position: relative;
-  margin: 0 4px;
-  text-align: center;
-  z-index: 1;
-  font-weight: 900;
-  font-size: 1.2rem;
-  letter-spacing: 1px;
-  color: rgba(255, 255, 255, 0.62);
-  text-shadow: 0 0 0 #000;
-  -webkit-text-stroke: rgba(255, 255, 255, 0.5) 0.4px;
-  mix-blend-mode: difference;
-}
-.sunset-holo-ticket-body {
-  position: relative;
-  margin: 0 0.5em;
-  padding: 0.2em 0;
-  font-size: 0.55rem;
-  font-weight: 400;
-  text-align: center;
-  color: #081912;
-  line-height: 1.5;
-  z-index: 1;
-}
-.sunset-holo-ticket-footer {
-  position: relative;
-  z-index: 1;
-  margin: 0 0.6em 0.4em;
-}
-.sunset-holo-ticket-number {
-  margin-bottom: 0.4rem;
-  text-align: center;
-  color: #081912;
-  font-size: 0.6rem;
-  font-weight: 400;
-}
-.sunset-holo-ticket-number b {
-  font-weight: 700;
-}
-.sunset-holo-ticket-barcode {
-  justify-self: center;
-  width: 0;
-  height: 18px;
-  box-shadow: 0 0 0 1px #081912, 3px 0 0 1px #081912, 4px 0 0 1px #081912, 6px 0 0 1px #081912, 8px 0 0 1px #081912,
-    9px 0 0 1px #081912, 12px 0 0 1px #081912, 15px 0 0 1px #081912, 17px 0 0 1px #081912, 20px 0 0 1px #081912,
-    20px 0 0 1px #081912, 22px 0 0 1px #081912, 24px 0 0 1px #081912, 26px 0 0 1px #081912, 28px 0 0 1px #081912,
-    31px 0 0 1px #081912, 33px 0 0 1px #081912, 34px 0 0 1px #081912, 36px 0 0 1px #081912, 39px 0 0 1px #081912;
-  transform: translateX(21px);
-}
-.sunset-holo-ticket-symbol {
-  position: absolute;
-  top: 0.75em;
-  right: 0px;
-  rotate: 185deg;
-  font-size: 0.75em;
-  color: #fff;
-  line-height: 0.5;
-  opacity: 0.2;
-}
-.sunset-holo-ticket-notes {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  font-size: 1.4rem;
-  color: #e7e7e7;
-  mix-blend-mode: color-burn;
-  transform: translateY(20%);
-  z-index: 1;
-  text-align: center;
-}
-.sunset-holo-ticket-notes:nth-child(2) {
-  transform: translateY(40%);
-}
-.sunset-holo-ticket-notes:nth-child(3) {
-  transform: translateY(60%);
+.sunset-income-card .sunset-income-more-button:active {
+  transform: scale(0.9);
 }
 
 /* From Uiverse.io by ashwin_5681 — esteira infinita (itens absolutos que
@@ -1021,78 +1009,49 @@ a {
   }
 }
 
-/* From Uiverse.io by NelsonDJCR — botão neumórfico reproduzido 100%
-   fiel à referência (mesmas cores/sombras/curva de transição, incl. o
-   fundo claro #e8e8e8 — não recolorido pra paleta escura do site, foi
-   pedido explicitamente "renderizar exatamente 100% igual"). O ícone
-   (posição absoluta sem top/left) fica na posição estática de onde
-   estaria no fluxo normal — por isso o padding-right maior no botão,
-   igual a referência original. */
-.sunset-nelson-btn {
-  display: inline-flex;
+/* Ícone do card de WhatsApp da landing — vidro fosco com um "BG" verde
+   atrás. Na referência original o "BG" só girava 35° no :hover; como
+   esse card não é mais clicável (a função de link é exclusiva do
+   WhatsAppFab), virou um loop automático e contínuo balançando o BG pra
+   lá e pra cá, em vez de esperar interação. */
+.sunset-wa-static {
+  width: 45px;
+  height: 45px;
+  display: flex;
   align-items: center;
-  transition: all 0.2s ease-in;
+  justify-content: center;
   position: relative;
-  overflow: hidden;
-  z-index: 1;
-  color: #090909;
-  padding: 0.7em 3.3em 0.7em 1.7em;
-  font-size: 18px;
-  border-radius: 0.5em;
-  background: #e8e8e8;
-  border: 1px solid #e8e8e8;
-  box-shadow: 6px 6px 12px #c5c5c5, -6px -6px 12px #ffffff;
-  cursor: pointer;
+  border-radius: 7px;
 }
-.sunset-nelson-btn svg {
-  height: 30px;
+.sunset-wa-static-icon {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  backdrop-filter: blur(4px);
+  border-radius: 10px;
+  border: 1px solid rgba(156, 156, 156, 0.466);
+}
+.sunset-wa-static-bg {
   position: absolute;
-  padding: 0px 5px;
-  margin-top: -4px;
-}
-.sunset-nelson-btn:active {
-  color: #666;
-  box-shadow: inset 4px 4px 12px #c5c5c5, inset -4px -4px 12px #ffffff;
-}
-.sunset-nelson-btn::before {
   content: '';
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%) scaleY(1) scaleX(1.25);
-  top: 100%;
-  width: 140%;
-  height: 180%;
-  background-color: rgba(0, 0, 0, 0.05);
-  border-radius: 50%;
-  display: block;
-  transition: all 0.5s 0.1s cubic-bezier(0.55, 0, 0.1, 1);
+  width: 100%;
+  height: 100%;
+  background: #00d757;
   z-index: -1;
+  border-radius: 9px;
+  pointer-events: none;
+  transform-origin: bottom;
+  animation: sunset-wa-static-sway 3.2s ease-in-out infinite;
 }
-.sunset-nelson-btn::after {
-  content: '';
-  position: absolute;
-  left: 55%;
-  transform: translateX(-50%) scaleY(1) scaleX(1.45);
-  top: 180%;
-  width: 160%;
-  height: 190%;
-  background-color: #009087;
-  border-radius: 50%;
-  display: block;
-  transition: all 0.5s 0.1s cubic-bezier(0.55, 0, 0.1, 1);
-  z-index: -1;
-}
-.sunset-nelson-btn:hover {
-  color: #ffffff;
-  border: 1px solid #009087;
-}
-.sunset-nelson-btn:hover::before {
-  top: -35%;
-  background-color: #009087;
-  transform: translateX(-50%) scaleY(1.3) scaleX(0.8);
-}
-.sunset-nelson-btn:hover::after {
-  top: -45%;
-  background-color: #009087;
-  transform: translateX(-50%) scaleY(1.3) scaleX(0.8);
+@keyframes sunset-wa-static-sway {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(35deg);
+  }
 }
