@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
+import SunsetBackdrop from './components/SunsetBackdrop'
 import Landing from './pages/Landing'
 import Catalogo from './pages/Catalogo'
 import ProdutoDetalhe from './pages/ProdutoDetalhe'
@@ -39,9 +40,18 @@ function PdvFallback() {
   )
 }
 
+// Fundo fixo com o cenário pôr-do-sol só aparece nas páginas de cliente —
+// telas de staff (admin/motoboy/logins) continuam no fundo sólido de sempre.
+function CustomerBackdrop() {
+  const { pathname } = useLocation()
+  if (pathname.startsWith('/admin') || pathname === '/funcionarios/login') return null
+  return <SunsetBackdrop />
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <CustomerBackdrop />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/catalogo" element={<Catalogo />} />

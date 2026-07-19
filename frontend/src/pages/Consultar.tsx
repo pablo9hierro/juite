@@ -290,7 +290,7 @@ export default function Consultar() {
   }, [])
 
   return (
-    <main className="min-h-screen bg-son-black text-white">
+    <main className="min-h-screen bg-son-black/85 text-white">
       <SiteHeader />
       <WhatsAppFab />
       <CartFab />

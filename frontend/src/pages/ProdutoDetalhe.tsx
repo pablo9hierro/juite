@@ -32,7 +32,7 @@ export default function ProdutoDetalhe() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-son-black text-white flex items-center justify-center">
+      <main className="min-h-screen bg-son-black/85 text-white flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
       </main>
     )
@@ -40,7 +40,7 @@ export default function ProdutoDetalhe() {
 
   if (!product) {
     return (
-      <main className="min-h-screen bg-son-black text-white">
+      <main className="min-h-screen bg-son-black/85 text-white">
         <SiteHeader />
         <div className="text-center py-24 text-son-silver-dim">
           <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -56,7 +56,7 @@ export default function ProdutoDetalhe() {
   const outOfStock = product.quantity <= 0
 
   return (
-    <main className="min-h-screen bg-son-black text-white">
+    <main className="min-h-screen bg-son-black/85 text-white">
       <SiteHeader />
       <motion.div
         initial={{ opacity: 0, y: 16 }}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { LayoutGrid, List, Loader2, Minus, Package, Plus, Search, X } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -30,6 +30,47 @@ function PromoPriceBlock({ price, promo }: { price: number; promo: PromotionalPr
       <span className="text-xs text-red-500 line-through decoration-2">{currency(price)}</span>
       <span className="text-xs font-semibold text-orange-400">{discountLabel(promo)}</span>
       <span className="sunset-text font-bold">{currency(finalPrice(price, promo))}</span>
+    </div>
+  )
+}
+
+// Esteira infinita (Uiverse by ashwin_5681) pros itens em promoção — cada
+// categoria da aba "🔥 Promoção" vira uma faixa que rola sozinha, em vez
+// da grade/lista estática. Pausa e volta a cor no hover (desktop); no
+// celular continua rolando (sem hover, não tem como pausar por toque).
+function PromoSlider({ products, promoByProduct }: { products: Product[]; promoByProduct: Map<string, PromotionalProduct> }) {
+  const ITEM_WIDTH = 168
+  const ITEM_HEIGHT = 236
+  return (
+    <div
+      className="sunset-promo-slider"
+      style={{ '--width': `${ITEM_WIDTH}px`, '--height': `${ITEM_HEIGHT}px`, '--quantity': products.length } as CSSProperties}
+    >
+      <div className="sunset-promo-slider-list">
+        {products.map((product, i) => {
+          const promo = promoByProduct.get(product.id)
+          return (
+            <Link
+              key={product.id}
+              to={`/produto/${product.id}`}
+              className="sunset-promo-slider-item"
+              style={{ '--position': i + 1 } as CSSProperties}
+            >
+              <div className="sunset-promo-card">
+                <div className="aspect-square rounded-xl bg-son-surface-light flex items-center justify-center overflow-hidden">
+                  {product.image_url ? (
+                    <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Package className="w-8 h-8 text-son-silver-dim/40" />
+                  )}
+                </div>
+                <p className="text-xs font-semibold text-white leading-snug line-clamp-2">{product.name}</p>
+                {promo && <PromoPriceBlock price={product.price} promo={promo} />}
+              </div>
+            </Link>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -257,7 +298,7 @@ export default function Catalogo() {
   }
 
   return (
-    <main className="min-h-screen bg-son-black text-white">
+    <main className="min-h-screen bg-son-black/85 text-white">
       <SiteHeader />
       <PageTransition className="max-w-6xl mx-auto px-5 sm:px-10 pb-16">
         <div className="flex items-center justify-between mb-1">
@@ -408,23 +449,11 @@ export default function Catalogo() {
             <p>Nenhum produto disponível no momento.</p>
           </div>
         ) : isPromo ? (
-          <div className="flex flex-col gap-8">
+          <div className="flex flex-col gap-6">
             {promoGroups.map(([label, groupProducts]) => (
               <div key={label}>
                 <h2 className="text-sm font-bold text-son-silver-dim uppercase tracking-wide mb-3">{label}</h2>
-                {view === 'grid' ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {groupProducts.map((product, i) => (
-                      <GridCard key={product.id} product={product} i={i} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {groupProducts.map((product, i) => (
-                      <ListCard key={product.id} product={product} i={i} />
-                    ))}
-                  </div>
-                )}
+                <PromoSlider products={groupProducts} promoByProduct={promoByProduct} />
               </div>
             ))}
           </div>

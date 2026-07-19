@@ -355,8 +355,8 @@ a {
    classe .is-open (React state), não :focus/:active. */
 .sunset-coupon-slot {
   position: relative;
-  width: 4.5rem;
-  height: 4.5rem;
+  width: 76px;
+  height: 100px;
   flex-shrink: 0;
   overflow: hidden;
   cursor: pointer;
@@ -364,99 +364,256 @@ a {
 .sunset-coupon-ticket {
   position: absolute;
   inset: 0;
-  transform: translateY(-0.75rem);
+  transform: translateY(-1.4rem);
   animation: sunset-coupon-wiggle 2.75s ease infinite;
   transition: transform 0.5s ease;
 }
 @media (hover: hover) {
   .sunset-coupon-slot:hover .sunset-coupon-ticket {
-    transform: translateY(1.4rem) !important;
+    transform: translateY(1.7rem) !important;
     animation-play-state: paused;
   }
 }
 .sunset-coupon-slot.is-open .sunset-coupon-ticket {
-  transform: translateY(1.4rem);
+  transform: translateY(1.7rem);
   animation-play-state: paused;
 }
 @keyframes sunset-coupon-wiggle {
   8%,
   27% {
-    transform: translateY(-0.75rem);
+    transform: translateY(-1.4rem);
   }
   20% {
-    transform: translateY(-0.5rem);
+    transform: translateY(-1.1rem);
   }
 }
 
-/* From Uiverse.io by zeeshan_2112 (boarding-pass ticket) — cores trocadas
-   pra paleta sunset (era roxo neon sobre cinza-chumbo). Simplificado pra
-   caber no espaço de um ícone de card (a referência original é uma tela
-   inteira) — mantém o essencial: fundo com grade animada, título com
-   gradiente, linha picotada, "código de barras", número grande em
-   destaque, feixe de brilho diagonal passando por cima. */
-.sunset-ticket {
+/* From Uiverse.io by dexter-st (ticket holográfico com bordas
+   perforadas) — reproduzido fiel à referência (mesma estrutura de grid,
+   máscara de picote/corte via SVG filter #sunsetTicketBump, camada
+   holográfica com conic-gradient + blend modes, código de barras,
+   floating animation), só recolorido pro dourado/laranja do site (era
+   magenta/ciano/azul neon) e reduzido de 180x320 pra caber no slot do
+   card da landing. */
+.sunset-holo-ticket {
+  --width: 76px;
+  --height: 132px;
+  --perforation-size: 6px;
+  --cutouts-adjust: 30px;
+
   position: relative;
-  width: 100%;
-  height: 100%;
-  border-radius: 0.6rem;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 0.3rem;
+  width: var(--width);
+  height: var(--height);
+  padding: var(--perforation-size) 0;
   overflow: hidden;
-  background: var(--color-son-black);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
-  font-size: 8px;
-  color: var(--color-son-silver);
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.25)) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.3));
+  animation: sunset-holo-hover 3s ease infinite;
+  will-change: transform, filter;
 }
-.sunset-ticket::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: linear-gradient(rgba(255, 210, 61, 0.18) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 210, 61, 0.18) 1px, transparent 1px);
-  background-size: 8px 8px;
-  transform: perspective(200px) rotateX(20deg) scale(1.4);
-  animation: sunset-ticket-grid-scroll 8s linear infinite;
-  opacity: 0.6;
-}
-@keyframes sunset-ticket-grid-scroll {
-  to {
-    background-position: 0 16px;
-  }
-}
-.sunset-ticket::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    115deg,
-    transparent 0%,
-    transparent 40%,
-    rgba(255, 255, 255, 0.12) 46%,
-    rgba(255, 255, 255, 0.3) 50%,
-    rgba(255, 255, 255, 0.12) 54%,
-    transparent 60%,
-    transparent 100%
-  );
-  background-size: 250% 250%;
-  background-position: 100% 100%;
-  animation: sunset-ticket-shine 4s ease-in-out infinite;
-  mix-blend-mode: overlay;
-}
-@keyframes sunset-ticket-shine {
+@keyframes sunset-holo-hover {
   50% {
-    background-position: 0% 0%;
+    filter: drop-shadow(0 4px 3px rgba(0, 0, 0, 0.15)) drop-shadow(0 14px 14px rgba(0, 0, 0, 0.18));
+    transform: translateY(-3px) scale(1.02);
   }
 }
-.sunset-ticket-num {
+.sunset-holo-ticket-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: #fff;
+  filter: url(#sunsetTicketBump);
+  mask:
+    radial-gradient(circle at 50% 0, #fff0 calc(var(--perforation-size) - 2px), #000 calc(var(--perforation-size) - 1.5px)),
+    radial-gradient(circle at 50% 100%, #fff0 calc(var(--perforation-size) - 2px), #000 calc(var(--perforation-size) - 1.5px)),
+    radial-gradient(circle 4px at left center, #000 98%, #0000 100%),
+    radial-gradient(circle 4px at right center, #000 98%, #0000 100%),
+    repeating-linear-gradient(90deg, #000 5px, #000 7px, #0000 8px, #0000 12px);
+  mask-repeat: repeat-x, repeat-x, no-repeat, no-repeat, repeat-x;
+  mask-size:
+    calc(var(--perforation-size) * 2) 100%,
+    calc(var(--perforation-size) * 2) 100%,
+    8px 8px,
+    8px 8px,
+    5px 2px;
+  mask-position:
+    calc(0.5 * var(--perforation-size)) top,
+    calc(0.5 * var(--perforation-size)) bottom,
+    left var(--cutouts-adjust),
+    right var(--cutouts-adjust),
+    0 calc(var(--cutouts-adjust) + 4px);
+  mask-composite: intersect, exclude, add, add;
+}
+.sunset-holo-ticket-holo {
+  background-image: linear-gradient(to bottom, rgba(255, 210, 61, 0.55), 90%, rgba(0, 0, 0, 0.15)),
+    conic-gradient(
+      at 60% 50%,
+      #ffe9a8,
+      #ffd23d,
+      #e08a3a,
+      #fff3d0,
+      #d5aa45,
+      #b57c27,
+      #d5aa45,
+      #e08a3a,
+      rgba(0, 0, 0, 0.1),
+      #d5aa45,
+      #fff3d0,
+      #ffd23d,
+      #ffe9a8
+    );
+}
+.sunset-holo-ticket-holo::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at 70% 20%, #fff2c2, #0000),
+    repeating-radial-gradient(circle at 30% 80%, #fff, #ffd23d 24px, #f3e6c8 70px);
+  mix-blend-mode: color-burn;
+}
+.sunset-holo-ticket-holo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, rgba(224, 138, 58, 0.35), rgba(213, 170, 69, 0.7), rgba(181, 124, 39, 0.7), rgba(224, 138, 58, 0.35));
+  mix-blend-mode: difference;
+  animation: sunset-holo-bg-pos 3s ease-in-out infinite alternate;
+  background-position: 0 0;
+  background-size: 100% 300%;
+  background-repeat: repeat;
+}
+@keyframes sunset-holo-bg-pos {
+  to {
+    background-position: 0 220px;
+  }
+}
+.sunset-holo-ticket-notes {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  font-size: 1.7rem;
+  font-weight: 900;
+  color: #f3e6c8;
+  mix-blend-mode: color-burn;
+  transform: translateY(20%);
+  z-index: 1;
+  text-align: center;
+}
+.sunset-holo-ticket-notes:nth-child(2) {
+  transform: translateY(42%);
+}
+.sunset-holo-ticket-notes:nth-child(3) {
+  transform: translateY(64%);
+}
+.sunset-holo-ticket-header {
+  position: relative;
+  margin: 0 4px;
+  text-align: center;
+  z-index: 1;
+  font-weight: 900;
+  font-size: 0.9rem;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.62);
+  -webkit-text-stroke: rgba(255, 255, 255, 0.5) 0.4px;
+  mix-blend-mode: difference;
+}
+.sunset-holo-ticket-body {
+  position: relative;
+  margin: 0 0.5em;
+  font-size: 0.48rem;
+  font-weight: 600;
+  text-align: center;
+  color: #081912;
+  z-index: 1;
+}
+.sunset-holo-ticket-footer {
   position: relative;
   z-index: 1;
+  margin: 0 0.5em 0.35em;
+}
+.sunset-holo-ticket-number {
+  margin-bottom: 0.25rem;
+  text-align: center;
+  color: #081912;
+  font-size: 0.52rem;
+  font-weight: 600;
+}
+.sunset-holo-ticket-number b {
+  font-weight: 800;
+}
+.sunset-holo-ticket-barcode {
+  justify-self: center;
+  width: 0;
+  height: 13px;
+  box-shadow: 0 0 0 1px #081912, 2px 0 0 1px #081912, 3px 0 0 1px #081912, 5px 0 0 1px #081912, 7px 0 0 1px #081912,
+    8px 0 0 1px #081912, 10px 0 0 1px #081912, 12px 0 0 1px #081912, 13px 0 0 1px #081912, 16px 0 0 1px #081912,
+    18px 0 0 1px #081912, 19px 0 0 1px #081912, 21px 0 0 1px #081912, 22px 0 0 1px #081912, 24px 0 0 1px #081912,
+    26px 0 0 1px #081912, 27px 0 0 1px #081912, 29px 0 0 1px #081912, 31px 0 0 1px #081912, 32px 0 0 1px #081912;
+  transform: translateX(16px);
+}
+
+/* From Uiverse.io by ashwin_5681 — esteira infinita (itens absolutos que
+   percorrem da direita pra esquerda, com animation-delay escalonado por
+   --position pra ficarem sempre em fila, sem gap). Velocidade 3x mais
+   lenta que a referência (30s em vez de 10s). Usado nos itens da aba
+   "🔥 Promoção" do catálogo — cada categoria promocional vira uma esteira
+   própria. .sunset-promo-card é o container do item (estilo ".card" da
+   referência, cores adaptadas pra paleta sunset). */
+.sunset-promo-slider {
+  width: 100%;
+  height: var(--height);
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, #000 8% 92%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 8% 92%, transparent);
+}
+.sunset-promo-slider-list {
   display: flex;
-  align-items: center;
-  justify-content: center;
   width: 100%;
   height: 100%;
-  font-size: 1.6rem;
-  font-weight: 900;
-  color: var(--color-son-gold);
-  text-shadow: 0 0 10px rgba(255, 210, 61, 0.6);
+  min-width: calc(var(--width) * var(--quantity));
+  position: relative;
+}
+.sunset-promo-slider-item {
+  width: var(--width);
+  height: 100%;
+  position: absolute;
+  left: 100%;
+  animation: sunset-promo-autorun 30s linear infinite;
+  transition: filter 0.5s;
+  animation-delay: calc((30s / var(--quantity)) * (var(--position) - 1) - 30s);
+}
+@keyframes sunset-promo-autorun {
+  from {
+    left: 100%;
+  }
+  to {
+    left: calc(var(--width) * -1);
+  }
+}
+.sunset-promo-slider:hover .sunset-promo-slider-item {
+  animation-play-state: paused;
+  filter: grayscale(1);
+}
+.sunset-promo-slider-item:hover {
+  filter: grayscale(0);
+}
+.sunset-promo-card {
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  background: var(--color-son-surface);
+  color: #fff;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 /* From Uiverse.io by Praashoo7 — era um card que crescia inteiro no
@@ -545,81 +702,66 @@ a {
   animation: sunset-cart-bounce 1.8s ease-in-out infinite;
 }
 
-/* From Uiverse.io by esraaabdel-kareem (coffee cup loader) — só o "shake"
-   fica no ícone do WhatsApp; a fumaça é adaptada (opacidade maior, cor
-   quente) subindo atrás do botão. */
-@keyframes sunset-shake {
-  0% {
-    transform: translateX(0) translateY(0) rotate(0);
-  }
-  25% {
-    transform: translateX(-3px) translateY(-2px) rotate(-3deg);
-  }
-  50% {
-    transform: translateX(0) translateY(0) rotate(0);
-  }
-  75% {
-    transform: translateX(3px) translateY(-2px) rotate(3deg);
-  }
-  100% {
-    transform: translateX(0) translateY(0) rotate(0);
-  }
-}
-.sunset-shake {
-  animation: sunset-shake 3s ease-in-out infinite;
-}
-@keyframes sunset-smoke-rise {
-  0% {
-    transform: translate(-50%, 0) scale(0.4);
-    opacity: 0;
-  }
-  30% {
-    opacity: 0.7;
-  }
-  60% {
-    opacity: 0.4;
-  }
-  100% {
-    transform: translate(-50%, -70px) scale(1);
-    opacity: 0;
-  }
-}
-.sunset-smoke {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  width: 7px;
-  height: 18px;
-  background: rgba(236, 228, 207, 0.5);
+/* From Uiverse.io by Gaurang7717 — botão do WhatsApp fixo (bottom-6
+   left-6), reproduzido exatamente como veio na referência: mesma
+   estrutura (.sign ícone + .text revelado), mesmos valores de tamanho/
+   transição, mesma cor de fundo (já era o verde oficial do WhatsApp). */
+.sunset-wa-btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 45px;
+  height: 45px;
+  border: none;
   border-radius: 50%;
-  transform: translateX(-50%);
-  filter: blur(5px);
-  animation: sunset-smoke-rise 3s infinite ease-in-out;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition-duration: 0.3s;
+  box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.199);
+  background-color: #00d757;
 }
-
-/* From Uiverse.io by SelfMadeSystem (fire ball loader) — a versão original
-   usa física de partícula por bolinha com CSS mod()/:has(), pesado demais
-   pra um brilho decorativo atrás de um botão fixo; ficou só a ESSÊNCIA (um
-   glow quente, pulsante, um pouco maior que o botão, por trás dele). */
-@keyframes sunset-fire-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.85;
-    transform: scale(1.08);
-  }
+.sunset-wa-btn-sign {
+  width: 100%;
+  height: 100%;
+  transition-duration: 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.sunset-fire-glow {
+.sunset-wa-btn-sign svg {
+  width: 25px;
+  height: 25px;
+}
+.sunset-wa-btn-text {
   position: absolute;
-  inset: -10px;
-  z-index: -1;
-  border-radius: 9999px;
-  background: radial-gradient(circle, rgba(255, 149, 43, 0.55), rgba(224, 60, 20, 0.35) 55%, transparent 75%);
-  filter: blur(6px);
-  animation: sunset-fire-pulse 2.4s ease-in-out infinite;
+  right: 0%;
+  width: 0%;
+  opacity: 0;
+  color: white;
+  font-size: 1.2em;
+  font-weight: 600;
+  white-space: nowrap;
+  transition-duration: 0.3s;
+}
+.sunset-wa-btn:hover {
+  width: 150px;
+  border-radius: 40px;
+  transition-duration: 0.3s;
+}
+.sunset-wa-btn:hover .sunset-wa-btn-sign {
+  width: 30%;
+  transition-duration: 0.3s;
+  padding-left: 10px;
+}
+.sunset-wa-btn:hover .sunset-wa-btn-text {
+  opacity: 1;
+  width: 70%;
+  transition-duration: 0.3s;
+  padding-right: 10px;
+}
+.sunset-wa-btn:active {
+  transform: translate(2px, 2px);
 }
 
 /* From Uiverse.io by Gaurang7717 — cor trocada pro verde do WhatsApp
@@ -665,122 +807,6 @@ a {
   opacity: 1;
 }
 
-/* From Uiverse.io by ZstarPanda0210 — cores trocadas pra paleta sunset
-   (era cinza claro neutro). Vira o balão de notificação do WhatsAppFab
-   (avatar + nome + @ revelados ao interagir) em vez do badge de "digitando"
-   antigo. */
-.sunset-msg-btn {
-  --sunset-msg-bg: rgba(15, 43, 29, 0.95);
-  --sunset-msg-bg-hover: rgba(26, 69, 48, 0.98);
-  display: flex;
-  align-items: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.3);
-  background-color: var(--sunset-msg-bg);
-  border: 1px solid rgba(255, 210, 61, 0.25);
-  border-radius: 68px;
-  cursor: pointer;
-  padding: 5px 9px 5px 5px;
-  width: fit-content;
-  height: 34px;
-  overflow: hidden;
-  transition: all 0.25s ease-out;
-}
-.sunset-msg-btn:hover,
-.sunset-msg-btn.is-open {
-  height: 46px;
-  padding: 6px 16px 6px 6px;
-  background-color: var(--sunset-msg-bg-hover);
-}
-.sunset-msg-avatar-wrap {
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  position: relative;
-  transition: all 0.25s ease-out;
-}
-.sunset-msg-btn:hover .sunset-msg-avatar-wrap,
-.sunset-msg-btn.is-open .sunset-msg-avatar-wrap {
-  width: 32px;
-  height: 32px;
-}
-.sunset-msg-avatar {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  overflow: hidden;
-  background-color: var(--color-son-surface-light);
-}
-.sunset-msg-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.sunset-msg-status {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  right: 0;
-  bottom: 0;
-  border-radius: 50%;
-  outline: solid 2px var(--sunset-msg-bg);
-  background-color: #00da00;
-  animation: sunset-msg-status-pulse 2s ease-in-out infinite;
-}
-@keyframes sunset-msg-status-pulse {
-  0%,
-  100% {
-    background-color: #00da00;
-  }
-  50% {
-    background-color: #93e200;
-  }
-}
-.sunset-msg-content {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  padding-left: 7px;
-  color: white;
-  white-space: nowrap;
-}
-.sunset-msg-username {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: -6px;
-  height: 0;
-  opacity: 0;
-  transform: translateY(-14px);
-  transition: all 0.25s ease-out;
-}
-.sunset-msg-userid {
-  font-size: 9px;
-  color: var(--color-son-silver-dim);
-  letter-spacing: -6px;
-  height: 0;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: all 0.25s ease-out;
-}
-.sunset-msg-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--color-son-gold);
-}
-.sunset-msg-btn:hover .sunset-msg-username,
-.sunset-msg-btn.is-open .sunset-msg-username,
-.sunset-msg-btn:hover .sunset-msg-userid,
-.sunset-msg-btn.is-open .sunset-msg-userid {
-  height: auto;
-  letter-spacing: normal;
-  opacity: 1;
-  transform: translateY(0);
-}
-.sunset-msg-btn:hover .sunset-msg-label,
-.sunset-msg-btn.is-open .sunset-msg-label {
-  height: 0;
-  opacity: 0;
-}
 
 /* Uiverse.io by JaydipPrajapati1910 — "pulse" loader: um anel em formato
    de gota (border-radius assimétrico + rotate(45deg)) que pulsa saindo do

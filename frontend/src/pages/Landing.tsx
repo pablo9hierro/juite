@@ -113,7 +113,7 @@ export default function Landing() {
           {openState?.reason || 'Fora do nosso horário de funcionamento — volte mais tarde!'}
         </div>
       )}
-      <main className={`min-h-screen bg-son-black text-white overflow-hidden relative ${closed ? 'grayscale' : ''}`}>
+      <main className={`min-h-screen bg-son-black/85 text-white overflow-hidden relative ${closed ? 'grayscale' : ''}`}>
       <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-son-orange/20 blur-[120px]" />
       <div className="absolute top-20 -right-40 w-96 h-96 rounded-full bg-son-purple/25 blur-[120px]" />
       <div className="absolute bottom-0 left-1/3 w-80 h-80 rounded-full bg-son-pink/15 blur-[120px]" />
