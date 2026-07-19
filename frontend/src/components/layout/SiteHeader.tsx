@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ShoppingBag } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import Logo from '../ui/Logo'
+import SunsetCartIcon from '../SunsetCartIcon'
 import { useCart } from '../../store/cart'
 
 export default function SiteHeader({ showBack = true }: { showBack?: boolean }) {
@@ -24,10 +25,12 @@ export default function SiteHeader({ showBack = true }: { showBack?: boolean }) 
         </Link>
       </div>
       <Link
-        to="/carrinho"
+        to="/checkout"
         className="relative flex items-center gap-2 bg-son-surface border border-white/10 rounded-2xl px-4 py-2.5 hover:border-son-pink/40 transition-colors"
       >
-        <ShoppingBag className="w-4 h-4 text-son-pink" />
+        <span className="w-4 h-4 flex items-center justify-center overflow-visible">
+          <SunsetCartIcon scale={0.13} />
+        </span>
         <span className="text-sm font-medium text-white hidden sm:inline">Sacola</span>
         {count > 0 && (
           <span className="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center text-xs font-bold sunset-bg text-white rounded-full">
