@@ -6,7 +6,6 @@ import heroBanner from '../assets/hero-banner.png'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
 import LiveTrackingMapMock from '../components/landing/LiveTrackingMapMock'
-import WhatsAppBubbleIcon from '../components/landing/WhatsAppBubbleIcon'
 import CouponShineIcon from '../components/landing/CouponShineIcon'
 import { api } from '../lib/api'
 import type { Promotion, StoreStatus } from '../lib/types'
@@ -169,11 +168,6 @@ export default function Landing() {
             title: 'Acompanhe a entrega em tempo real',
             desc: 'Assim que seu pedido sai, você vê o trajeto do motoboy no mapa, ao vivo, até chegar na sua porta.',
             graphic: <LiveTrackingMapMock />,
-          },
-          {
-            title: 'Atualizações direto no seu WhatsApp',
-            desc: 'Confirmado, pronto, saiu pra entrega — você acompanha cada etapa sem precisar ficar recarregando a tela.',
-            graphic: <WhatsAppBubbleIcon />,
           },
           {
             title: 'Cupons exclusivos de fidelidade',
