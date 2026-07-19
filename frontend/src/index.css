@@ -621,11 +621,82 @@ a {
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.8);
 }
 
-/* From Uiverse.io by abhinav_7137 — só o carrinho (#cart-icon, mesmo SVG
-   e bounce da referência, traço recolorido de #334155 pra ficar visível
-   no fundo escuro do site). É o ícone padrão de carrinho em todo botão
-   do site agora — os 5 itens caindo (celular, notebook, tablet,
-   headphone, mixer) e a moldura circular foram removidos a pedido. */
+/* From Uiverse.io by abhinav_7137 — reproduzido fiel à referência: mesmo
+   carrinho SVG, mesmos 5 itens caindo em sequência (celular, notebook,
+   tablet, headphone, mixer) com os mesmos timings/rotações, traço do
+   carrinho recolorido de #334155 pra ficar visível no fundo escuro do
+   site. Sem o texto "Loading..." (não faz sentido num botão fixo que
+   não representa um estado de carregamento). */
+.cart-loader {
+  position: relative;
+  width: 160px;
+  height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+.items-container {
+  position: absolute;
+  top: 20px;
+  left: 0;
+  width: 100%;
+  height: 100px;
+  z-index: 1;
+}
+.item {
+  position: absolute;
+  opacity: 0;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  animation: sunset-cart-drop-item 4s cubic-bezier(0.3, 0, 0.5, 1) infinite;
+}
+#item-mobile {
+  top: -15px;
+  left: 58px;
+  width: 20px;
+  height: 32px;
+  --end-rot: -15deg;
+  animation-delay: 0.05s;
+  background-image: url("data:image/svg+xml,%3Csvg%20viewBox='0%200%2024%2036'%20xmlns='http://www.w3.org/2000/svg'%3E%3Crect%20x='2'%20y='2'%20width='20'%20height='32'%20rx='3'%20fill='%233b82f6'/%3E%3Crect%20x='4'%20y='4'%20width='16'%20height='25'%20rx='1'%20fill='%23eff6ff'/%3E%3Ccircle%20cx='12'%20cy='31.5'%20r='1.5'%20fill='%23eff6ff'/%3E%3C/svg%3E");
+}
+#item-laptop {
+  top: -10px;
+  left: 70px;
+  width: 35px;
+  height: 26px;
+  --end-rot: 10deg;
+  animation-delay: 0.8s;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 40 30' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='6' y='4' width='28' height='18' rx='1' fill='%2364748b'/%3E%3Crect x='8' y='6' width='24' height='14' fill='%23cbd5e1'/%3E%3Cpolygon points='2,24 38,24 40,28 0,28' fill='%23334155' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+#item-tab {
+  top: -20px;
+  left: 85px;
+  width: 24px;
+  height: 32px;
+  --end-rot: 25deg;
+  animation-delay: 1.6s;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 32 40' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='2' y='2' width='28' height='36' rx='2' fill='%23a855f7'/%3E%3Crect x='4' y='4' width='24' height='32' fill='%23faf5ff'/%3E%3C/svg%3E");
+}
+#item-headphone {
+  top: -15px;
+  left: 58px;
+  width: 28px;
+  height: 28px;
+  --end-rot: -5deg;
+  animation-delay: 2.4s;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M 6 16 C 6 4, 26 4, 26 16' fill='none' stroke='%23ef4444' stroke-width='4'/%3E%3Crect x='2' y='14' width='8' height='14' rx='4' fill='%23ef4444'/%3E%3Crect x='22' y='14' width='8' height='14' rx='4' fill='%23ef4444'/%3E%3C/svg%3E");
+}
+#item-mixer {
+  top: -25px;
+  left: 75px;
+  width: 26px;
+  height: 34px;
+  --end-rot: 5deg;
+  animation-delay: 3.2s;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 32 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M 8 20 L 24 20 L 28 36 L 4 36 Z' fill='%2314b8a6' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='28' r='4' fill='%23ccfbf1'/%3E%3Cpolygon points='10,20 22,20 24,8 8,8' fill='%23cbd5e1'/%3E%3Crect x='6' y='4' width='20' height='4' rx='2' fill='%230f766e'/%3E%3Cpath d='M 8 10 L 3 10 L 3 18 L 8 18' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
 #cart-icon {
   position: relative;
   z-index: 2;
@@ -637,6 +708,25 @@ a {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 140 120' width='140' height='120' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23334155' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='35' y1='90' x2='110' y2='90' /%3E%3Cline x1='40' y1='90' x2='50' y2='70' /%3E%3Cpolyline points='10,15 25,15 40,30' /%3E%3Cline x1='40' y1='30' x2='50' y2='70' /%3E%3Cline x1='68' y1='30' x2='71' y2='70' /%3E%3Cline x1='96' y1='30' x2='93' y2='70' /%3E%3Cline x1='125' y1='30' x2='115' y2='70' /%3E%3Cline x1='40' y1='30' x2='125' y2='30' /%3E%3Cline x1='43' y1='43' x2='122' y2='43' /%3E%3Cline x1='47' y1='57' x2='118' y2='57' /%3E%3Cline x1='50' y1='70' x2='115' y2='70' /%3E%3Ccircle cx='45' cy='105' r='8' /%3E%3Ccircle cx='105' cy='105' r='8' /%3E%3C/g%3E%3C/svg%3E");
   animation: sunset-cart-bounce 0.8s ease-in-out infinite;
   animation-delay: 0.2s;
+}
+@keyframes sunset-cart-drop-item {
+  0% {
+    transform: translateY(-20px) scale(0.8) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(20px) scale(1) rotate(calc(var(--end-rot) / 2));
+  }
+  25% {
+    transform: translateY(55px) scale(1) rotate(var(--end-rot));
+    opacity: 1;
+  }
+  35%,
+  100% {
+    transform: translateY(75px) scale(0.9) rotate(var(--end-rot));
+    opacity: 0;
+  }
 }
 @keyframes sunset-cart-bounce {
   0%,
