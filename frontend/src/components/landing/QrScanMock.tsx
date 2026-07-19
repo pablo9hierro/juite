@@ -1,97 +1,31 @@
-import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Search } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 
-// QR code ilustrativo (não escaneia nada de verdade) — gerado 100% em
-// código: uma grade de módulos onde um vira e outro sempre trocam de
-// posição em loop (Framer Motion anima o deslocamento sozinho via
-// `layout`, cada módulo mantém sua própria identidade/key entre as
-// trocas), mais uma lupa deslizando por cima simulando "sendo escaneado".
-const GRID = 6
-const FILLED_RATIO = 0.42
-const SWAP_INTERVAL_MS = 650
-
-function randomFilledPositions(): number[] {
-  const total = GRID * GRID
-  const count = Math.floor(total * FILLED_RATIO)
-  const all = Array.from({ length: total }, (_, i) => i)
-  for (let i = all.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[all[i], all[j]] = [all[j], all[i]]
-  }
-  return all.slice(0, count)
-}
-
-function FinderPattern({ corner }: { corner: 'tl' | 'tr' | 'bl' }) {
-  const pos =
-    corner === 'tl' ? { left: 0, top: 0 } : corner === 'tr' ? { right: 0, top: 0 } : { left: 0, bottom: 0 }
-  const cell = 100 / GRID
-  return (
-    <div
-      className="absolute bg-son-black"
-      style={{ ...pos, width: `${cell * 1.6}%`, height: `${cell * 1.6}%`, padding: '14%' }}
-    >
-      <div className="w-full h-full bg-white" style={{ padding: '18%' }}>
-        <div className="w-full h-full bg-son-black" />
-      </div>
-    </div>
-  )
-}
+// QR code de verdade (mesma lib usada em /pagamento pro Pix real,
+// qrcode.react) — aqui só ilustrativo, sem cobrança nenhuma por trás. Uma
+// linha vermelha fina varre de cima a baixo em loop, simulando o
+// "escaneando" — o próprio QR pisca bem sutil no meio da passada, só pra
+// reforçar a leitura.
+const BOX_SIZE = 64
 
 export default function QrScanMock() {
-  const [squares, setSquares] = useState(() => randomFilledPositions().map((pos, id) => ({ id, pos })))
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSquares((prev) => {
-        const total = GRID * GRID
-        const occupied = new Set(prev.map((s) => s.pos))
-        const empties = Array.from({ length: total }, (_, i) => i).filter((i) => !occupied.has(i))
-        if (empties.length === 0 || prev.length === 0) return prev
-        const idx = Math.floor(Math.random() * prev.length)
-        const newPos = empties[Math.floor(Math.random() * empties.length)]
-        return prev.map((s, i) => (i === idx ? { ...s, pos: newPos } : s))
-      })
-    }, SWAP_INTERVAL_MS)
-    return () => clearInterval(interval)
-  }, [])
-
   return (
-    <div className="relative w-24 h-24 flex-shrink-0 bg-white rounded-xl p-2.5 shadow-inner overflow-hidden">
-      <div className="relative w-full h-full">
-        {squares.map((s) => {
-          const row = Math.floor(s.pos / GRID)
-          const col = s.pos % GRID
-          return (
-            <motion.div
-              key={s.id}
-              layout
-              transition={{ duration: 0.5, ease: 'easeInOut' }}
-              className="absolute bg-son-black rounded-[1px]"
-              style={{
-                width: `${100 / GRID}%`,
-                height: `${100 / GRID}%`,
-                left: `${(col / GRID) * 100}%`,
-                top: `${(row / GRID) * 100}%`,
-              }}
-            />
-          )
-        })}
-        <FinderPattern corner="tl" />
-        <FinderPattern corner="tr" />
-        <FinderPattern corner="bl" />
-        <motion.div
-          className="absolute text-son-orange drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
-          animate={{
-            left: ['8%', '58%', '28%', '68%', '8%'],
-            top: ['10%', '18%', '62%', '52%', '10%'],
-            scale: [1, 1.18, 1, 1.18, 1],
-          }}
-          transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          <Search className="w-6 h-6" strokeWidth={2.5} />
-        </motion.div>
-      </div>
+    <div
+      className="relative flex-shrink-0 bg-white rounded-xl overflow-hidden shadow-inner"
+      style={{ width: BOX_SIZE, height: BOX_SIZE }}
+    >
+      <motion.div
+        animate={{ opacity: [1, 1, 0.8, 1, 1] }}
+        transition={{ duration: 4.8, repeat: Infinity, times: [0, 0.55, 0.65, 0.75, 1], ease: 'easeInOut' }}
+      >
+        <QRCodeSVG value="SUNSET-TABAS-PIX-DEMO" size={BOX_SIZE} bgColor="#ffffff" fgColor="#0f2b1d" />
+      </motion.div>
+      <motion.div
+        className="absolute left-0 right-0 h-[2px] bg-red-500"
+        style={{ boxShadow: '0 0 6px 2px rgba(239,68,68,0.75)' }}
+        animate={{ top: ['0%', '100%'], opacity: [0, 1, 1, 0] }}
+        transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut', times: [0, 0.1, 0.9, 1] }}
+      />
     </div>
   )
 }

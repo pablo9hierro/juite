@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, TicketPercent } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import heroBanner from '../assets/hero-banner.png'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
 import QrScanMock from '../components/landing/QrScanMock'
 import LiveTrackingMapMock from '../components/landing/LiveTrackingMapMock'
 import WhatsAppBubbleIcon from '../components/landing/WhatsAppBubbleIcon'
+import CouponShineIcon from '../components/landing/CouponShineIcon'
 import { api } from '../lib/api'
 import type { Promotion, StoreStatus } from '../lib/types'
 import { getStoreOpenState } from '../lib/storeHours'
@@ -45,13 +46,19 @@ function BannerCarousel() {
 
   return (
     <div className={`${containerClass} aspect-[2/1]`}>
-      <AnimatePresence mode="wait" initial={false}>
+      {/* Sem mode="wait" de propósito — o slide que sai e o que entra
+          precisam animar AO MESMO TEMPO (um empurrando o outro) pra parecer
+          um carrossel de verdade; com "wait" o Framer Motion espera o de
+          saída terminar pra só then começar o de entrada, o que lia como um
+          corte seco no meio (a extremidade off-screen do slide antigo some
+          antes do novo aparecer). */}
+      <AnimatePresence initial={false}>
         <motion.div
           key={current.kind === 'hero' ? 'hero' : current.promotion.id}
           initial={{ x: '100%', opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: '-100%', opacity: 0 }}
-          transition={{ duration: 0.6, ease: [0.65, 0, 0.35, 1] }}
+          transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
           className="absolute inset-0"
         >
           {/* Pulsação leve e contínua — sinaliza "isso é clicável" sem
@@ -157,7 +164,7 @@ export default function Landing() {
         </motion.div>
       </section>
 
-      <section className="relative z-10 max-w-2xl mx-auto px-6 sm:px-10 pb-24 flex flex-col gap-4">
+      <section className="relative z-10 max-w-2xl mx-auto px-6 sm:px-10 pb-16 flex flex-col gap-2">
         {[
           {
             title: 'Pix na hora, entrega com agilidade',
@@ -177,11 +184,7 @@ export default function Landing() {
           {
             title: 'Cupons exclusivos de fidelidade',
             desc: 'Participe das campanhas e ganhe cupons de desconto e de frete grátis só pra quem já é nosso cliente.',
-            graphic: (
-              <div className="w-24 h-24 flex-shrink-0 rounded-xl bg-son-gold/10 border border-son-gold/30 flex items-center justify-center">
-                <TicketPercent className="w-10 h-10 text-son-gold" strokeWidth={1.5} />
-              </div>
-            ),
+            graphic: <CouponShineIcon />,
           },
         ].map((f, i) => (
           <motion.div
@@ -190,11 +193,11 @@ export default function Landing() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: i * 0.08 }}
-            className="glass rounded-2xl p-5 sm:p-6 text-left flex items-center gap-4 sm:gap-5 shadow-[10px_16px_30px_-8px_rgba(0,0,0,0.65)]"
+            className="glass rounded-2xl p-3 text-left flex items-center gap-3 shadow-[8px_10px_20px_-6px_rgba(0,0,0,0.6)]"
           >
             <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-white mb-1.5">{f.title}</h3>
-              <p className="text-sm text-son-silver-dim">{f.desc}</p>
+              <h3 className="text-sm font-bold text-white mb-0.5">{f.title}</h3>
+              <p className="text-xs text-son-silver-dim leading-snug">{f.desc}</p>
             </div>
             {f.graphic}
           </motion.div>

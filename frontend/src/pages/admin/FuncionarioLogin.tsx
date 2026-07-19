@@ -4,15 +4,21 @@ import { Loader2, Lock, Store, Truck } from 'lucide-react'
 import Logo from '../../components/ui/Logo'
 import { api, ApiError } from '../../lib/api'
 import { useAdminAuth } from '../../store/adminAuth'
+import { useMotoboyAuth } from '../../store/motoboyAuth'
 
 type Role = 'vendedor' | 'motoboy'
 
 // Login exclusivo de vendedor/motoboy, separado do login do admin
 // (/admin/login) — cada aba chama SÓ a RPC daquele papel específico, sem
 // nenhuma tentativa em cascata contra outro papel. Elimina qualquer chance
-// de um funcionário acabar logado numa conta que não é a dele.
+// de um funcionário acabar logado numa conta que não é a dele. Vendedor
+// grava em useAdminAuth (divide layout/sessão com o admin, por design);
+// motoboy grava em useMotoboyAuth, chave própria — as duas sessões nunca
+// se sobrescrevem, mesmo com abas/dispositivos diferentes logados ao
+// mesmo tempo.
 export default function FuncionarioLogin() {
   const { token, role: sessionRole, login } = useAdminAuth()
+  const { token: motoboyToken, login: motoboyLogin } = useMotoboyAuth()
   const navigate = useNavigate()
   const [role, setRole] = useState<Role>('vendedor')
   const [email, setEmail] = useState('')
@@ -20,13 +26,9 @@ export default function FuncionarioLogin() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  if (motoboyToken) return <Navigate to="/admin/motoboy" replace />
   if (token) {
-    return (
-      <Navigate
-        to={sessionRole === 'vendedor' ? '/admin/pdv' : sessionRole === 'motoboy' ? '/admin/motoboy' : '/admin/pedidos'}
-        replace
-      />
-    )
+    return <Navigate to={sessionRole === 'vendedor' ? '/admin/pdv' : '/admin/pedidos'} replace />
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -40,7 +42,7 @@ export default function FuncionarioLogin() {
         navigate('/admin/pdv')
       } else {
         const res = await api.auth.motoboyLogin(email, password)
-        login(res.token, res.name, 'motoboy')
+        motoboyLogin(res.token, res.name)
         navigate('/admin/motoboy')
       }
     } catch (err) {

@@ -1,4 +1,5 @@
 import { useAdminAuth } from '../store/adminAuth'
+import { useMotoboyAuth } from '../store/motoboyAuth'
 import { ApiError } from './apiError'
 import { localApi } from './localApi'
 import { supabasePublicApi } from './supabasePublicApi'
@@ -107,12 +108,12 @@ async function callVercelPixApi(path: string, orderId: string): Promise<Order> {
 function adminToken() {
   return useAdminAuth.getState().token ?? undefined
 }
-// admin, vendedor e motoboy compartilham a mesma sessão (useAdminAuth), só
-// logam em telas separadas (/admin/login pro admin, /funcionarios/login pra
-// vendedor/motoboy) — motoboyToken() existe só pra deixar claro, nos call
-// sites abaixo, que o token está indo pra uma rota de motoboy.
+// motoboy tem sessão própria (useMotoboyAuth, chave de localStorage
+// separada de useAdminAuth) — nunca se sobrescreve com a sessão de
+// admin/vendedor, mesmo com os dois logados ao mesmo tempo em
+// abas/dispositivos diferentes.
 function motoboyToken() {
-  return useAdminAuth.getState().token ?? undefined
+  return useMotoboyAuth.getState().token ?? undefined
 }
 
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {

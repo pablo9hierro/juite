@@ -25,6 +25,7 @@ import { distanciaKm } from './geo/rotas'
 import { FALLBACK as STORE_LOCATION } from './geo/mapa'
 import { isScheduledOpenNow } from './storeHours'
 import { useAdminAuth } from '../store/adminAuth'
+import { useMotoboyAuth } from '../store/motoboyAuth'
 import type {
   Promotion,
   Category,
@@ -64,7 +65,7 @@ function stripPassword(m: LocalMotoboy): Motoboy {
 }
 
 function currentMotoboyId(): string {
-  const token = useAdminAuth.getState().token
+  const token = useMotoboyAuth.getState().token
   if (!token || !token.startsWith('local-motoboy:')) {
     throw new ApiError(401, 'not authenticated')
   }

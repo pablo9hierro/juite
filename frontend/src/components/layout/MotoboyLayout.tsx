@@ -3,7 +3,7 @@ import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-d
 import { LogOut, MessageCircle, Moon, Navigation, Sun, Truck, Wallet } from 'lucide-react'
 import Logo from '../ui/Logo'
 import { api } from '../../lib/api'
-import { useAdminAuth } from '../../store/adminAuth'
+import { useMotoboyAuth } from '../../store/motoboyAuth'
 import { useMotoboyTheme } from '../../store/motoboyTheme'
 
 const NAV_ITEMS = [
@@ -15,7 +15,7 @@ const NAV_ITEMS = [
 const ACTIVE_RUN_POLL_MS = 20000
 
 export default function MotoboyLayout() {
-  const { token, name, role, logout } = useAdminAuth()
+  const { token, name, logout } = useMotoboyAuth()
   const { theme, toggle: toggleTheme } = useMotoboyTheme()
   const location = useLocation()
   const navigate = useNavigate()
@@ -25,7 +25,7 @@ export default function MotoboyLayout() {
   // dashboard — a corrida em si mora no banco (não aqui), isso é só um
   // atalho pra ele não esquecer de voltar pro mapa.
   useEffect(() => {
-    if (!token || role !== 'motoboy') return
+    if (!token) return
     let cancelled = false
     const check = () => api.motoboy.runs.active().then((r) => !cancelled && setHasActiveRun(!!r))
     check()
@@ -34,13 +34,9 @@ export default function MotoboyLayout() {
       cancelled = true
       clearInterval(interval)
     }
-  }, [token, role])
+  }, [token])
 
   if (!token) return <Navigate to="/funcionarios/login" state={{ from: location }} replace />
-  // Mesma sessão de admin/vendedor caiu numa rota que não é dele — manda de
-  // volta pro dashboard certo em vez de deslogar (espelha a guarda inversa
-  // em AdminLayout).
-  if (role !== 'motoboy') return <Navigate to={role === 'vendedor' ? '/admin/pdv' : '/admin/pedidos'} replace />
 
   const handleLogout = () => {
     logout()
