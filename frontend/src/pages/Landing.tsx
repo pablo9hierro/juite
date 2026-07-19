@@ -13,16 +13,46 @@ import { getStoreOpenState } from '../lib/storeHours'
 
 function BannerCarousel() {
   const navigate = useNavigate()
+  const [heroUrl, setHeroUrl] = useState<string | null>(null)
   const [promotions, setPromotions] = useState<Promotion[]>([])
 
   useEffect(() => {
+    api.siteSettings.get().then((s) => setHeroUrl(s.hero_image_url)).catch(() => setHeroUrl(null))
     api.promotions.listActive().then(setPromotions).catch(() => setPromotions([]))
   }, [])
 
-  const items = [
-    { key: 'hero', label: '🌅 Sunset Tabas — a vibe começa aqui', onClick: undefined as (() => void) | undefined },
-    ...promotions.map((p) => ({ key: p.id, label: `🎁 ${p.title}`, onClick: () => navigate(`/banner?promocao=${p.id}`) })),
-  ]
+  // Primeiro item é sempre o banner cadastrado (a promoção ativa mais
+  // recente, com imagem de verdade) — os demais continuam como pílulas
+  // de texto simples.
+  const firstPromo = promotions[0]
+  const bannerImage = firstPromo?.image_url ?? heroUrl
+  const restPromos = firstPromo ? promotions.slice(1) : promotions
+
+  const pillItems = restPromos.map((p) => ({
+    key: p.id,
+    label: `🎁 ${p.title}`,
+    onClick: () => navigate(`/banner?promocao=${p.id}`),
+  }))
+
+  const renderGroup = (g: number) => (
+    <div className="sunset-marquee-group" key={g}>
+      {bannerImage && (
+        <span
+          key={`${g}-banner`}
+          onClick={firstPromo ? () => navigate(`/banner?promocao=${firstPromo.id}`) : undefined}
+          role={firstPromo ? 'button' : undefined}
+          tabIndex={firstPromo ? 0 : undefined}
+          className={`sunset-marquee-card ${firstPromo ? 'is-clickable' : ''}`}
+          style={{ backgroundImage: `url(${bannerImage})` }}
+        />
+      )}
+      {pillItems.map((it) => (
+        <span key={`${g}-${it.key}`} onClick={it.onClick} role="button" tabIndex={0} className="is-clickable">
+          {it.label}
+        </span>
+      ))}
+    </div>
+  )
 
   return (
     <div className="sunset-marquee">
@@ -31,24 +61,10 @@ function BannerCarousel() {
           animando translateX(0) até translateX(-50%) — como o segundo
           grupo é cópia exata do primeiro, o loop nunca mostra emenda.
           Cada item é literalmente um <span>, cores trocadas pro gradiente
-          sunset (era preto sólido). */}
-      <div className="sunset-marquee-header">Promoções exclusivas</div>
+          sunset (era preto sólido). O primeiro <span> de cada grupo vira
+          um card com a imagem do banner/promoção cadastrado. */}
       <div className="sunset-marquee-inner">
-        {[0, 1].map((g) => (
-          <div className="sunset-marquee-group" key={g}>
-            {items.map((it) => (
-              <span
-                key={`${g}-${it.key}`}
-                onClick={it.onClick}
-                role={it.onClick ? 'button' : undefined}
-                tabIndex={it.onClick ? 0 : undefined}
-                className={it.onClick ? 'is-clickable' : ''}
-              >
-                {it.label}
-              </span>
-            ))}
-          </div>
-        ))}
+        {[0, 1].map(renderGroup)}
       </div>
     </div>
   )

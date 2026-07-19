@@ -1,25 +1,29 @@
-// Uiverse.io by aadium — a arte (palmeiras/sol/pássaros) é o SVG exato da
-// referência (mesmos paths, sem aproximação), só destacada do "card"
-// pequeno original (250x320, moldura magenta/vermelho/dourado) pra virar
-// o fundo FIXO de toda a experiência do cliente — landing, catálogo,
-// checkout, consultar etc. `xMidYMid meet` mantém a arte inteira sempre
-// visível/centralizada, sem cortar nada nas bordas. Sol com o gradiente
-// original (#ff632a → #ffd900); palmeiras/pássaros no preto original da
-// referência. Texto trocado pra "Sunset Tabas" / "tabacaria".
+// Uiverse.io by aadium — clone 100% fiel da estrutura do card de
+// referência, só esticado pra caber a tela inteira em vez de 250x320:
+// moldura em gradiente (#ca1eb3 → #FD2E24 → #FFD701, cores EXATAS da
+// referência, sem recolorir) com padding:5px, vidro escuro por dentro
+// (#212121cf + backdrop-filter:blur(50px), também exato), texto nas
+// cores originais (#ff4d7d/#ff8d79) só com o conteúdo trocado pra
+// "Sunset Tabas"/"tabacaria", e o SVG das palmeiras/sol com os paths
+// exatos da referência (sol com o gradiente original #ff632a→#ffd900).
 export default function SunsetBackdrop() {
   return (
-    <div className="fixed inset-0 -z-10 overflow-hidden bg-son-black pointer-events-none" aria-hidden="true">
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid meet">
-        <defs>
-          <linearGradient id="bdSky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#081912" />
-            <stop offset="42%" stopColor="#b57c27" />
-            <stop offset="70%" stopColor="#e08a3a" />
-            <stop offset="100%" stopColor="#081912" />
-          </linearGradient>
-        </defs>
-        <rect width="1200" height="900" fill="url(#bdSky)" />
-      </svg>
+    <div
+      className="fixed inset-0 -z-10 overflow-hidden pointer-events-none"
+      style={{ padding: 5, backgroundImage: 'linear-gradient(#ca1eb3, #FD2E24, #FFD701 70%)' }}
+      aria-hidden="true"
+    >
+      <div
+        style={{
+          backgroundColor: '#212121cf',
+          backdropFilter: 'blur(50px)',
+          WebkitBackdropFilter: 'blur(50px)',
+          width: '100%',
+          height: '100%',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
       <svg
         className="absolute inset-0 w-full h-full"
         version="1.0"
@@ -94,10 +98,13 @@ export default function SunsetBackdrop() {
         </g>
       </svg>
       <div className="absolute inset-x-0 top-8 sm:top-12 flex flex-col items-center text-center px-4">
-        <span className="sunset-text text-4xl sm:text-6xl font-black tracking-tight">Sunset Tabas</span>
-        <span className="text-son-silver-dim text-xs sm:text-sm font-semibold tracking-[0.3em] uppercase mt-1">
+        <span style={{ color: '#ff4d7d' }} className="text-4xl sm:text-6xl font-black tracking-tight">
+          Sunset Tabas
+        </span>
+        <span style={{ color: '#ff8d79' }} className="text-xs sm:text-sm font-semibold tracking-[0.3em] uppercase mt-1">
           tabacaria
         </span>
+      </div>
       </div>
     </div>
   )
