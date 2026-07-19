@@ -1,8 +1,7 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
-import heroBanner from '../assets/hero-banner.png'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
 import LiveTrackingMapMock from '../components/landing/LiveTrackingMapMock'
@@ -12,50 +11,43 @@ import { api } from '../lib/api'
 import type { Promotion, StoreStatus } from '../lib/types'
 import { getStoreOpenState } from '../lib/storeHours'
 
-type Slide = { kind: 'hero' } | { kind: 'promotion'; promotion: Promotion }
-
 function BannerCarousel() {
   const navigate = useNavigate()
-  const [heroUrl, setHeroUrl] = useState<string | null>(null)
   const [promotions, setPromotions] = useState<Promotion[]>([])
 
   useEffect(() => {
-    api.siteSettings.get().then((s) => setHeroUrl(s.hero_image_url)).catch(() => setHeroUrl(null))
     api.promotions.listActive().then(setPromotions).catch(() => setPromotions([]))
   }, [])
 
-  // Imagem inicial é sempre a primeira do carrossel — mesmo com promoções
-  // cadastradas — só depois ele desliza pras promoções, em loop.
-  const slides: Slide[] = [{ kind: 'hero' }, ...promotions.map((p) => ({ kind: 'promotion' as const, promotion: p }))]
-  const n = slides.length
+  const items = [
+    { key: 'hero', label: '🌅 Sunset Tabas — a vibe começa aqui', onClick: undefined as (() => void) | undefined },
+    ...promotions.map((p) => ({ key: p.id, label: `🎁 ${p.title}`, onClick: () => navigate(`/banner?promocao=${p.id}`) })),
+  ]
 
   return (
-    <div className="relative z-10 flex justify-center py-6">
-      {/* Uiverse.io by musashi-13 — anel 3D giratório reproduzido fiel à
-          referência (mesmo perspective/rotateY/translateZ, mesma pulsação
-          de brilho, mesma pausa no hover). O ângulo entre cards e o delay
-          da pulsação, que na referência eram fixos por nth-child (10
-          cards), viram calculados aqui (360°/n e 20s/n), já que o número
-          de slides muda com as promoções cadastradas. */}
-      <div className="sunset-3d-carousel" style={{ '--quantity': n } as CSSProperties}>
-        {slides.map((s, i) => (
-          <button
-            key={s.kind === 'hero' ? 'hero' : s.promotion.id}
-            type="button"
-            onClick={() => {
-              if (s.kind === 'promotion') navigate(`/banner?promocao=${s.promotion.id}`)
-            }}
-            className="sunset-3d-carousel-item"
-            style={
-              {
-                transform: `translate(-50%, -50%) rotateY(${(360 / n) * i}deg) translateZ(150px)`,
-                '--delay': `${-(i * (20 / n))}s`,
-              } as CSSProperties
-            }
-            aria-label={s.kind === 'promotion' ? s.promotion.title : 'Sunset Tabas'}
-          >
-            <img src={s.kind === 'hero' ? heroUrl ?? heroBanner : s.promotion.image_url} alt="" />
-          </button>
+    <div className="sunset-marquee">
+      {/* Vue "Infinite Marquee" reproduzido fiel à referência: dois grupos
+          idênticos lado a lado (marquee__inner com width:max-content),
+          animando translateX(0) até translateX(-50%) — como o segundo
+          grupo é cópia exata do primeiro, o loop nunca mostra emenda.
+          Cada item é literalmente um <span>, cores trocadas pro gradiente
+          sunset (era preto sólido). */}
+      <div className="sunset-marquee-header">Promoções exclusivas</div>
+      <div className="sunset-marquee-inner">
+        {[0, 1].map((g) => (
+          <div className="sunset-marquee-group" key={g}>
+            {items.map((it) => (
+              <span
+                key={`${g}-${it.key}`}
+                onClick={it.onClick}
+                role={it.onClick ? 'button' : undefined}
+                tabIndex={it.onClick ? 0 : undefined}
+                className={it.onClick ? 'is-clickable' : ''}
+              >
+                {it.label}
+              </span>
+            ))}
+          </div>
         ))}
       </div>
     </div>
@@ -145,6 +137,11 @@ export default function Landing() {
             desc: 'Confirmado, pronto, saiu pra entrega — você acompanha cada etapa sem precisar ficar recarregando a tela.',
             graphic: <LandingWhatsAppCard />,
           },
+          {
+            title: 'Cupons exclusivos de fidelidade',
+            desc: 'Participe das campanhas e ganhe cupons de desconto e de frete grátis só pra quem já é nosso cliente.',
+            graphic: <CouponTicketCard />,
+          },
         ].map((f, i) => (
           <motion.div
             key={f.title}
@@ -161,25 +158,6 @@ export default function Landing() {
             {f.graphic}
           </motion.div>
         ))}
-
-        {/* Card de fidelidade é grande (320px, com gráfico) — não cabe
-            lado a lado com texto como os outros dois, por isso fica numa
-            seção própria, empilhada. */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.16 }}
-          className="glass rounded-2xl p-3 text-left flex flex-col gap-3 items-center shadow-[8px_10px_20px_-6px_rgba(0,0,0,0.6)]"
-        >
-          <div className="w-full">
-            <h3 className="text-sm font-bold text-white mb-0.5">Cupons exclusivos de fidelidade</h3>
-            <p className="text-xs text-son-silver-dim leading-snug">
-              Participe das campanhas e ganhe cupons de desconto e de frete grátis só pra quem já é nosso cliente.
-            </p>
-          </div>
-          <CouponTicketCard />
-        </motion.div>
       </section>
       </main>
     </>

@@ -317,13 +317,15 @@ a {
    gradiente animado recolorida pro dourado/laranja do site (era
    arco-íris magenta/roxo/ciano). */
 .sunset-income-card {
-  border-radius: 16px;
-  padding: 10px;
-  width: 320px;
+  border-radius: 12px;
+  padding: 5px;
+  width: 136px;
   max-width: 100%;
+  flex-shrink: 0;
   background: var(--color-son-black);
   position: relative;
   user-select: none;
+  overflow: hidden;
 }
 .sunset-income-card::before,
 .sunset-income-card::after {
@@ -331,7 +333,7 @@ a {
   position: absolute;
   left: 0px;
   top: 0px;
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(45deg, #ffd23d, #ffb703, #e08a3a, #fff3d0, #d5aa45, #b57c27, #d5aa45, #e08a3a, #ffb703, #ffd23d);
   background-size: 400%;
   width: 100%;
@@ -357,45 +359,47 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 18px;
+  margin-bottom: 4px;
 }
 .sunset-income-tag {
   fill: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 25px;
-  width: 25px;
-  box-shadow: 4px 4px 3px rgba(0, 0, 0, 0.65);
+  height: 14px;
+  width: 14px;
+  flex-shrink: 0;
+  box-shadow: 2px 2px 2px rgba(0, 0, 0, 0.65);
 }
 .sunset-income-bg-custom {
   background: linear-gradient(to right, #3a2410, #020202);
-  padding: 18px;
-  margin-bottom: 10px;
-  border-radius: 10px;
-  box-shadow: inset -5px -5px 9px rgba(58, 36, 16, 0.5), inset 5px 5px 9px rgba(20, 20, 20, 0.6);
+  padding: 8px;
+  border-radius: 8px;
+  box-shadow: inset -3px -3px 6px rgba(58, 36, 16, 0.5), inset 3px 3px 6px rgba(20, 20, 20, 0.6);
+  overflow: hidden;
 }
 .sunset-income-card .sunset-income-heading {
   margin: 0;
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 10px;
+  font-weight: 600;
   color: var(--color-son-silver);
-  text-shadow: 4px 4px 3px rgba(0, 0, 0, 0.65);
+  text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.65);
 }
 .sunset-income-amount {
-  font-size: 32px;
+  font-size: 15px;
   font-weight: bold;
-  margin: 10px 0;
+  margin: 4px 0;
   line-height: 1.2;
   color: #fff;
-  text-shadow: 4px 4px 3px rgba(0, 0, 0, 0.65);
-  display: inline-flex;
+  text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.65);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
 }
 .sunset-income-typing {
   overflow: hidden;
   white-space: nowrap;
-  border-right: 3px solid #fff;
+  border-right: 2px solid #fff;
   display: inline-block;
   animation: sunset-income-typing 8s steps(20) infinite, sunset-income-blink 1.2s step-end infinite;
 }
@@ -404,10 +408,10 @@ a {
     width: 0;
   }
   40% {
-    width: 128px;
+    width: 62px;
   }
   60% {
-    width: 128px;
+    width: 62px;
   }
   100% {
     width: 0;
@@ -419,19 +423,20 @@ a {
   }
 }
 .sunset-income-main-pr {
-  font-size: 14px;
+  font-size: 8px;
   color: var(--color-son-orange);
-  margin-left: 6px;
+  margin-left: 3px;
   font-weight: 500;
   background: rgba(224, 138, 58, 0.25);
-  border-radius: 5px;
-  padding: 2px 4px;
+  border-radius: 4px;
+  padding: 1px 3px;
+  white-space: nowrap;
 }
 .sunset-income-compare {
-  font-size: 12px;
+  font-size: 7px;
   color: var(--color-son-silver);
-  text-shadow: 4px 4px 3px rgba(0, 0, 0, 0.65);
-  letter-spacing: 1px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.65);
+  line-height: 1.3;
 }
 
 /* From Uiverse.io by ashwin_5681 — esteira infinita (itens absolutos que
@@ -494,68 +499,56 @@ a {
   gap: 6px;
 }
 
-/* From Uiverse.io by musashi-13 — anel 3D giratório reproduzido fiel à
-   referência (mesmo perspective(800px)/rotateY, mesmo translateZ(150px),
-   mesma pulsação de brightness por card, mesma pausa no hover) — só o
-   número de cards/ângulo entre eles vira dinâmico (--quantity), já que
-   aqui é hero + promoções cadastradas, não um baralho fixo de 10. */
-.sunset-3d-carousel {
+/* Vue "Infinite Marquee" reproduzido fiel à referência (dois grupos
+   idênticos em .marquee__inner com width:max-content, animando
+   translateX(0)→translateX(-50%) — o loop nunca "emenda" porque o
+   segundo grupo é cópia exata do primeiro). Cores trocadas pro
+   gradiente sunset (era preto sólido #000). */
+.sunset-marquee {
   position: relative;
-  width: 400px;
-  height: 200px;
-  transform-style: preserve-3d;
-  transform: perspective(800px);
-  animation: sunset-3d-autorun 20s linear infinite;
-  will-change: transform;
-}
-.sunset-3d-carousel-item {
-  position: absolute;
-  width: 110px;
-  height: 154px;
-  background-color: rgb(199, 199, 199);
-  border: solid 2px rgba(255, 255, 255, 0.35);
-  border-radius: 0.5rem;
+  z-index: 10;
   overflow: hidden;
-  top: 50%;
-  left: 50%;
-  transform-origin: center center;
-  animation: sunset-3d-brightness 20s linear infinite;
-  animation-delay: var(--delay);
-  transition-duration: 200ms;
-  will-change: transform, filter;
-  cursor: pointer;
-  padding: 0;
-}
-.sunset-3d-carousel-item img {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+  padding: 1.5rem 0;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
 }
-@keyframes sunset-3d-autorun {
-  from {
-    transform: perspective(800px) rotateY(-360deg);
-  }
-  to {
-    transform: perspective(800px) rotateY(0deg);
-  }
+.sunset-marquee-header {
+  font-size: 1.5rem;
+  font-weight: 800;
+  text-align: center;
+  margin-bottom: 1rem;
+  color: var(--color-son-gold);
 }
-@keyframes sunset-3d-brightness {
-  10% {
-    filter: brightness(1);
-  }
-  50% {
-    filter: brightness(0.1);
-  }
-  90% {
-    filter: brightness(1);
-  }
+.sunset-marquee-inner {
+  display: flex;
+  width: max-content;
+  animation: sunset-marquee-scroll 15s linear infinite;
 }
-.sunset-3d-carousel:hover {
-  animation-play-state: paused !important;
+.sunset-marquee-group {
+  display: flex;
 }
-.sunset-3d-carousel:hover .sunset-3d-carousel-item {
-  animation-play-state: paused !important;
+.sunset-marquee-group span {
+  margin: 0 0.75rem;
+  white-space: nowrap;
+  background: linear-gradient(135deg, var(--color-son-orange), var(--color-son-pink) 55%, var(--color-son-purple));
+  color: #fff;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+.sunset-marquee-group span.is-clickable {
+  cursor: pointer;
+}
+@keyframes sunset-marquee-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
 }
 
 /* From Uiverse.io by Praashoo7 — era um card que crescia inteiro no
