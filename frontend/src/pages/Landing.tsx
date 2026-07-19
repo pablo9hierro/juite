@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
@@ -11,62 +11,109 @@ import { api } from '../lib/api'
 import type { Promotion, StoreStatus } from '../lib/types'
 import { getStoreOpenState } from '../lib/storeHours'
 
+// Um giro completo em 20s parado (igual a referência) quando ninguém
+// mexe — arrastando, a velocidade/direção passa a seguir o dedo 1:1.
+const AUTO_DEG_PER_MS = 360 / 20000
+const DRAG_DEG_PER_PX = 0.6
+
 function BannerCarousel() {
   const navigate = useNavigate()
   const [heroUrl, setHeroUrl] = useState<string | null>(null)
   const [promotions, setPromotions] = useState<Promotion[]>([])
+  const ringRef = useRef<HTMLDivElement>(null)
+  const rotationRef = useRef(0)
+  const draggingRef = useRef(false)
+  const lastXRef = useRef(0)
 
   useEffect(() => {
     api.siteSettings.get().then((s) => setHeroUrl(s.hero_image_url)).catch(() => setHeroUrl(null))
     api.promotions.listActive().then(setPromotions).catch(() => setPromotions([]))
   }, [])
 
-  // Primeiro item é sempre o banner cadastrado (a promoção ativa mais
-  // recente, com imagem de verdade) — os demais continuam como pílulas
-  // de texto simples.
+  // Gira sozinho pra sempre (rAF, não CSS animation — precisa poder ser
+  // "assumido" pelo arrasto a qualquer momento sem travar/reiniciar).
+  // Arrastar NUNCA para o carrossel: enquanto o dedo está em cima, a
+  // rotação segue o movimento 1:1; ao soltar, volta a girar sozinho de
+  // onde parou, na mesma direção de sempre.
+  useEffect(() => {
+    let raf: number
+    let last = performance.now()
+    function tick(now: number) {
+      const dt = now - last
+      last = now
+      if (!draggingRef.current) {
+        rotationRef.current += AUTO_DEG_PER_MS * dt
+      }
+      if (ringRef.current) {
+        ringRef.current.style.transform = `perspective(800px) rotateY(${rotationRef.current}deg)`
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    draggingRef.current = true
+    lastXRef.current = e.clientX
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!draggingRef.current) return
+    const dx = e.clientX - lastXRef.current
+    lastXRef.current = e.clientX
+    rotationRef.current += dx * DRAG_DEG_PER_PX
+  }
+  function endDrag() {
+    draggingRef.current = false
+  }
+
   const firstPromo = promotions[0]
   const bannerImage = firstPromo?.image_url ?? heroUrl
   const restPromos = firstPromo ? promotions.slice(1) : promotions
 
-  const pillItems = restPromos.map((p) => ({
-    key: p.id,
-    label: `🎁 ${p.title}`,
-    onClick: () => navigate(`/banner?promocao=${p.id}`),
-  }))
-
-  const renderGroup = (g: number) => (
-    <div className="sunset-marquee-group" key={g}>
-      {bannerImage && (
-        <span
-          key={`${g}-banner`}
-          onClick={firstPromo ? () => navigate(`/banner?promocao=${firstPromo.id}`) : undefined}
-          role={firstPromo ? 'button' : undefined}
-          tabIndex={firstPromo ? 0 : undefined}
-          className={`sunset-marquee-card ${firstPromo ? 'is-clickable' : ''}`}
-          style={{ backgroundImage: `url(${bannerImage})` }}
-        >
-          <span className="sunset-marquee-card-label">{firstPromo ? firstPromo.title : 'Sunset Tabas'}</span>
-        </span>
-      )}
-      {pillItems.map((it) => (
-        <span key={`${g}-${it.key}`} onClick={it.onClick} role="button" tabIndex={0} className="is-clickable">
-          {it.label}
-        </span>
-      ))}
-    </div>
-  )
+  const items = [
+    { key: 'hero', image: bannerImage, label: firstPromo ? firstPromo.title : 'Sunset Tabas', onClick: firstPromo ? () => navigate(`/banner?promocao=${firstPromo.id}`) : undefined },
+    ...restPromos.map((p) => ({ key: p.id, image: p.image_url, label: p.title, onClick: () => navigate(`/banner?promocao=${p.id}`) })),
+  ].filter((it) => it.image)
+  const n = Math.max(items.length, 1)
 
   return (
-    <div className="sunset-marquee">
-      {/* Vue "Infinite Marquee" reproduzido fiel à referência: dois grupos
-          idênticos lado a lado (marquee__inner com width:max-content),
-          animando translateX(0) até translateX(-50%) — como o segundo
-          grupo é cópia exata do primeiro, o loop nunca mostra emenda.
-          Cada item é literalmente um <span>, cores trocadas pro gradiente
-          sunset (era preto sólido). O primeiro <span> de cada grupo vira
-          um card com a imagem do banner/promoção cadastrado. */}
-      <div className="sunset-marquee-inner">
-        {[0, 1].map(renderGroup)}
+    <div className="sunset-3d-carousel-wrap">
+      {/* Uiverse.io by musashi-13 — anel 3D giratório (mesmo perspective/
+          rotateY/translateZ, mesma pulsação de brilho por card), mas a
+          rotação é 100% controlada via JS (rAF) em vez de @keyframes CSS,
+          pra poder responder ao arrasto do dedo sem nunca "travar" o
+          carrossel — ele sempre volta a girar sozinho ao soltar. */}
+      <div
+        ref={ringRef}
+        className="sunset-3d-carousel"
+        style={{ '--quantity': n } as CSSProperties}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onPointerLeave={endDrag}
+      >
+        {items.map((it, i) => (
+          <div
+            key={it.key}
+            className="sunset-3d-carousel-item"
+            role={it.onClick ? 'button' : undefined}
+            tabIndex={it.onClick ? 0 : undefined}
+            onClick={it.onClick}
+            style={
+              {
+                transform: `translate(-50%, -50%) rotateY(${(360 / n) * i}deg) translateZ(150px)`,
+                '--delay': `${-(i * (20 / n))}s`,
+                backgroundImage: `url(${it.image})`,
+              } as CSSProperties
+            }
+            aria-label={it.label}
+          >
+            <span className="sunset-3d-carousel-item-label">{it.label}</span>
+          </div>
+        ))}
       </div>
     </div>
   )

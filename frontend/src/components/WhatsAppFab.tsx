@@ -1,13 +1,12 @@
 import logoSrc from '../assets/logo.png'
-import SunsetFireLoader from './SunsetFireLoader'
 
 const WHATSAPP_URL =
   'https://api.whatsapp.com/send/?phone=5583987059373&text&type=phone_number&app_absent=0'
 
 // Floating WhatsApp button — fixed to the viewport (follows scroll).
 // Ícone balança sozinho (Uiverse by esraaabdel-kareem, só o "shake"),
-// fumaça sobe atrás dele em loop (mesma referência, mais densa/opaca) e
-// o fogo de partículas exato do SelfMadeSystem queima atrás.
+// fumaça sobe atrás dele em loop (mesma referência, mais densa/opaca).
+// O brilho de fogo foi retirado por pedido explícito.
 export default function WhatsAppFab() {
   return (
     <a
@@ -18,7 +17,6 @@ export default function WhatsAppFab() {
       aria-label="Falar no WhatsApp"
     >
       <div className="relative w-16 h-16">
-        <SunsetFireLoader />
         <span className="sunset-smoke" style={{ left: '22%', animationDelay: '0s' }} />
         <span className="sunset-smoke" style={{ left: '38%', animationDelay: '0.6s' }} />
         <span className="sunset-smoke" style={{ left: '50%', animationDelay: '1.2s' }} />
