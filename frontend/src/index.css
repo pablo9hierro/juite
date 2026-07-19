@@ -536,17 +536,47 @@ a {
   cursor: pointer;
 }
 .sunset-marquee-card {
+  position: relative;
+  display: block;
+  overflow: hidden;
   margin: 0 0.75rem;
   width: 140px;
   height: 80px;
   border-radius: 12px;
   background-color: var(--color-son-surface);
   background-repeat: no-repeat;
-  background-size: contain;
+  background-size: cover;
   background-position: center;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.15);
   flex-shrink: 0;
+}
+/* Scrim escuro + título por cima — a imagem cadastrada na promoção pode
+   ser qualquer coisa (foto de produto, proporção estranha etc.), então
+   isso garante que o card sempre lê como "banner desenhado" em vez de
+   uma imagem crua encaixada à força num espaço pequeno. */
+.sunset-marquee-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(8, 25, 18, 0.92) 0%, rgba(8, 25, 18, 0.4) 50%, rgba(8, 25, 18, 0.05) 75%);
+}
+.sunset-marquee-card-label {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 6px;
+  z-index: 1;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 @keyframes sunset-marquee-scroll {
   0% {

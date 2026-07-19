@@ -44,7 +44,9 @@ function BannerCarousel() {
           tabIndex={firstPromo ? 0 : undefined}
           className={`sunset-marquee-card ${firstPromo ? 'is-clickable' : ''}`}
           style={{ backgroundImage: `url(${bannerImage})` }}
-        />
+        >
+          <span className="sunset-marquee-card-label">{firstPromo ? firstPromo.title : 'Sunset Tabas'}</span>
+        </span>
       )}
       {pillItems.map((it) => (
         <span key={`${g}-${it.key}`} onClick={it.onClick} role="button" tabIndex={0} className="is-clickable">
