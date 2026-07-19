@@ -540,7 +540,9 @@ a {
   width: 140px;
   height: 80px;
   border-radius: 12px;
-  background-size: cover;
+  background-color: var(--color-son-surface);
+  background-repeat: no-repeat;
+  background-size: contain;
   background-position: center;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -820,10 +822,14 @@ a {
   aspect-ratio: 2 / 3;
   transform: scale(0.5);
 }
+/* brightness(10) da referência original é pensado pra um fundo sólido de
+   demo — sobre conteúdo de verdade (imagens, texto) isso estoura tudo
+   num branco ilegível. Reduzido pra um brilho suave em vez de um
+   "flashbang". */
 .sunset-fire-overlay {
   position: absolute;
-  inset: -999px;
-  backdrop-filter: blur(7px) brightness(10);
+  inset: -60px;
+  backdrop-filter: blur(7px) brightness(1.35);
 }
 .sunset-fire-ball {
   position: absolute;
