@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import heroBanner from '../assets/hero-banner.png'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
-import QrScanMock from '../components/landing/QrScanMock'
 import LiveTrackingMapMock from '../components/landing/LiveTrackingMapMock'
 import WhatsAppBubbleIcon from '../components/landing/WhatsAppBubbleIcon'
 import CouponShineIcon from '../components/landing/CouponShineIcon'
@@ -42,45 +41,45 @@ function BannerCarousel() {
   const containerClass =
     'relative z-10 mx-6 sm:mx-10 mt-3 sm:mt-4 rounded-2xl overflow-hidden shadow-[0_20px_50px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/5'
   const safeIndex = index % slides.length
-  const current = slides[safeIndex]
 
   return (
     <div className={`${containerClass} aspect-[2/1]`}>
-      {/* Sem mode="wait" de propósito — o slide que sai e o que entra
-          precisam animar AO MESMO TEMPO (um empurrando o outro) pra parecer
-          um carrossel de verdade; com "wait" o Framer Motion espera o de
-          saída terminar pra só then começar o de entrada, o que lia como um
-          corte seco no meio (a extremidade off-screen do slide antigo some
-          antes do novo aparecer). */}
-      <AnimatePresence initial={false}>
-        <motion.div
-          key={current.kind === 'hero' ? 'hero' : current.promotion.id}
-          initial={{ x: '100%', opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: '-100%', opacity: 0 }}
-          transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
-          className="absolute inset-0"
-        >
-          {/* Pulsação leve e contínua — sinaliza "isso é clicável" sem
-              depender de hover (a maioria de quem visita está no celular). */}
+      {/* Trilho clássico de carrossel: TODOS os slides ficam lado a lado
+          num flex row, e o que anima é só o deslocamento horizontal do
+          trilho inteiro (translateX de -N*100%) — um empurra o outro pra
+          fora enquanto o próximo entra, sempre na mesma direção (esquerda).
+          Trocar de slide via key/AnimatePresence (mount/unmount) tinha essa
+          armadilha: se o slide de saída não tivesse terminado de desmontar
+          antes do novo montar, o corte ficava seco em vez de deslizar — o
+          trilho não tem esse problema porque nada desmonta, só translada. */}
+      <motion.div
+        className="flex h-full"
+        animate={{ x: `-${safeIndex * 100}%` }}
+        transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
+      >
+        {slides.map((s) => (
           <motion.button
+            key={s.kind === 'hero' ? 'hero' : s.promotion.id}
             type="button"
             onClick={() => {
-              if (current.kind === 'promotion') navigate(`/banner?promocao=${current.promotion.id}`)
+              if (s.kind === 'promotion') navigate(`/banner?promocao=${s.promotion.id}`)
             }}
+            // Pulsação leve e contínua — sinaliza "isso é clicável" sem
+            // depender de hover (a maioria de quem visita está no celular).
             animate={{ scale: [1, 1.015, 1] }}
-            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute inset-0 w-full h-full text-left"
-            aria-label={current.kind === 'promotion' ? current.promotion.title : 'Sunset Tabas'}
+            transition={{ scale: { duration: 2.2, repeat: Infinity, ease: 'easeInOut' } }}
+            className="relative h-full text-left flex-shrink-0"
+            style={{ width: '100%' }}
+            aria-label={s.kind === 'promotion' ? s.promotion.title : 'Sunset Tabas'}
           >
             <img
-              src={current.kind === 'hero' ? heroUrl ?? heroBanner : current.promotion.image_url}
+              src={s.kind === 'hero' ? heroUrl ?? heroBanner : s.promotion.image_url}
               alt=""
               className="w-full h-full object-cover block"
             />
           </motion.button>
-        </motion.div>
-      </AnimatePresence>
+        ))}
+      </motion.div>
       {slides.length > 1 && (
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
           {slides.map((s, i) => (
@@ -166,11 +165,6 @@ export default function Landing() {
 
       <section className="relative z-10 max-w-2xl mx-auto px-6 sm:px-10 pb-16 flex flex-col gap-2">
         {[
-          {
-            title: 'Pix na hora, entrega com agilidade',
-            desc: 'Pague no Pix e receba na sua casa em minutos — confirmação automática, sem esperar ninguém aprovar nada na mão.',
-            graphic: <QrScanMock />,
-          },
           {
             title: 'Acompanhe a entrega em tempo real',
             desc: 'Assim que seu pedido sai, você vê o trajeto do motoboy no mapa, ao vivo, até chegar na sua porta.',
