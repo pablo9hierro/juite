@@ -425,7 +425,7 @@ function BackgroundSettingsCard() {
               real (BackgroundScene), só numa caixa pequena, refletindo o
               rascunho atual em tempo real antes de salvar de verdade. */}
           <div className="w-28 h-[200px] rounded-xl overflow-hidden border border-white/15 flex-shrink-0 relative bg-son-black">
-            <BackgroundScene settings={draft} showTitle={false} />
+            <BackgroundScene settings={draft} />
           </div>
         </div>
 

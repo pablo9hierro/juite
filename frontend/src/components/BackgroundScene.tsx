@@ -3,22 +3,6 @@ import type { BgSettings } from '../lib/types'
 import SynthwaveBackdrop from './SynthwaveBackdrop'
 import StarsBackdrop from './StarsBackdrop'
 
-// Título "Sunset Tabas" renderizado por cima de QUALQUER modo de fundo
-// escolhido — mantém a marca consistente entre o SVG padrão, o
-// synthwave, as estrelas ou uma imagem própria.
-function BgTitle() {
-  return (
-    <div className="absolute inset-x-0 top-2 sm:top-3 flex flex-col items-center text-center px-4 pointer-events-none z-10">
-      <span style={{ color: '#ff4d7d' }} className="text-4xl sm:text-6xl font-black tracking-tight">
-        Sunset Tabas
-      </span>
-      <span style={{ color: '#ff8d79' }} className="text-xs sm:text-sm font-semibold tracking-[0.3em] uppercase mt-1">
-        tabacaria
-      </span>
-    </div>
-  )
-}
-
 // Uiverse.io by aadium — clone 100% fiel da estrutura do card de
 // referência: moldura em gradiente (#ca1eb3 → #FD2E24 → #FFD701, cores
 // EXATAS da referência) com padding:5px, vidro escuro por dentro
@@ -27,7 +11,7 @@ function BgTitle() {
 // original #ff632a→#ffd900). Essa moldura é específica desse modo — os
 // outros modos (synthwave/estrelas/imagem própria) já são cenas
 // completas por si, não usam essa borda.
-function Svg1Scene({ settings, showTitle }: { settings: BgSettings; showTitle: boolean }) {
+function Svg1Scene({ settings }: { settings: BgSettings }) {
   return (
     <div
       className="relative w-full h-full overflow-hidden"
@@ -121,7 +105,6 @@ function Svg1Scene({ settings, showTitle }: { settings: BgSettings; showTitle: b
             />
           </g>
         </svg>
-        {showTitle && <BgTitle />}
       </div>
     </div>
   )
@@ -141,9 +124,9 @@ function AdjustWrap({ settings, children }: { settings: BgSettings; children: Re
   )
 }
 
-export default function BackgroundScene({ settings, showTitle = true }: { settings: BgSettings; showTitle?: boolean }) {
+export default function BackgroundScene({ settings }: { settings: BgSettings }) {
   if (settings.bg_mode === 'svg1') {
-    return <Svg1Scene settings={settings} showTitle={showTitle} />
+    return <Svg1Scene settings={settings} />
   }
 
   if (settings.bg_mode === 'synthwave') {
@@ -158,7 +141,6 @@ export default function BackgroundScene({ settings, showTitle = true }: { settin
             <SynthwaveBackdrop />
           </div>
         </AdjustWrap>
-        {showTitle && <BgTitle />}
       </div>
     )
   }
@@ -169,7 +151,6 @@ export default function BackgroundScene({ settings, showTitle = true }: { settin
         <AdjustWrap settings={settings}>
           <StarsBackdrop />
         </AdjustWrap>
-        {showTitle && <BgTitle />}
       </div>
     )
   }
@@ -190,7 +171,6 @@ export default function BackgroundScene({ settings, showTitle = true }: { settin
           }}
         />
       )}
-      {showTitle && <BgTitle />}
     </div>
   )
 }

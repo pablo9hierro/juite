@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
+import BrandHeader from '../components/landing/BrandHeader'
 import LiveTrackingMapMock from '../components/landing/LiveTrackingMapMock'
 import CouponTicketCard from '../components/landing/CouponTicketCard'
 import LandingWhatsAppCard from '../components/landing/LandingWhatsAppCard'
@@ -134,6 +135,8 @@ export default function Landing() {
       <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-son-orange/20 blur-[120px]" />
       <div className="absolute top-20 -right-40 w-96 h-96 rounded-full bg-son-purple/25 blur-[120px]" />
       <div className="absolute bottom-0 left-1/3 w-80 h-80 rounded-full bg-son-pink/15 blur-[120px]" />
+
+      <BrandHeader />
 
       {/* Banner scrolls with the page (not fixed) — only the WhatsApp button stays put.
           Sem promoção ativa cadastrada, cai no banner estático de sempre; com

@@ -4,6 +4,7 @@ import { LayoutGrid, List, Loader2, Minus, Package, Plus, Search, X } from 'luci
 import { motion } from 'framer-motion'
 import SiteHeader from '../components/layout/SiteHeader'
 import PageTransition from '../components/layout/PageTransition'
+import CartFab from '../components/CartFab'
 import { api } from '../lib/api'
 import type { Category, Product } from '../lib/types'
 import type { PromotionalProduct } from '../lib/supabasePublicApi'
@@ -285,7 +286,8 @@ export default function Catalogo() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader title="Catálogo" />
+      <SiteHeader title="Catálogo" showCart={false} />
+      <CartFab />
       <PageTransition className="max-w-6xl mx-auto px-5 sm:px-10 pb-16">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-2xl sm:text-3xl font-black">Catálogo</h1>

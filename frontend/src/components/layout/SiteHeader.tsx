@@ -39,15 +39,12 @@ export default function SiteHeader({
       </div>
       {title && <h1 className="flex-1 min-w-0 text-center text-sm sm:text-base font-bold text-white truncate">{title}</h1>}
       <div className="flex-1 flex items-center justify-end gap-3">
-        {/* "Meu perfil" não existe conta de cliente neste site — o mais
-            próximo disso é /consultar (acompanhar pedido por WhatsApp),
-            então o ícone aponta pra lá. Escondido na própria /consultar
-            pelo mesmo motivo do carrinho em /checkout: não faz sentido
-            linkar pra página em que já se está. */}
+        {/* Sem ação por enquanto — destino do "meu perfil" ainda não foi
+            definido. */}
         {showProfile && (
-          <Link to="/consultar" className="sunset-profile-btn w-11 h-11 flex items-center justify-center flex-shrink-0" aria-label="Acompanhar meu pedido">
+          <button type="button" className="sunset-profile-btn w-11 h-11 flex items-center justify-center flex-shrink-0" aria-label="Perfil">
             <User className="w-4 h-4" />
-          </Link>
+          </button>
         )}
         {/* Igual ao botão flutuante — só o #cart-icon puro, sem pílula/
             texto "Sacola" ao redor. overflow-hidden + flex centering é
