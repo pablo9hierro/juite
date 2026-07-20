@@ -513,7 +513,7 @@ a {
   z-index: 10;
   display: flex;
   justify-content: center;
-  padding: 2rem 0;
+  padding: 4.5rem 0 2rem;
 }
 /* Fica DENTRO do espaço 3D do anel (é filho de .sunset-3d-carousel, que
    tem transform-style:preserve-3d) — sem offset de translateZ, ou seja,
@@ -1052,4 +1052,86 @@ a {
   width: 260px;
   height: 260px;
   opacity: 1;
+}
+
+/* "Continue" — reproduzido fiel à referência (pill + círculo com seta),
+   recolorido pro dourado do site (era branco/preto). Na referência a
+   seta só deslizava no :hover; vira loop automático e contínuo aqui. */
+.sunset-continue-btn {
+  cursor: pointer;
+  font-weight: 700;
+  transition: all 0.2s;
+  padding: 10px 14px 10px 24px;
+  border-radius: 100px;
+  background: var(--color-son-gold);
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 16px;
+  color: var(--color-son-black);
+}
+.sunset-continue-btn:active {
+  transform: scale(0.95);
+}
+.sunset-continue-btn svg {
+  width: 34px;
+  flex-shrink: 0;
+  animation: sunset-continue-arrow 1.6s ease-in-out infinite;
+}
+@keyframes sunset-continue-arrow {
+  0%,
+  20% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(6px);
+  }
+  80%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+/* "Folhinhas" extraídas de cima do .toggle__circle da referência (só o
+   par de formas de folha, nada do resto do switch/checkbox) — coladas
+   em cima do círculo do ícone de voltar. Verde de folha de propósito
+   (não dourado) — é o que dá a leitura de "planta" de verdade. */
+.sunset-back-btn-icon {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-son-surface-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s;
+}
+.sunset-back-btn:hover .sunset-back-btn-icon {
+  background: var(--color-son-pink);
+}
+.sunset-back-btn-icon::before,
+.sunset-back-btn-icon::after {
+  content: '';
+  position: absolute;
+  background-color: #4caf50;
+  bottom: 118%;
+  transform-origin: bottom left;
+}
+.sunset-back-btn-icon::before {
+  width: 9px;
+  height: 15px;
+  left: 32%;
+  border-radius: 0% 100% 0% 100% / 0% 27% 73% 100%;
+  transform: translateX(-70%) rotate(-2deg);
+}
+.sunset-back-btn-icon::after {
+  width: 15px;
+  height: 18px;
+  left: 48%;
+  border-radius: 100% 0% 100% 0% / 100% 0% 100% 0%;
+  transform: rotate(-20deg);
 }

@@ -556,11 +556,7 @@ export default function Checkout() {
             {couponError && <p className="error-msg mt-1">{couponError}</p>}
           </div>
 
-          <div className="border-t border-white/10 pt-4 space-y-1 text-sm">
-            <div className="flex justify-between text-son-silver-dim font-medium">
-              <span>Subtotal</span>
-              <span>{currency(subtotal)}</span>
-            </div>
+          <div className="bg-son-black/70 border border-white/10 rounded-2xl pt-4 px-4 pb-4 space-y-1 text-sm">
             {lines.map((l) => {
               const lineTotal = l.product.price * l.item.quantity
               const pd = appliedCoupon?.kind === 'produto' ? appliedCoupon.product_discounts?.find((p) => p.product_id === l.product.id) : undefined

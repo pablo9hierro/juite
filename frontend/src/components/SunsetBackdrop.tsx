@@ -97,7 +97,7 @@ export default function SunsetBackdrop() {
           />
         </g>
       </svg>
-      <div className="absolute inset-x-0 top-8 sm:top-12 flex flex-col items-center text-center px-4">
+      <div className="absolute inset-x-0 top-2 sm:top-3 flex flex-col items-center text-center px-4">
         <span style={{ color: '#ff4d7d' }} className="text-4xl sm:text-6xl font-black tracking-tight">
           Sunset Tabas
         </span>
