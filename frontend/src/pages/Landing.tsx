@@ -112,7 +112,7 @@ function BannerCarousel() {
             onClick={it.onClick}
             style={
               {
-                transform: `translate(-50%, -50%) rotateY(${(360 / n) * i}deg) translateZ(150px)`,
+                transform: `translate(-50%, -50%) rotateY(${(360 / n) * i}deg) translateZ(85px)`,
                 '--delay': `${-(i * (20 / n))}s`,
                 backgroundImage: `url(${it.image})`,
               } as CSSProperties

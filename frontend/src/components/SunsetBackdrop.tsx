@@ -29,7 +29,7 @@ export default function SunsetBackdrop() {
         version="1.0"
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 1312.000000 876.000000"
-        preserveAspectRatio="xMidYMid meet"
+        preserveAspectRatio="xMidYMax meet"
       >
         <defs>
           <linearGradient id="sunsetMyGradient" gradientTransform="rotate(90)">
