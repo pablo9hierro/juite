@@ -515,17 +515,20 @@ a {
   justify-content: center;
   padding: 2rem 0;
 }
+/* Fica DENTRO do espaço 3D do anel (é filho de .sunset-3d-carousel, que
+   tem transform-style:preserve-3d) — sem offset de translateZ, ou seja,
+   bem no eixo em volta do qual os cards giram. O transform (posição +
+   contra-rotação) é setado via JS a cada frame, não aqui. */
 .sunset-3d-carousel-center {
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 5;
   pointer-events: none;
   color: var(--color-son-gold);
   font-weight: 900;
   font-size: 1.1rem;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+  white-space: nowrap;
 }
 .sunset-3d-carousel {
   position: relative;
@@ -783,28 +786,78 @@ a {
   }
 }
 
-/* From Uiverse.io by esraaabdel-kareem (coffee cup loader) — só o "shake"
-   fica no logo do WhatsApp; a fumaça é adaptada (opacidade maior, cor
-   quente) subindo atrás do botão. */
-@keyframes sunset-shake {
+/* Bolhas explodindo pra cima/baixo do botão de WhatsApp — reproduzido
+   fiel à referência (mesmos radial-gradient em camadas, mesmos
+   keyframes de posição/tamanho), recolorido pro dourado/laranja do
+   site (era roxo #7d2ae8). Na referência só disparava no :hover; aqui
+   vira loop automático e contínuo (pedido explícito — no celular não
+   tem hover, o botão precisa ficar "vivo" sozinho). */
+.sunset-bubbles {
+  isolation: isolate;
+}
+.sunset-bubbles::before,
+.sunset-bubbles::after {
+  position: absolute;
+  content: '';
+  width: 150%;
+  left: 50%;
+  height: 100%;
+  transform: translateX(-50%);
+  z-index: -1;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+.sunset-bubbles::before {
+  top: -70%;
+  background-image: radial-gradient(circle, var(--color-son-gold) 20%, transparent 20%),
+    radial-gradient(circle, transparent 20%, var(--color-son-orange) 20%, transparent 30%),
+    radial-gradient(circle, var(--color-son-gold) 20%, transparent 20%),
+    radial-gradient(circle, var(--color-son-pink) 20%, transparent 20%),
+    radial-gradient(circle, transparent 10%, var(--color-son-orange) 15%, transparent 20%),
+    radial-gradient(circle, var(--color-son-gold) 20%, transparent 20%),
+    radial-gradient(circle, var(--color-son-pink) 20%, transparent 20%),
+    radial-gradient(circle, var(--color-son-gold) 20%, transparent 20%),
+    radial-gradient(circle, var(--color-son-orange) 20%, transparent 20%);
+  background-size: 10% 10%, 20% 20%, 15% 15%, 20% 20%, 18% 18%, 10% 10%, 15% 15%, 10% 10%, 18% 18%;
+  background-position: 50% 120%;
+  animation: sunset-bubbles-top 2.4s ease infinite;
+}
+@keyframes sunset-bubbles-top {
   0% {
-    transform: translateX(0) translateY(0) rotate(0);
-  }
-  25% {
-    transform: translateX(-3px) translateY(-2px) rotate(-3deg);
+    background-position: 5% 90%, 10% 90%, 10% 90%, 15% 90%, 25% 90%, 25% 90%, 40% 90%, 55% 90%, 70% 90%;
   }
   50% {
-    transform: translateX(0) translateY(0) rotate(0);
-  }
-  75% {
-    transform: translateX(3px) translateY(-2px) rotate(3deg);
+    background-position: 0% 80%, 0% 20%, 10% 40%, 20% 0%, 30% 30%, 22% 50%, 50% 50%, 65% 20%, 90% 30%;
   }
   100% {
-    transform: translateX(0) translateY(0) rotate(0);
+    background-position: 0% 70%, 0% 10%, 10% 30%, 20% -10%, 30% 20%, 22% 40%, 50% 40%, 65% 10%, 90% 20%;
+    background-size: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%;
   }
 }
-.sunset-shake {
-  animation: sunset-shake 3s ease-in-out infinite;
+.sunset-bubbles::after {
+  bottom: -70%;
+  background-image: radial-gradient(circle, var(--color-son-gold) 20%, transparent 20%),
+    radial-gradient(circle, var(--color-son-orange) 20%, transparent 20%),
+    radial-gradient(circle, transparent 10%, var(--color-son-pink) 15%, transparent 20%),
+    radial-gradient(circle, var(--color-son-gold) 20%, transparent 20%),
+    radial-gradient(circle, var(--color-son-orange) 20%, transparent 20%),
+    radial-gradient(circle, var(--color-son-gold) 20%, transparent 20%),
+    radial-gradient(circle, var(--color-son-pink) 20%, transparent 20%);
+  background-size: 15% 15%, 20% 20%, 18% 18%, 20% 20%, 15% 15%, 20% 20%, 18% 18%;
+  background-position: 50% 0%;
+  animation: sunset-bubbles-bottom 2.4s ease infinite;
+}
+@keyframes sunset-bubbles-bottom {
+  0% {
+    background-position: 10% -10%, 30% 10%, 55% -10%, 70% -10%, 85% -10%, 70% -10%, 70% 0%;
+  }
+  50% {
+    background-position: 0% 80%, 20% 80%, 45% 60%, 60% 100%, 75% 70%, 95% 60%, 105% 0%;
+  }
+  100% {
+    background-position: 0% 90%, 20% 90%, 45% 70%, 60% 110%, 75% 80%, 95% 70%, 110% 10%;
+    background-size: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%;
+  }
 }
 @keyframes sunset-smoke-rise {
   0% {
@@ -917,4 +970,85 @@ a {
   50% {
     transform: rotate(35deg);
   }
+}
+
+/* "animated-button" — reproduzido fiel à referência (mesma seta
+   entrando/saindo, mesmo círculo expandindo por baixo, mesmo texto
+   deslizando, mesmo scale no :active), só recolorido pro dourado do
+   site (era azul #1f387e sobre fundo claro). O badge de endereço vira
+   um botão de verdade (os outros 3 continuam só decorativos) — abre o
+   endereço no Google Maps. */
+.sunset-maps-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 22px;
+  border: 3px solid transparent;
+  background-color: var(--color-son-surface);
+  border-radius: 100px;
+  font-weight: 700;
+  color: var(--color-son-gold);
+  box-shadow: 0 0 0 2px var(--color-son-gold);
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  text-align: center;
+}
+.sunset-maps-btn svg {
+  position: absolute;
+  width: 18px;
+  fill: var(--color-son-gold);
+  z-index: 9;
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.sunset-maps-btn .arr-1 {
+  right: 12px;
+}
+.sunset-maps-btn .arr-2 {
+  left: -25%;
+}
+.sunset-maps-btn .circle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  background-color: var(--color-son-gold);
+  border-radius: 50%;
+  opacity: 0;
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.sunset-maps-btn .text {
+  position: relative;
+  z-index: 1;
+  transform: translateX(-10px);
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.sunset-maps-btn:hover {
+  box-shadow: 0 0 0 12px transparent;
+  color: var(--color-son-black);
+  border-radius: 12px;
+}
+.sunset-maps-btn:hover .arr-1 {
+  right: -25%;
+}
+.sunset-maps-btn:hover .arr-2 {
+  left: 12px;
+}
+.sunset-maps-btn:hover .text {
+  transform: translateX(10px);
+}
+.sunset-maps-btn:hover svg {
+  fill: var(--color-son-black);
+}
+.sunset-maps-btn:active {
+  scale: 0.95;
+  box-shadow: 0 0 0 4px var(--color-son-orange);
+}
+.sunset-maps-btn:hover .circle {
+  width: 260px;
+  height: 260px;
+  opacity: 1;
 }

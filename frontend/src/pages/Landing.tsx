@@ -21,6 +21,7 @@ function BannerCarousel() {
   const [heroUrl, setHeroUrl] = useState<string | null>(null)
   const [promotions, setPromotions] = useState<Promotion[]>([])
   const ringRef = useRef<HTMLDivElement>(null)
+  const centerRef = useRef<HTMLDivElement>(null)
   const rotationRef = useRef(0)
   const draggingRef = useRef(false)
   const lastXRef = useRef(0)
@@ -46,6 +47,13 @@ function BannerCarousel() {
       }
       if (ringRef.current) {
         ringRef.current.style.transform = `perspective(800px) rotateY(${rotationRef.current}deg)`
+      }
+      // O texto do centro é filho do anel (participa do mesmo espaço 3D,
+      // fica "dentro do cilindro"), mas gira na direção CONTRÁRIA do
+      // anel — cancela a rotação do pai, então ele fica sempre de frente
+      // pra câmera, suspenso no meio, com os cards passando ao redor.
+      if (centerRef.current) {
+        centerRef.current.style.transform = `translate(-50%, -50%) rotateY(${-rotationRef.current}deg)`
       }
       raf = requestAnimationFrame(tick)
     }
@@ -114,12 +122,15 @@ function BannerCarousel() {
             <span className="sunset-3d-carousel-item-label">{it.label}</span>
           </div>
         ))}
+        {/* Testando: fica DENTRO do espaço 3D do anel (translateZ(0), no
+            eixo exato em que os cards giram ao redor), mas com rotação
+            própria cancelando a do anel a cada frame — sempre de frente
+            pra câmera, "suspenso" no meio do cilindro em vez de colado
+            na tela por cima de tudo. */}
+        <div ref={centerRef} className="sunset-3d-carousel-center">
+          TEXTO
+        </div>
       </div>
-      {/* Testando: elemento fixo no centro do carrossel, por cima dos
-          cards mas sem girar junto com eles (fica na frente/no eixo,
-          então não vira de lado quando o anel roda). pointer-events:none
-          pra não atrapalhar o arrasto. */}
-      <div className="sunset-3d-carousel-center">TEXTO</div>
     </div>
   )
 }
@@ -181,13 +192,40 @@ export default function Landing() {
           {[
             { text: 'SUNSET • Desde 2023', bold: true },
             { text: '🔥 Experiência, vibe e essência' },
-            { text: '📍 R. Rosa de Paula Barbosa, 16 - José Américo de Almeida. João Pessoa - PB' },
-            { text: '👇 A vibe começa aqui' },
           ].map((b) => (
             <span key={b.text} className="sunset-shine-badge">
               <span
                 className={`sunset-shine-badge-inner px-4 py-2 text-xs sm:text-sm ${b.bold ? 'font-bold' : 'font-medium'} text-son-gold`}
               >
+                {b.text}
+              </span>
+            </span>
+          ))}
+          {/* Vira botão de verdade (não só decorativo como os outros
+              badges) — abre o endereço no Google Maps. Efeito de clique
+              exato da referência (seta entrando/saindo + círculo
+              expandindo + texto deslizando), recolorido pro dourado do
+              site (era azul #1f387e). */}
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+              'Rua Rosa de Paula Barbosa, 16 - José Américo de Almeida, João Pessoa - PB'
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="sunset-maps-btn text-xs sm:text-sm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="arr-2" viewBox="0 0 24 24">
+              <path d="M16.1716 10.9999L10.8076 5.63589L12.2218 4.22168L20 11.9999L12.2218 19.778L10.8076 18.3638L16.1716 12.9999H4V10.9999H16.1716Z" />
+            </svg>
+            <span className="text">📍 R. Rosa de Paula Barbosa, 16 - José Américo de Almeida. João Pessoa - PB</span>
+            <span className="circle" />
+            <svg xmlns="http://www.w3.org/2000/svg" className="arr-1" viewBox="0 0 24 24">
+              <path d="M16.1716 10.9999L10.8076 5.63589L12.2218 4.22168L20 11.9999L12.2218 19.778L10.8076 18.3638L16.1716 12.9999H4V10.9999H16.1716Z" />
+            </svg>
+          </a>
+          {[{ text: '👇 A vibe começa aqui' }].map((b) => (
+            <span key={b.text} className="sunset-shine-badge">
+              <span className="sunset-shine-badge-inner px-4 py-2 text-xs sm:text-sm font-medium text-son-gold">
                 {b.text}
               </span>
             </span>
