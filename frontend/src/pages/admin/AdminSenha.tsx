@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
-import { Clock, KeyRound, Loader2, MessageCircle, Plus, Power, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Clock, Image as ImageIcon, ImagePlus, KeyRound, Loader2, MessageCircle, Palette, Plus, Power, Trash2 } from 'lucide-react'
 import { api, ApiError } from '../../lib/api'
-import type { StoreHourDay, StoreStatus } from '../../lib/types'
+import type { BgMode, BgSettings, StoreHourDay, StoreStatus } from '../../lib/types'
 import { DAY_LABELS, isScheduledOpenNow } from '../../lib/storeHours'
 import WhatsAppConnection from '../../components/ui/WhatsAppConnection'
+import BackgroundScene from '../../components/BackgroundScene'
 
 // Horas inteiras de 0 a 24 (Brasil usa 24h) — granularidade de intervalo é
 // por hora cheia, sem minutos.
@@ -250,6 +251,200 @@ function StoreHoursCard() {
   )
 }
 
+const BG_MODES: { value: BgMode; label: string }[] = [
+  { value: 'svg1', label: 'Coqueiro (padrão)' },
+  { value: 'synthwave', label: 'Synthwave' },
+  { value: 'stars', label: 'Estrelas' },
+  { value: 'custom', label: 'Imagem própria' },
+]
+
+// Fundo do site (SunsetBackdrop) — escolhe entre os fundos prontos ou
+// sobe uma imagem própria, e ajusta tamanho/posição/enquadramento do
+// que estiver ativo. Fica salvo pra todo mundo que visita o site (não é
+// um ajuste só do navegador do admin) — por isso o preview ao lado é
+// só um rascunho local até clicar em "Salvar fundo".
+function BackgroundSettingsCard() {
+  const [draft, setDraft] = useState<BgSettings | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    api.siteSettings.get().then((s) =>
+      setDraft({ bg_mode: s.bg_mode, bg_image_url: s.bg_image_url, bg_scale: s.bg_scale, bg_x: s.bg_x, bg_y: s.bg_y, bg_fit: s.bg_fit })
+    )
+  }, [])
+
+  const patch = (p: Partial<BgSettings>) => setDraft((d) => (d ? { ...d, ...p } : d))
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true)
+    setError(null)
+    try {
+      const { url } = await api.admin.products.uploadImage(file)
+      patch({ bg_image_url: url, bg_mode: 'custom' })
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Erro ao enviar a imagem.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const save = async () => {
+    if (!draft) return
+    setSaving(true)
+    setError(null)
+    setSaved(false)
+    try {
+      await api.admin.siteSettings.updateBackground(draft)
+      setSaved(true)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Erro ao salvar o fundo.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!draft) {
+    return (
+      <div className="flex justify-center py-6">
+        <Loader2 className="w-5 h-5 animate-spin text-son-pink" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-lg space-y-4">
+      <div className="bg-son-surface border border-white/5 rounded-2xl p-6 space-y-4">
+        <div className="grid grid-cols-2 gap-2">
+          {BG_MODES.map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              onClick={() => patch({ bg_mode: m.value })}
+              className={`py-2.5 rounded-xl text-sm font-medium border transition-colors ${
+                draft.bg_mode === m.value
+                  ? 'sunset-bg text-white border-transparent'
+                  : 'bg-son-surface-light border-white/10 text-son-silver hover:border-son-pink/30'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        {draft.bg_mode === 'custom' && (
+          <div>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+            <div className="flex items-center gap-3">
+              <div className="w-20 h-20 rounded-xl bg-son-surface-light flex items-center justify-center overflow-hidden flex-shrink-0">
+                {uploading ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-son-silver-dim" />
+                ) : draft.bg_image_url ? (
+                  <img src={draft.bg_image_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <ImageIcon className="w-6 h-6 text-son-silver-dim/40" />
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="btn-secondary text-sm py-2 px-3"
+              >
+                <ImagePlus className="w-3.5 h-3.5" />
+                {draft.bg_image_url ? 'Trocar imagem' : 'Enviar imagem'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-4 items-start">
+          <div className="flex-1 space-y-3">
+            <div>
+              <label className="label">Tamanho — {(draft.bg_scale * 100).toFixed(0)}%</label>
+              <input
+                type="range"
+                min={0.3}
+                max={3}
+                step={0.02}
+                value={draft.bg_scale}
+                onChange={(e) => patch({ bg_scale: parseFloat(e.target.value) })}
+                className="w-full accent-son-pink"
+              />
+            </div>
+            <div>
+              <label className="label">Horizontal — {draft.bg_x}px</label>
+              <input
+                type="range"
+                min={-400}
+                max={400}
+                step={2}
+                value={draft.bg_x}
+                onChange={(e) => patch({ bg_x: parseInt(e.target.value, 10) })}
+                className="w-full accent-son-pink"
+              />
+            </div>
+            <div>
+              <label className="label">Vertical — {draft.bg_y}px</label>
+              <input
+                type="range"
+                min={-400}
+                max={400}
+                step={2}
+                value={draft.bg_y}
+                onChange={(e) => patch({ bg_y: parseInt(e.target.value, 10) })}
+                className="w-full accent-son-pink"
+              />
+            </div>
+            {(draft.bg_mode === 'svg1' || draft.bg_mode === 'custom') && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => patch({ bg_fit: 'meet' })}
+                  className={`flex-1 py-2 rounded-xl text-xs font-semibold border ${
+                    draft.bg_fit === 'meet' ? 'sunset-bg text-white border-transparent' : 'bg-son-surface-light border-white/10 text-son-silver'
+                  }`}
+                >
+                  Ajustar (contido)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => patch({ bg_fit: 'slice' })}
+                  className={`flex-1 py-2 rounded-xl text-xs font-semibold border ${
+                    draft.bg_fit === 'slice' ? 'sunset-bg text-white border-transparent' : 'bg-son-surface-light border-white/10 text-son-silver'
+                  }`}
+                >
+                  Cobrir (cheio)
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Preview proporcional — o MESMO componente usado no fundo
+              real (BackgroundScene), só numa caixa pequena, refletindo o
+              rascunho atual em tempo real antes de salvar de verdade. */}
+          <div className="w-28 h-[200px] rounded-xl overflow-hidden border border-white/15 flex-shrink-0 relative bg-son-black">
+            <BackgroundScene settings={draft} showTitle={false} />
+          </div>
+        </div>
+
+        {error && <p className="error-msg">{error}</p>}
+        {saved && <p className="text-green-500 text-sm">Fundo salvo — já vale pra todo mundo que visita o site.</p>}
+        <button onClick={save} disabled={saving} className="btn-primary text-sm py-2.5 px-3">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          Salvar fundo
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminSenha() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -340,6 +535,16 @@ export default function AdminSenha() {
         </h2>
         <p className="text-son-silver-dim text-sm mb-6">Conecte o número da loja pra disparar as notificações automáticas.</p>
         <WhatsAppConnection api={api.admin.whatsapp} />
+      </div>
+
+      <div>
+        <h2 className="text-2xl font-black mb-1 flex items-center gap-2">
+          <Palette className="w-5 h-5" /> Fundo do site
+        </h2>
+        <p className="text-son-silver-dim text-sm mb-6">
+          Escolha o coqueiro padrão, o synthwave, as estrelas, ou envie uma imagem própria — e ajuste tamanho/posição.
+        </p>
+        <BackgroundSettingsCard />
       </div>
     </div>
   )

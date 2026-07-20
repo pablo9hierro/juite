@@ -396,6 +396,19 @@ export interface ShippingSettings {
   max_km: number | null
 }
 
+// Fundo do site (SunsetBackdrop), ajustável em /admin/conta.
+export type BgMode = 'svg1' | 'synthwave' | 'stars' | 'custom'
+export type BgFit = 'meet' | 'slice'
+
+export interface BgSettings {
+  bg_mode: BgMode
+  bg_image_url: string | null
+  bg_scale: number
+  bg_x: number
+  bg_y: number
+  bg_fit: BgFit
+}
+
 export interface StoreHourInterval {
   opens_at: string // 'HH:MM', formato 24h (0-24)
   closes_at: string

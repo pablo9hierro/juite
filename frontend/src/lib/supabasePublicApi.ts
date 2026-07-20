@@ -1,6 +1,6 @@
 import { ApiError } from './apiError'
 import { supabase } from './supabaseClient'
-import type { Category, Coupon, DeliveryPosition, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
+import type { BgFit, BgMode, Category, Coupon, DeliveryPosition, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new ApiError(400, result.error.message)
@@ -52,8 +52,19 @@ export const supabasePublicApi = {
   },
   siteSettings: {
     get: async () => {
-      const { data } = await supabase.from('site_settings').select('hero_image_url').single()
-      return { hero_image_url: (data?.hero_image_url as string | null) ?? null }
+      const { data } = await supabase
+        .from('site_settings')
+        .select('hero_image_url, bg_mode, bg_image_url, bg_scale, bg_x, bg_y, bg_fit')
+        .single()
+      return {
+        hero_image_url: (data?.hero_image_url as string | null) ?? null,
+        bg_mode: (data?.bg_mode as BgMode | undefined) ?? 'svg1',
+        bg_image_url: (data?.bg_image_url as string | null) ?? null,
+        bg_scale: (data?.bg_scale as number | undefined) ?? 1,
+        bg_x: (data?.bg_x as number | undefined) ?? 0,
+        bg_y: (data?.bg_y as number | undefined) ?? 0,
+        bg_fit: (data?.bg_fit as BgFit | undefined) ?? 'meet',
+      }
     },
   },
   storeStatus: {

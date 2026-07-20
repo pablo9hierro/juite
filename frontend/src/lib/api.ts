@@ -5,6 +5,7 @@ import { localApi } from './localApi'
 import { supabasePublicApi } from './supabasePublicApi'
 import { supabase } from './supabaseClient'
 import type {
+  BgSettings,
   CampanhaOrientation,
   Category,
   Coupon,
@@ -595,6 +596,16 @@ const remoteApi = {
     siteSettings: {
       updateHeroImage: (imageUrl: string) =>
         rpc<{ hero_image_url: string }>('admin_update_hero_image', { p_token: adminToken(), p_image_url: imageUrl }),
+      updateBackground: (settings: BgSettings) =>
+        rpc<BgSettings>('admin_update_bg_settings', {
+          p_token: adminToken(),
+          p_bg_mode: settings.bg_mode,
+          p_bg_image_url: settings.bg_image_url,
+          p_bg_scale: settings.bg_scale,
+          p_bg_x: settings.bg_x,
+          p_bg_y: settings.bg_y,
+          p_bg_fit: settings.bg_fit,
+        }),
     },
     storeStatus: {
       get: () => supabasePublicApi.storeStatus.get(),

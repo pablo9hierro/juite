@@ -543,14 +543,9 @@ a {
   position: relative;
   z-index: 10;
   display: flex;
-  gap: 28px;
+  justify-content: center;
   padding: 3.5rem 1.5rem 2.5rem;
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
   perspective: 700px;
-}
-.sunset-book-row::-webkit-scrollbar {
-  display: none;
 }
 .sunset-book {
   position: relative;

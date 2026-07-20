@@ -27,6 +27,9 @@ import { isScheduledOpenNow } from './storeHours'
 import { useAdminAuth } from '../store/adminAuth'
 import { useMotoboyAuth } from '../store/motoboyAuth'
 import type {
+  BgFit,
+  BgMode,
+  BgSettings,
   Promotion,
   Category,
   Coupon,
@@ -1807,9 +1810,25 @@ async function updateShippingSettings(pricePerKm: number, maxKm: number | null):
   return { price_per_km: db.pricePerKm, max_km: db.maxKm }
 }
 
-async function getSiteSettings(): Promise<{ hero_image_url: string | null }> {
+async function getSiteSettings(): Promise<{
+  hero_image_url: string | null
+  bg_mode: BgMode
+  bg_image_url: string | null
+  bg_scale: number
+  bg_x: number
+  bg_y: number
+  bg_fit: BgFit
+}> {
   const db = loadDb()
-  return { hero_image_url: db.heroImageUrl ?? null }
+  return {
+    hero_image_url: db.heroImageUrl ?? null,
+    bg_mode: db.bgMode ?? 'svg1',
+    bg_image_url: db.bgImageUrl ?? null,
+    bg_scale: db.bgScale ?? 1,
+    bg_x: db.bgX ?? 0,
+    bg_y: db.bgY ?? 0,
+    bg_fit: db.bgFit ?? 'meet',
+  }
 }
 
 async function updateHeroImage(imageUrl: string): Promise<{ hero_image_url: string }> {
@@ -1818,6 +1837,18 @@ async function updateHeroImage(imageUrl: string): Promise<{ hero_image_url: stri
   db.heroImageUrl = imageUrl
   saveDb(db)
   return { hero_image_url: imageUrl }
+}
+
+async function updateBackground(settings: BgSettings): Promise<BgSettings> {
+  const db = loadDb()
+  db.bgMode = settings.bg_mode
+  db.bgImageUrl = settings.bg_image_url
+  db.bgScale = settings.bg_scale
+  db.bgX = settings.bg_x
+  db.bgY = settings.bg_y
+  db.bgFit = settings.bg_fit
+  saveDb(db)
+  return settings
 }
 
 const DEFAULT_STORE_HOURS: StoreHourDay[] = Array.from({ length: 7 }, (_, day_of_week) => ({
@@ -2273,7 +2304,7 @@ export const localApi = {
     },
     orders: { list: adminListOrders, updateStatus: adminUpdateStatus, notifyReady: async () => {} },
     shippingSettings: { get: getShippingSettings, update: updateShippingSettings },
-    siteSettings: { updateHeroImage },
+    siteSettings: { updateHeroImage, updateBackground },
     storeStatus: { get: getStoreStatus, setHours: setStoreHours, setManualStatus: setStoreManualStatus },
     financeiro: { get: financeiro, timeseries: financeiroTimeseries },
     crm: { customers: adminCrmCustomers },

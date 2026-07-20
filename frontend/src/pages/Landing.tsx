@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import WhatsAppFab from '../components/WhatsAppFab'
@@ -29,34 +29,44 @@ function BannerCarousel() {
     ...restPromos.map((p) => ({ key: p.id, image: p.image_url, label: p.title, onClick: () => navigate(`/banner?promocao=${p.id}`) })),
   ].filter((it) => it.image)
 
+  // Um card só que AGRUPA todos os banners/promoções — não um card por
+  // item lado a lado (isso lia como "duplicado" com só 2 itens ativos).
+  // Troca o conteúdo (imagem/título) sozinho a cada 4.5s quando há mais
+  // de um item; clique sempre leva pro item que está em tela no momento.
+  const [activeIndex, setActiveIndex] = useState(0)
+  useEffect(() => {
+    if (items.length < 2) return
+    const timer = setInterval(() => setActiveIndex((i) => (i + 1) % items.length), 4500)
+    return () => clearInterval(timer)
+  }, [items.length])
+  const active = items[activeIndex] ?? items[0]
+
+  if (!active) return null
+
   return (
     <div className="sunset-book-row">
       {/* Uiverse.io by dalbrechtmartin — "book" (capa .cover na frente,
           página .inner que desliza pra fora, texto base .text por trás
           de tudo). Na referência só abria no :hover; aqui vira loop
-          automático (:hover -> keyframes infinite) com delay escalonado
-          por card, pra manter a sensação de "carrossel vivo" mesmo sem
-          giro contínuo. Clique continua levando pro checkout da
-          promoção, como no carrossel 3D anterior. */}
-      {items.map((it, i) => (
-        <div
-          key={it.key}
-          className="sunset-book"
-          style={{ '--book-delay': `${i * 0.4}s` } as CSSProperties}
-          role={it.onClick ? 'button' : undefined}
-          tabIndex={it.onClick ? 0 : undefined}
-          onClick={it.onClick}
-          aria-label={it.label}
-        >
-          <p className="sunset-book-text">🌅</p>
-          <div className="sunset-book-inner">
-            <p className="sunset-book-text">{it.label}</p>
-          </div>
-          <div className="sunset-book-cover" style={{ backgroundImage: `url(${it.image})` }}>
-            <p className="sunset-book-text">Toque para ver</p>
-          </div>
+          automático (:hover -> keyframes infinite), pra manter a
+          sensação de "carrossel vivo" mesmo sendo um card só. Clique
+          leva pro item que está em tela no momento. */}
+      <div
+        key={active.key}
+        className="sunset-book"
+        role={active.onClick ? 'button' : undefined}
+        tabIndex={active.onClick ? 0 : undefined}
+        onClick={active.onClick}
+        aria-label={active.label}
+      >
+        <p className="sunset-book-text">🌅</p>
+        <div className="sunset-book-inner">
+          <p className="sunset-book-text">{active.label}</p>
         </div>
-      ))}
+        <div className="sunset-book-cover" style={{ backgroundImage: `url(${active.image})` }}>
+          <p className="sunset-book-text">Toque para ver</p>
+        </div>
+      </div>
     </div>
   )
 }

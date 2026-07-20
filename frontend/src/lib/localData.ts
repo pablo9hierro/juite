@@ -1,6 +1,8 @@
 import { distanciaKm } from './geo/rotas'
 import { FALLBACK as STORE_LOCATION } from './geo/mapa'
 import type {
+  BgFit,
+  BgMode,
   CampanhaOrientation,
   Category,
   Coupon,
@@ -93,6 +95,12 @@ export interface LocalDb {
   pricePerKm: number
   maxKm: number | null
   heroImageUrl: string | null
+  bgMode: BgMode
+  bgImageUrl: string | null
+  bgScale: number
+  bgX: number
+  bgY: number
+  bgFit: BgFit
   storeHours: StoreHourDay[]
   storeManuallyClosed: boolean
   storeManualClosedReason: string | null
@@ -173,6 +181,12 @@ function seedDb(): LocalDb {
     pricePerKm: 1.5,
     maxKm: null,
     heroImageUrl: null,
+    bgMode: 'svg1',
+    bgImageUrl: null,
+    bgScale: 1,
+    bgX: 0,
+    bgY: 0,
+    bgFit: 'meet',
     storeHours: Array.from({ length: 7 }, (_, day_of_week) => ({
       day_of_week,
       is_open: true,
