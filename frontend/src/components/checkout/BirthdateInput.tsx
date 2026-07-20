@@ -16,8 +16,71 @@ function parse(value: string): [number | undefined, number | undefined, number |
   return [y, m, d]
 }
 
+type Option = { value: number; label: string }
+
+// Uiverse.io by 3bdel3ziz-T — na referência a lista abria no :hover e
+// tinha só 4 opções fixas (a label do valor escolhido era resolvida
+// 100% em CSS via :has()+attr()); aqui são dezenas de opções (31 dias,
+// 12 meses, ~80 anos), então abre por clique/toque (mobile não tem
+// hover) e a label selecionada vem do estado React — mas o visual
+// (caixa escura, seta girando, lista deslizando com opacity+translate)
+// é o mesmo, só recolorido pro tema do site.
+function Dropdown({
+  options,
+  value,
+  placeholder,
+  onChange,
+  ariaLabel,
+}: {
+  options: Option[]
+  value: number | undefined
+  placeholder: string
+  onChange: (value: number) => void
+  ariaLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [open])
+
+  const selected = options.find((o) => o.value === value)
+
+  return (
+    <div ref={ref} className={`sunset-dd${open ? ' is-open' : ''}`}>
+      <button type="button" className="sunset-dd-selected" onClick={() => setOpen((o) => !o)} aria-label={ariaLabel}>
+        <span>{selected ? selected.label : placeholder}</span>
+        <svg className="sunset-dd-arrow" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M233.4 406.6c12.5 12.5 32.8 12.5 45.3 0l192-192c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L256 338.7 86.6 169.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l192 192z" />
+        </svg>
+      </button>
+      <div className="sunset-dd-options">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            className={`sunset-dd-option${o.value === value ? ' is-selected' : ''}`}
+            onClick={() => {
+              onChange(o.value)
+              setOpen(false)
+            }}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Value/onChange sempre em yyyy-mm-dd (formato que o backend espera) — só a
-// APRESENTAÇÃO é dia/mês/ano, via 3 selects em vez do <input type="date">
+// APRESENTAÇÃO é dia/mês/ano, via 3 dropdowns em vez do <input type="date">
 // nativo (cujo formato/calendário segue o locale do navegador, não o
 // nosso — ficava em mm/dd/yyyy mesmo com o site em pt-BR).
 //
@@ -25,9 +88,9 @@ function parse(value: string): [number | undefined, number | undefined, number |
 // emitimos onChange pro pai quando os 3 estão preenchidos, se a seleção
 // fosse 100% controlada por `value` cada escolha parcial (ex: só o dia)
 // disparava onChange('') e o próprio componente re-renderizava com os 3
-// selects vazios de novo — a data nunca ficava selecionada. `lastEmitted`
+// dropdowns vazios de novo — a data nunca ficava selecionada. `lastEmitted`
 // distingue "o pai ecoou o que eu acabei de mandar" (ignora) de "o pai
-// resetou/carregou um valor por fora" (aí sim resincroniza os selects).
+// resetou/carregou um valor por fora" (aí sim resincroniza os dropdowns).
 export default function BirthdateInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const initial = parse(value)
   const [year, setYear] = useState<number | undefined>(initial[0])
@@ -63,59 +126,33 @@ export default function BirthdateInput({ value, onChange }: { value: string; onC
     onChange(next)
   }
 
-  // Visual "dial mecânico" (Uiverse by dexter-st, "combination lock") por
-  // cima do <select> nativo — só a moldura muda, o comportamento/valor
-  // continua 100% o <select> de sempre (mesma correção do bug de data que
-  // não registrava, intacta).
-  const selectClass =
-    'sunset-dial-select input-field appearance-none cursor-pointer'
-
   return (
     <div className="grid grid-cols-[1fr_1.4fr_1.1fr] gap-2">
-      <select
-        className={selectClass}
-        value={day ?? ''}
-        onChange={(e) => commit(e.target.value ? Number(e.target.value) : undefined, month, year)}
-        aria-label="Dia"
-      >
-        <option value="">Dia</option>
-        {days.map((d) => (
-          <option key={d} value={d}>
-            {d}
-          </option>
-        ))}
-      </select>
-      <select
-        className={selectClass}
-        value={month ?? ''}
-        onChange={(e) => {
-          const m = e.target.value ? Number(e.target.value) : undefined
+      <Dropdown
+        ariaLabel="Dia"
+        placeholder="Dia"
+        value={day}
+        options={days.map((d) => ({ value: d, label: String(d) }))}
+        onChange={(d) => commit(d, month, year)}
+      />
+      <Dropdown
+        ariaLabel="Mês"
+        placeholder="Mês"
+        value={month}
+        options={MONTHS.map((label, i) => ({ value: i + 1, label }))}
+        onChange={(m) => {
           // Se o dia escolhido não existe no novo mês (ex: 31 de fevereiro), ajusta.
-          const clampedDay = day && m ? Math.min(day, daysInMonth(m, year ?? thisYear)) : day
+          const clampedDay = day ? Math.min(day, daysInMonth(m, year ?? thisYear)) : day
           commit(clampedDay, m, year)
         }}
-        aria-label="Mês"
-      >
-        <option value="">Mês</option>
-        {MONTHS.map((label, i) => (
-          <option key={label} value={i + 1}>
-            {label}
-          </option>
-        ))}
-      </select>
-      <select
-        className={selectClass}
-        value={year ?? ''}
-        onChange={(e) => commit(day, month, e.target.value ? Number(e.target.value) : undefined)}
-        aria-label="Ano"
-      >
-        <option value="">Ano</option>
-        {years.map((y) => (
-          <option key={y} value={y}>
-            {y}
-          </option>
-        ))}
-      </select>
+      />
+      <Dropdown
+        ariaLabel="Ano"
+        placeholder="Ano"
+        value={year}
+        options={years.map((y) => ({ value: y, label: String(y) }))}
+        onChange={(y) => commit(day, month, y)}
+      />
     </div>
   )
 }

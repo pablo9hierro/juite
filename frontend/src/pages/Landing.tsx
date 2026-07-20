@@ -45,26 +45,42 @@ function BannerCarousel() {
 
   return (
     <div className="sunset-book-row">
-      {/* Uiverse.io by dalbrechtmartin — "book" (capa .cover na frente,
-          página .inner que desliza pra fora, texto base .text por trás
-          de tudo). Na referência só abria no :hover; aqui vira loop
-          automático (:hover -> keyframes infinite), pra manter a
-          sensação de "carrossel vivo" mesmo sendo um card só. Clique
-          leva pro item que está em tela no momento. */}
+      {/* Uiverse.io by Javierrocadev — card com halo borrado atrás, tela
+          branca com brilho passando de raspão (era só no :hover; aqui
+          é loop contínuo) e rodapé título+seta. O carrossel continua
+          sendo UM card só que troca de conteúdo sozinho (activeIndex
+          acima) — clique leva pro item que está em tela no momento. */}
       <div
         key={active.key}
-        className="sunset-book"
+        className="sunset-jcard"
         role={active.onClick ? 'button' : undefined}
         tabIndex={active.onClick ? 0 : undefined}
         onClick={active.onClick}
         aria-label={active.label}
       >
-        <p className="sunset-book-text">🌅</p>
-        <div className="sunset-book-inner">
-          <p className="sunset-book-text">{active.label}</p>
-        </div>
-        <div className="sunset-book-cover" style={{ backgroundImage: `url(${active.image})` }}>
-          <p className="sunset-book-text">Toque para ver</p>
+        <div className="sunset-jcard-glow" />
+        <div className="sunset-jcard-inner">
+          <div className="sunset-jcard-screen" style={{ backgroundImage: `url(${active.image})` }} />
+          <div className="sunset-jcard-footer">
+            <div className="sunset-jcard-footer-text">
+              <p>{active.label}</p>
+              <p>Toque para ver</p>
+            </div>
+            <svg
+              className="sunset-jcard-arrow"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M5 12l14 0" />
+              <path d="M13 18l6 -6" />
+              <path d="M13 6l6 6" />
+            </svg>
+          </div>
         </div>
       </div>
     </div>
