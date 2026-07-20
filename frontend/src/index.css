@@ -195,6 +195,13 @@ a {
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* Só o card do mapa de rastreio na landing — opacidade do .glass (0.65)
+   dobrada (vira praticamente opaco). Classe própria, não mexe no
+   .glass compartilhado com o resto do site. */
+.sunset-feature-card-solid {
+  background: rgba(15, 43, 29, 1);
+}
+
 /* Custom component classes live in the "components" layer (below Tailwind's
    "utilities" layer) so that utility classes appended after them in a
    className (e.g. `input-field w-24`) correctly win, instead of this
@@ -1276,6 +1283,27 @@ a {
 /* "Continue" — reproduzido fiel à referência (pill + círculo com seta),
    recolorido pro dourado do site (era branco/preto). Na referência a
    seta só deslizava no :hover; vira loop automático e contínuo aqui. */
+/* Uiverse.io by ShrinilDhorda — botão neon: glow em box-shadow, reflexo
+   espelhado abaixo (-webkit-box-reflect, só WebKit, ignorado em outros
+   sem quebrar nada), gradiente varrendo no hover, encolhe no clique.
+   Aplicado como classe extra em cima do botão "Ver catálogo" (mantém a
+   pílula/seta) e do "Acompanhar meu pedido" (mantém o .btn-secondary
+   compartilhado intacto — só esse elemento ganha a classe extra).
+   Recolorido pro laranja/dourado do site (era azul/ciano). */
+.sunset-glow-btn {
+  background-color: rgb(14, 14, 26) !important;
+  color: var(--color-son-gold) !important;
+  box-shadow: 0 0 45px rgba(224, 138, 58, 0.5) !important;
+  transition: 0.5s !important;
+  -webkit-box-reflect: below 8px linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.4));
+}
+.sunset-glow-btn:active {
+  scale: 0.94;
+}
+.sunset-glow-btn:hover {
+  background: linear-gradient(270deg, rgba(224, 138, 58, 0.75) 0%, rgba(255, 210, 61, 0.9) 60%) !important;
+  color: #081912 !important;
+}
 .sunset-continue-btn {
   cursor: pointer;
   font-weight: 700;

@@ -254,7 +254,6 @@ function StoreHoursCard() {
 const BG_MODES: { value: BgMode; label: string }[] = [
   { value: 'svg1', label: 'Coqueiro (padrão)' },
   { value: 'synthwave', label: 'Synthwave' },
-  { value: 'stars', label: 'Estrelas' },
   { value: 'custom', label: 'Imagem própria' },
 ]
 
@@ -321,7 +320,7 @@ function BackgroundSettingsCard() {
   return (
     <div className="max-w-lg space-y-4">
       <div className="bg-son-surface border border-white/5 rounded-2xl p-6 space-y-4">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {BG_MODES.map((m) => (
             <button
               key={m.value}
