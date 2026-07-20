@@ -515,6 +515,18 @@ a {
   justify-content: center;
   padding: 2rem 0;
 }
+.sunset-3d-carousel-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+  color: var(--color-son-gold);
+  font-weight: 900;
+  font-size: 1.1rem;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+}
 .sunset-3d-carousel {
   position: relative;
   width: 400px;
@@ -656,7 +668,9 @@ a {
    site. Sem o texto "Loading..." (não faz sentido num botão fixo que
    não representa um estado de carregamento). */
 .cart-loader {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 160px;
   height: 180px;
   display: flex;

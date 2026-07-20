@@ -15,9 +15,7 @@ export default function CartFab() {
 
   return (
     <Link to="/checkout" className="fixed bottom-6 right-6 z-40 w-16 h-16" aria-label="Ir para o checkout">
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-        <SunsetCartIcon scale={0.42} withItems />
-      </div>
+      <SunsetCartIcon scale={0.42} withItems />
       {count > 0 && (
         <span className="absolute top-2 right-0 z-10 w-6 h-6 flex items-center justify-center text-xs font-bold sunset-bg text-white rounded-full shadow-md shadow-black/40">
           {count}

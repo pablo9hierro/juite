@@ -9,7 +9,7 @@ export default function SunsetCartIcon({ scale = 1, withItems = false }: { scale
     return <div id="cart-icon" style={{ transform: `scale(${scale})` }} />
   }
   return (
-    <div className="cart-loader" style={{ transform: `scale(${scale})` }}>
+    <div className="cart-loader" style={{ transform: `translate(-50%, -50%) scale(${scale})` }}>
       <div className="items-container">
         <div id="item-mobile" className="item" />
         <div id="item-laptop" className="item" />

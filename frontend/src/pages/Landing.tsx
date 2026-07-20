@@ -115,6 +115,11 @@ function BannerCarousel() {
           </div>
         ))}
       </div>
+      {/* Testando: elemento fixo no centro do carrossel, por cima dos
+          cards mas sem girar junto com eles (fica na frente/no eixo,
+          então não vira de lado quando o anel roda). pointer-events:none
+          pra não atrapalhar o arrasto. */}
+      <div className="sunset-3d-carousel-center">TEXTO</div>
     </div>
   )
 }
