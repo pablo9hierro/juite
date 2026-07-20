@@ -341,7 +341,7 @@ export default function Checkout() {
           </div>
         )}
 
-        <div className="space-y-5">
+        <div className="bg-son-black/75 backdrop-blur-md border border-white/10 rounded-3xl p-4 sm:p-6 space-y-5">
           <div>
             <label className="label">Seu nome *</label>
             <input
