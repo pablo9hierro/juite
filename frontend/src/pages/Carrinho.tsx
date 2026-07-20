@@ -31,7 +31,7 @@ export default function Carrinho() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader />
+      <SiteHeader showCart={false} title="Meu carrinho" />
       <PageTransition className="max-w-2xl mx-auto px-5 sm:px-10 pb-20">
         <h1 className="text-2xl sm:text-3xl font-black mb-6 flex items-center gap-2">
           <ShoppingBag className="w-6 h-6 text-son-pink" />

@@ -182,6 +182,9 @@ export type PromotionType = 'selfie_service' | 'kit'
 export interface Promotion {
   id: string
   title: string
+  // Segunda linha do rodapé do card na landing (era fixo "Promoções");
+  // null/vazio cai no padrão "Promoções" no componente que renderiza.
+  subtitle: string | null
   image_url: string
   product_ids: string[]
   promotion_type: PromotionType

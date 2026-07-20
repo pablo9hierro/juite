@@ -318,7 +318,7 @@ export default function Checkout() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader showCart={false} />
+      <SiteHeader showCart={false} title="Finalizar pedido" />
       <PageTransition className="max-w-xl mx-auto px-5 sm:px-10 pb-24">
         <h1 className="text-2xl sm:text-3xl font-black mb-6">Checkout</h1>
 

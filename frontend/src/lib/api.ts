@@ -499,6 +499,7 @@ const remoteApi = {
       list: () => rpc<Promotion[]>('admin_list_promotions', { p_token: adminToken() }),
       create: (payload: {
         title: string
+        subtitle?: string
         image_url: string
         product_ids: string[]
         promotion_type: PromotionType
@@ -525,11 +526,13 @@ const remoteApi = {
           p_expires_at: payload.expires_at || null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
           p_category_discounts: payload.category_discounts && payload.category_discounts.length > 0 ? payload.category_discounts : null,
+          p_subtitle: payload.subtitle || null,
         }),
       update: (
         id: string,
         payload: {
           title: string
+          subtitle?: string
           image_url: string
           product_ids: string[]
           promotion_type: PromotionType
@@ -560,6 +563,7 @@ const remoteApi = {
           p_expires_at: payload.expires_at || null,
           p_product_discounts: payload.product_discounts && payload.product_discounts.length > 0 ? payload.product_discounts : null,
           p_category_discounts: payload.category_discounts && payload.category_discounts.length > 0 ? payload.category_discounts : null,
+          p_subtitle: payload.subtitle || null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_promotion', { p_token: adminToken(), p_id: id }),
     },

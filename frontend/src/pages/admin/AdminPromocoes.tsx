@@ -16,6 +16,7 @@ const MAX_BANNER_MB = 10
 // (categoria "Kit") e escolhe esse produto aqui, com o desconto dele.
 type PromotionForm = {
   title: string
+  subtitle: string
   image_url: string
   productDiscounts: ProductDiscount[]
   active: boolean
@@ -24,6 +25,7 @@ type PromotionForm = {
 }
 const EMPTY_PROMOTION_FORM: PromotionForm = {
   title: '',
+  subtitle: '',
   image_url: '',
   productDiscounts: [],
   active: true,
@@ -175,6 +177,7 @@ export default function AdminPromocoes() {
     })
     setPromotionForm({
       title: p.title,
+      subtitle: p.subtitle ?? '',
       image_url: p.image_url,
       productDiscounts,
       active: p.active ?? true,
@@ -210,6 +213,7 @@ export default function AdminPromocoes() {
       }
       const payload = {
         title: promotionForm.title,
+        subtitle: promotionForm.subtitle || undefined,
         image_url: promotionForm.image_url,
         product_ids: promotionForm.productDiscounts.map((d) => d.product_id),
         promotion_type: 'selfie_service' as const,
@@ -237,6 +241,7 @@ export default function AdminPromocoes() {
   const togglePromotionActive = async (p: Promotion) => {
     await api.admin.promotions.update(p.id, {
       title: p.title,
+      subtitle: p.subtitle ?? undefined,
       image_url: p.image_url,
       product_ids: p.product_ids,
       promotion_type: p.promotion_type,
@@ -352,6 +357,16 @@ export default function AdminPromocoes() {
                   value={promotionForm.title}
                   onChange={(e) => setPromotionForm({ ...promotionForm, title: e.target.value })}
                 />
+              </div>
+              <div>
+                <label className="label">Subtítulo do banner (opcional)</label>
+                <input
+                  className="input-field"
+                  placeholder="Promoções"
+                  value={promotionForm.subtitle}
+                  onChange={(e) => setPromotionForm({ ...promotionForm, subtitle: e.target.value })}
+                />
+                <p className="text-xs text-son-silver-dim mt-1">Segunda linha do card na landing. Em branco, mostra "Promoções".</p>
               </div>
               <div>
                 <label className="label">Banner (imagem, gif ou vídeo — obrigatório)</label>

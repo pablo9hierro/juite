@@ -32,7 +32,7 @@ export default function CartFab() {
   }))
 
   return (
-    <Link to="/checkout" className="fixed bottom-6 right-6 z-40 w-16 h-16 flex items-center justify-center" aria-label="Ir para o checkout">
+    <Link to="/carrinho" className="fixed bottom-6 right-6 z-40 w-16 h-16 flex items-center justify-center" aria-label="Ir para o carrinho">
       {/* Atrás do #cart-icon (z-index:2) de propósito — a fumaça nunca
           deve tampar o ícone/contador, só decorar em volta. */}
       <div className="sunset-smoke-wrap" style={{ width: `${smoke.smoke_width}px` }}>

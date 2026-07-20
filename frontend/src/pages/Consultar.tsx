@@ -291,7 +291,7 @@ export default function Consultar() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader showCart={false} />
+      <SiteHeader showCart={false} showProfile={false} title="Consultar pedido" />
       <WhatsAppFab />
       <CartFab />
       <PageTransition className="max-w-xl mx-auto px-5 sm:px-10 pb-20">

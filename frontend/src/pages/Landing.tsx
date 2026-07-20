@@ -31,8 +31,14 @@ function BannerCarousel() {
   const restPromos = firstPromo ? promotions.slice(1) : promotions
 
   const items = [
-    { key: 'hero', image: bannerImage, label: firstPromo ? firstPromo.title : 'Sunset Tabas', onClick: firstPromo ? () => navigate(`/banner?promocao=${firstPromo.id}`) : undefined },
-    ...restPromos.map((p) => ({ key: p.id, image: p.image_url, label: p.title, onClick: () => navigate(`/banner?promocao=${p.id}`) })),
+    {
+      key: 'hero',
+      image: bannerImage,
+      label: firstPromo ? firstPromo.title : 'Sunset Tabas',
+      subtitle: (firstPromo?.subtitle || 'Promoções'),
+      onClick: firstPromo ? () => navigate(`/banner?promocao=${firstPromo.id}`) : undefined,
+    },
+    ...restPromos.map((p) => ({ key: p.id, image: p.image_url, label: p.title, subtitle: p.subtitle || 'Promoções', onClick: () => navigate(`/banner?promocao=${p.id}`) })),
   ].filter((it) => it.image)
 
   // Um card só que AGRUPA todos os banners/promoções — não um card por
@@ -70,7 +76,7 @@ function BannerCarousel() {
           <div className="sunset-jcard-footer">
             <div className="sunset-jcard-footer-text">
               <p>{active.label}</p>
-              <p>Promoções</p>
+              <p>{active.subtitle}</p>
             </div>
             <svg
               className="sunset-jcard-arrow"

@@ -1631,6 +1631,7 @@ async function adminListPromotions(): Promise<Promotion[]> {
 
 async function createPromotion(payload: {
   title: string
+  subtitle?: string
   image_url: string
   product_ids: string[]
   promotion_type: import('./types').PromotionType
@@ -1660,6 +1661,7 @@ async function createPromotion(payload: {
   const promotion: Promotion = {
     id: uid(),
     title: payload.title.trim(),
+    subtitle: payload.subtitle?.trim() || null,
     image_url: payload.image_url,
     product_ids: payload.product_ids,
     promotion_type: payload.promotion_type,
@@ -1682,6 +1684,7 @@ async function updatePromotion(
   id: string,
   payload: {
     title: string
+    subtitle?: string
     image_url: string
     product_ids: string[]
     promotion_type: import('./types').PromotionType
@@ -1711,6 +1714,7 @@ async function updatePromotion(
     }
   }
   promotion.title = payload.title.trim()
+  promotion.subtitle = payload.subtitle?.trim() || null
   promotion.image_url = payload.image_url
   promotion.product_ids = payload.product_ids
   promotion.promotion_type = payload.promotion_type

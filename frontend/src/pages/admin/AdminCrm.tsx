@@ -3506,20 +3506,14 @@ export default function AdminCrm() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Válido a partir de (opcional)</label>
-                      <input
-                        className="input-field"
-                        type="date"
-                        value={campanhaEditForm.starts_at ? campanhaEditForm.starts_at.slice(0, 10) : ''}
-                        onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, starts_at: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Validade (opcional)</label>
-                      <ExpiryInput value={campanhaEditForm.expires_at} onChange={(expires_at) => setCampanhaEditForm({ ...campanhaEditForm, expires_at })} />
-                    </div>
+                  <div>
+                    {/* "Válido a partir de" removido deste formulário — pra
+                        campanha de evento isso já é o Agendar do gatilho
+                        ("Cupons exclusivos deste gatilho"), ter os dois
+                        aqui só duplicava o mesmo conceito de "quando
+                        começa a valer". */}
+                    <label className="label">Validade (opcional)</label>
+                    <ExpiryInput value={campanhaEditForm.expires_at} onChange={(expires_at) => setCampanhaEditForm({ ...campanhaEditForm, expires_at })} />
                   </div>
                   <div>
                     <label className="label">Descrição interna (opcional)</label>
