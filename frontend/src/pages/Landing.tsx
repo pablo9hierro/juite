@@ -64,7 +64,7 @@ function BannerCarousel() {
           <div className="sunset-jcard-footer">
             <div className="sunset-jcard-footer-text">
               <p>{active.label}</p>
-              <p>Toque para ver</p>
+              <p>Promoções</p>
             </div>
             <svg
               className="sunset-jcard-arrow"

@@ -327,12 +327,20 @@ function BackgroundSettingsCard() {
               key={m.value}
               type="button"
               onClick={() => patch({ bg_mode: m.value })}
-              className={`py-2.5 rounded-xl text-sm font-medium border transition-colors ${
+              className={`py-2.5 rounded-xl text-sm font-medium border transition-colors flex items-center justify-center gap-1.5 ${
                 draft.bg_mode === m.value
-                  ? 'sunset-bg text-white border-transparent'
+                  ? 'bg-son-surface-light border-son-pink text-white ring-1 ring-son-pink/50'
                   : 'bg-son-surface-light border-white/10 text-son-silver hover:border-son-pink/30'
               }`}
             >
+              {m.value === 'svg1' && (
+                <svg className="sunset-coqueiro-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" aria-hidden="true">
+                  <path d="M12 21V11" />
+                  <path d="M12 11c-3-1-5-4-6-6 3 0 6 2 6 6z" />
+                  <path d="M12 11c3-1 5-4 6-6-3 0-6 2-6 6z" />
+                  <path d="M12 9c-2-2-3-5-2-7 2 1 3 4 2 7z" />
+                </svg>
+              )}
               {m.label}
             </button>
           ))}
