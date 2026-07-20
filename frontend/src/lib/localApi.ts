@@ -1301,30 +1301,83 @@ async function deactivateCampanhaExtraCoupon(id: string): Promise<import('./type
   return { ...campanha, extra_coupons: campanhaExtraCoupons(db, campanha.id) }
 }
 
-async function fireCampanhaEvent(id: string, customerWhatsapps: string[]): Promise<{ newly_granted: string[] }> {
+async function fireCampanhaEvent(
+  id: string,
+  customerWhatsapps: string[]
+): Promise<{ newly_granted: string[]; to_notify: { coupon_id: string; message_template: string; whatsapps: string[] }[] }> {
   const db = loadDb()
   const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
   if (!row) throw new ApiError(404, 'campanha coupon not found')
   if (row.orientation !== 'evento') throw new ApiError(400, 'only orientation=evento campanhas can be re-fired')
   if (!row.active) throw new ApiError(400, 'this campanha is paused')
   db.couponGrants = db.couponGrants ?? []
-  const couponIds = [row.coupon_id, ...campanhaExtraCoupons(db, row.id).map((ec) => ec.coupon.id)].filter(
-    (cid): cid is string => !!cid
-  )
+  const couponDefs: { coupon_id: string; message_template: string; delay: number | null; is_primary: boolean }[] = []
+  if (row.coupon_id) {
+    couponDefs.push({ coupon_id: row.coupon_id, message_template: row.message_template, delay: row.schedule_delay_days ?? null, is_primary: true })
+  }
+  for (const ec of campanhaExtraCoupons(db, row.id)) {
+    couponDefs.push({ coupon_id: ec.coupon.id, message_template: ec.message_template, delay: ec.schedule_delay_days ?? null, is_primary: false })
+  }
   const newlyGranted: string[] = []
-  for (const couponId of couponIds) {
+  const toNotify = new Map<string, { coupon_id: string; message_template: string; whatsapps: string[] }>()
+  for (const def of couponDefs) {
     for (const whatsapp of customerWhatsapps) {
       if (!whatsapp?.trim()) continue
-      const exists = db.couponGrants.some((g) => g.coupon_id === couponId && g.customer_whatsapp === whatsapp)
+      const exists = db.couponGrants.some((g) => g.coupon_id === def.coupon_id && g.customer_whatsapp === whatsapp)
       if (!exists) {
-        db.couponGrants.push({ id: uid(), coupon_id: couponId, customer_whatsapp: whatsapp, granted_uses: row.uses_per_customer, used_count: 0, created_at: nowIso() })
-        if (couponId === row.coupon_id) newlyGranted.push(whatsapp)
+        db.couponGrants.push({ id: uid(), coupon_id: def.coupon_id, customer_whatsapp: whatsapp, granted_uses: row.uses_per_customer, used_count: 0, created_at: nowIso() })
+        if (def.is_primary) newlyGranted.push(whatsapp)
+        if (def.delay == null) {
+          const entry = toNotify.get(def.coupon_id) ?? { coupon_id: def.coupon_id, message_template: def.message_template, whatsapps: [] }
+          entry.whatsapps.push(whatsapp)
+          toNotify.set(def.coupon_id, entry)
+        }
       }
     }
   }
   if (newlyGranted.length > 0) row.fired_at = nowIso()
   saveDb(db)
-  return { newly_granted: newlyGranted }
+  return { newly_granted: newlyGranted, to_notify: Array.from(toNotify.values()) }
+}
+
+function assertValidSchedule(delayDays: number | null, hour: number | null) {
+  if (delayDays != null && hour == null) throw new ApiError(400, 'hour is required when delay is set')
+  if (hour != null && (hour < 0 || hour > 23)) throw new ApiError(400, 'hour must be between 0 and 23')
+}
+
+// Agendamento de disparo do cupom PRINCIPAL da campanha — delay/hour nulos
+// volta a notificar na hora que a concessão é criada (comportamento padrão).
+async function setCampanhaCouponSchedule(
+  id: string,
+  delayDays: number | null,
+  hour: number | null
+): Promise<import('./types').CrmCampanhaCoupon> {
+  const db = loadDb()
+  const row = (db.campanhaCoupons ?? []).find((c) => c.id === id)
+  if (!row) throw new ApiError(404, 'campanha not found')
+  assertValidSchedule(delayDays, hour)
+  row.schedule_delay_days = delayDays
+  row.schedule_hour = hour
+  saveDb(db)
+  return { ...row, extra_coupons: campanhaExtraCoupons(db, row.id) }
+}
+
+async function setExtraCouponSchedule(id: string, delayDays: number | null, hour: number | null): Promise<void> {
+  const db = loadDb()
+  const ec = (db.campanhaExtraCoupons ?? []).find((x) => x.id === id)
+  if (!ec) throw new ApiError(404, 'extra coupon not found')
+  assertValidSchedule(delayDays, hour)
+  ec.schedule_delay_days = delayDays
+  ec.schedule_hour = hour
+  saveDb(db)
+}
+
+// Modo demonstração não roda um "relógio" de verdade — concessões agendadas
+// só são notificadas de fato no modo remoto (Supabase). Aqui não há nada pendente.
+async function dispatchScheduledCouponNotifications(): Promise<
+  { coupon_id: string; customer_whatsapp: string; message_template: string }[]
+> {
+  return []
 }
 
 async function deleteCampanhaCoupon(id: string): Promise<void> {
@@ -2376,6 +2429,9 @@ export const localApi = {
       deleteExtra: deleteCampanhaExtraCoupon,
       setExtraEndCriteria: setExtraCouponEndCriteria,
       deactivateExtra: deactivateCampanhaExtraCoupon,
+      setSchedule: setCampanhaCouponSchedule,
+      setExtraSchedule: setExtraCouponSchedule,
+      dispatchScheduledNotifications: dispatchScheduledCouponNotifications,
     },
     whatsapp: {
       status: async () => ({ instance: { state: 'close' } }),

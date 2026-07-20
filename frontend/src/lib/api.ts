@@ -722,11 +722,37 @@ const remoteApi = {
       // atual de whatsapps que casam com ele (calculada no front) — grants
       // pra quem ainda não tinha, idempotente (não duplica).
       fireEvent: (id: string, customerWhatsapps: string[]) =>
-        rpc<{ newly_granted: string[] }>('admin_fire_campanha_event', {
+        rpc<{ newly_granted: string[]; to_notify: { coupon_id: string; message_template: string; whatsapps: string[] }[] }>(
+          'admin_fire_campanha_event',
+          { p_token: adminToken(), p_id: id, p_customer_whatsapps: customerWhatsapps }
+        ),
+      // Agendamento de disparo do cupom PRINCIPAL — null/null volta a
+      // notificar na hora que concede (comportamento de sempre).
+      setSchedule: (id: string, delayDays: number | null, hour: number | null) =>
+        rpc<CrmCampanhaCoupon>('admin_set_campanha_coupon_schedule', {
           p_token: adminToken(),
           p_id: id,
-          p_customer_whatsapps: customerWhatsapps,
+          p_delay_days: delayDays,
+          p_hour: hour,
         }),
+      // Mesma coisa, só que pra um cupom EXTRA específico (ver
+      // campanhaExtraCoupons.setSchedule mais abaixo — fica junto aqui
+      // por ser chamado do mesmo lugar da UI).
+      setExtraSchedule: (extraCouponId: string, delayDays: number | null, hour: number | null) =>
+        rpc<void>('admin_set_extra_coupon_schedule', {
+          p_token: adminToken(),
+          p_id: extraCouponId,
+          p_delay_days: delayDays,
+          p_hour: hour,
+        }),
+      // Roda a cada load do CRM: resolve concessões agendadas cujo
+      // prazo+horário já bateu, marca como notificadas e devolve a
+      // lista pro front disparar o WhatsApp de cada uma.
+      dispatchScheduledNotifications: () =>
+        rpc<{ coupon_id: string; customer_whatsapp: string; message_template: string }[]>(
+          'admin_dispatch_scheduled_coupon_notifications',
+          { p_token: adminToken() }
+        ),
       delete: (id: string) => rpc<void>('admin_delete_campanha_coupon', { p_token: adminToken(), p_id: id }),
       // Liga/desliga a campanha inteira — junto com ela o cupom exclusivo
       // por trás (não existe on/off separado só do cupom de uma campanha).

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, Ban, Cake, Crosshair, Gift, Layers, Loader2, Plus, Search, Sparkles, Tag, Trash2, Users, X, Zap } from 'lucide-react'
+import { AlertTriangle, Ban, Cake, Clock, Crosshair, Gift, Layers, Loader2, Plus, Search, Sparkles, Tag, Trash2, Users, X, Zap } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import WhatsAppLink from '../../components/ui/WhatsAppLink'
 import ExpiryInput from '../../components/admin/ExpiryInput'
@@ -453,6 +453,70 @@ const EMPTY_CAMPANHA_FORM: CampanhaForm = {
   description: '',
 }
 
+// Formulário compacto "Agendar" — aparece dentro do subcard de um cupom
+// exclusivo (principal ou extra) do gatilho de evento. delay/hour vazios
+// e salvos = volta a notificar na hora que a concessão é criada.
+function ScheduleForm({
+  delay,
+  hour,
+  onDelayChange,
+  onHourChange,
+  error,
+  saving,
+  onSave,
+  onClear,
+}: {
+  delay: string
+  hour: string
+  onDelayChange: (v: string) => void
+  onHourChange: (v: string) => void
+  error: string | null
+  saving: boolean
+  onSave: () => void
+  onClear?: () => void
+}) {
+  return (
+    <div className="p-2.5 pt-2 border-t border-purple-400/20 space-y-2 bg-black/20">
+      <p className="text-[10px] text-son-silver-dim">Disparar cupom em X dias após o gatilho disparar</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input
+          type="number"
+          min={0}
+          className={`input-field w-16 !py-1.5 !text-xs text-center ${NO_SPINNER}`}
+          placeholder="0"
+          value={delay}
+          onChange={(e) => onDelayChange(e.target.value)}
+        />
+        <span className="text-[10px] text-son-silver-dim">dias, às</span>
+        <select
+          className="input-field w-auto !py-1.5 !text-xs"
+          value={hour}
+          onChange={(e) => onHourChange(e.target.value)}
+        >
+          <option value="">--:--</option>
+          {Array.from({ length: 24 }, (_, h) => (
+            <option key={h} value={h}>
+              {String(h).padStart(2, '0')}:00
+            </option>
+          ))}
+        </select>
+        <span className="text-[10px] text-son-silver-dim">(horário de Brasília)</span>
+      </div>
+      {error && <p className="error-msg">{error}</p>}
+      <div className="flex items-center gap-3">
+        <button type="button" onClick={onSave} disabled={saving} className="btn-primary text-xs py-1.5 px-3">
+          {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : null} Salvar agendamento
+        </button>
+        {onClear && (
+          <button type="button" onClick={onClear} disabled={saving} className="text-xs text-son-silver-dim hover:text-son-pink">
+            Remover agendamento
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminCrm() {
   const [customers, setCustomers] = useState<CrmCustomer[]>([])
   const [loading, setLoading] = useState(true)
@@ -563,6 +627,15 @@ export default function AdminCrm() {
   const [savingGatilho, setSavingGatilho] = useState(false)
   const [gatilhoSaveError, setGatilhoSaveError] = useState<string | null>(null)
 
+  // "Agendar" de um cupom exclusivo (dentro do formulário do gatilho) —
+  // chave é `primary:<campanha_id>` ou `extra:<extra_coupon_id>`, só um
+  // aberto por vez. null/null desmarca (volta a notificar na hora).
+  const [scheduleOpenKey, setScheduleOpenKey] = useState<string | null>(null)
+  const [scheduleDelayInput, setScheduleDelayInput] = useState('')
+  const [scheduleHourInput, setScheduleHourInput] = useState('')
+  const [savingSchedule, setSavingSchedule] = useState(false)
+  const [scheduleError, setScheduleError] = useState<string | null>(null)
+
   // "Novos Alvos (Opcional)" — dentro da edição do gatilho, abre o
   // formulário de filtro completo numa cópia isolada; ao confirmar, os
   // campos preenchidos aqui são só MESCLADOS no critério do gatilho, sem
@@ -663,15 +736,32 @@ export default function AdminCrm() {
           const matching = applyFilters(customers, row.trigger_criteria as unknown as FilterState, products).map((c) => c.whatsapp)
           if (matching.length === 0) continue
           const result = await api.admin.campanhaCoupons.fireEvent(row.id, matching).catch(() => null)
-          if (result && result.newly_granted.length > 0) {
-            api.admin.whatsapp.notifyCouponGrant(row.coupon_id, row.message_template).catch(() => {})
-            changed = true
+          if (result) {
+            for (const n of result.to_notify) {
+              api.admin.whatsapp.notifyCouponGrant(n.coupon_id, n.message_template).catch(() => {})
+            }
+            if (result.newly_granted.length > 0 || result.to_notify.length > 0) changed = true
           }
         }
         if (changed) loadCampanhaCoupons(seg.id)
       }
     })()
   }, [segments, customers, products])
+
+  // Concessões com envio agendado (schedule_delay_days) ficam pendentes
+  // até o prazo+horário baterem — sem cron no projeto, o dispatch roda
+  // aqui (uma vez por load do CRM), igual o auto-check de evento acima.
+  const autoDispatchedSchedule = useRef(false)
+  useEffect(() => {
+    if (autoDispatchedSchedule.current) return
+    autoDispatchedSchedule.current = true
+    ;(async () => {
+      const due = await api.admin.campanhaCoupons.dispatchScheduledNotifications().catch(() => [])
+      for (const n of due) {
+        api.admin.whatsapp.notifyCouponGrant(n.coupon_id, n.message_template).catch(() => {})
+      }
+    })()
+  }, [])
 
   // Mesma lógica do auto-check de campanha evento acima, mas pros cupons
   // avulsos de aniversário (cliente/loja) — sem cron no projeto, só roda
@@ -1410,14 +1500,11 @@ export default function AdminCrm() {
     try {
       const matching = applyFilters(customers, row.trigger_criteria as unknown as FilterState, products).map((c) => c.whatsapp)
       const result = await api.admin.campanhaCoupons.fireEvent(row.id, matching)
-      if (result.newly_granted.length > 0) {
-        // Extras são concedidos junto com o principal na mesma chamada
-        // (mesmo critério de "novo"), então avisa pra todos os cupons da
-        // campanha — cada um com sua própria mensagem/código.
-        api.admin.whatsapp.notifyCouponGrant(couponId, row.message_template).catch(() => {})
-        for (const ec of row.extra_coupons) {
-          api.admin.whatsapp.notifyCouponGrant(ec.coupon.id, ec.message_template).catch(() => {})
-        }
+      // Extras são concedidos junto com o principal na mesma chamada (mesmo
+      // critério de "novo"); to_notify já filtra quem tem envio agendado
+      // pra não disparar WhatsApp agora.
+      for (const n of result.to_notify) {
+        api.admin.whatsapp.notifyCouponGrant(n.coupon_id, n.message_template).catch(() => {})
       }
       loadCampanhaCoupons(row.segment_id)
       const grants = await api.admin.coupons.listGrants(couponId)
@@ -1863,6 +1950,47 @@ export default function AdminCrm() {
       loadCampanhaCoupons(cc.segment_id)
       loadCoupons()
     })
+
+  const toggleScheduleForm = (key: string, delayDays: number | null, hour: number | null) => {
+    setScheduleError(null)
+    if (scheduleOpenKey === key) {
+      setScheduleOpenKey(null)
+      return
+    }
+    setScheduleOpenKey(key)
+    setScheduleDelayInput(delayDays != null ? String(delayDays) : '')
+    setScheduleHourInput(hour != null ? String(hour) : '')
+  }
+
+  const saveCouponSchedule = async (kind: 'primary' | 'extra', id: string, segmentId: string) => {
+    setScheduleError(null)
+    const delayTrim = scheduleDelayInput.trim()
+    const hourTrim = scheduleHourInput.trim()
+    const delayDays = delayTrim === '' ? null : Number(delayTrim)
+    const hour = hourTrim === '' ? null : Number(hourTrim)
+    if (delayDays != null && (!Number.isFinite(delayDays) || delayDays < 0)) {
+      setScheduleError('Dias precisa ser um número válido (0 ou mais).')
+      return
+    }
+    if (delayDays != null && hour == null) {
+      setScheduleError('Escolha o horário de envio.')
+      return
+    }
+    setSavingSchedule(true)
+    try {
+      if (kind === 'primary') {
+        await api.admin.campanhaCoupons.setSchedule(id, delayDays, hour)
+      } else {
+        await api.admin.campanhaCoupons.setExtraSchedule(id, delayDays, hour)
+      }
+      setScheduleOpenKey(null)
+      loadCampanhaCoupons(segmentId)
+    } catch (err) {
+      setScheduleError(err instanceof ApiError ? err.message : 'Não foi possível agendar o cupom.')
+    } finally {
+      setSavingSchedule(false)
+    }
+  }
 
   // Só limpa o FILTRO — nome/descrição/editingSegmentId (o "isto é uma
   // edição, não uma criação") ficam intactos. "Limpar filtros" != "trocar
@@ -3027,70 +3155,149 @@ export default function AdminCrm() {
                         }
                         return (
                           <>
-                            {primaryCoupon && (
-                              <div className="rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch">
-                                <div className="min-w-0 flex-1 p-2.5">
-                                  <p className="font-mono text-xs font-bold text-white truncate">{primaryCoupon.code}</p>
-                                  <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
-                                    {COUPON_KIND_LABEL[primaryCoupon.kind]}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => openEditCampanha(editingCampanhaRow, 'cupom')}
-                                    className="block text-[10px] font-semibold text-son-silver-dim hover:text-white mt-1"
-                                  >
-                                    Editar
-                                  </button>
+                            {primaryCoupon && (() => {
+                              const key = `primary:${editingCampanhaRow.id}`
+                              const scheduled = editingCampanhaRow.schedule_delay_days != null
+                              return (
+                                <div className="rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden">
+                                  <div className="flex items-stretch">
+                                    <div className="min-w-0 flex-1 p-2.5">
+                                      <p className="font-mono text-xs font-bold text-white truncate">{primaryCoupon.code}</p>
+                                      <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
+                                        {COUPON_KIND_LABEL[primaryCoupon.kind]}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => openEditCampanha(editingCampanhaRow, 'cupom')}
+                                        className="block text-[10px] font-semibold text-son-silver-dim hover:text-white mt-1"
+                                      >
+                                        Editar
+                                      </button>
+                                    </div>
+                                    <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
+                                    <div className="flex-shrink-0 p-2.5 flex flex-col items-center justify-center gap-1">
+                                      <span className="text-xs font-black text-purple-300 text-center">
+                                        {discountLabel(primaryCoupon.discount_type, primaryCoupon.discount_value) ??
+                                          discountLabel(primaryCoupon.shipping_discount_type, primaryCoupon.shipping_discount_value) ??
+                                          `${primaryCoupon.product_discounts?.length ?? 0} prod.`}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          toggleScheduleForm(key, editingCampanhaRow.schedule_delay_days, editingCampanhaRow.schedule_hour)
+                                        }
+                                        className={`flex items-center gap-0.5 text-[10px] font-semibold ${scheduled ? 'text-son-gold' : 'text-son-silver-dim hover:text-white'}`}
+                                      >
+                                        <Clock className="w-3 h-3" /> Agendar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => deletePrimaryCoupon(editingCampanhaRow)}
+                                        className="text-son-silver-dim hover:text-son-pink"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {scheduled && scheduleOpenKey !== key && (
+                                    <p className="px-2.5 pb-2 text-[10px] text-son-gold">
+                                      Agendado: dispara {editingCampanhaRow.schedule_delay_days}d após o gatilho, às{' '}
+                                      {String(editingCampanhaRow.schedule_hour).padStart(2, '0')}:00
+                                    </p>
+                                  )}
+                                  {scheduleOpenKey === key && (
+                                    <ScheduleForm
+                                      delay={scheduleDelayInput}
+                                      hour={scheduleHourInput}
+                                      onDelayChange={setScheduleDelayInput}
+                                      onHourChange={setScheduleHourInput}
+                                      error={scheduleError}
+                                      saving={savingSchedule}
+                                      onSave={() => saveCouponSchedule('primary', editingCampanhaRow.id, editingCampanhaRow.segment_id)}
+                                      onClear={
+                                        scheduled
+                                          ? () => {
+                                              setScheduleDelayInput('')
+                                              setScheduleHourInput('')
+                                              saveCouponSchedule('primary', editingCampanhaRow.id, editingCampanhaRow.segment_id)
+                                            }
+                                          : undefined
+                                      }
+                                    />
+                                  )}
                                 </div>
-                                <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
-                                <div className="flex-shrink-0 p-2.5 flex flex-col items-center justify-center gap-1">
-                                  <span className="text-xs font-black text-purple-300 text-center">
-                                    {discountLabel(primaryCoupon.discount_type, primaryCoupon.discount_value) ??
-                                      discountLabel(primaryCoupon.shipping_discount_type, primaryCoupon.shipping_discount_value) ??
-                                      `${primaryCoupon.product_discounts?.length ?? 0} prod.`}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => deletePrimaryCoupon(editingCampanhaRow)}
-                                    className="text-son-silver-dim hover:text-son-pink"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
+                              )
+                            })()}
+                            {editingCampanhaRow.extra_coupons.map((ec) => {
+                              const key = `extra:${ec.id}`
+                              const scheduled = ec.schedule_delay_days != null
+                              return (
+                                <div key={ec.id} className="rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden">
+                                  <div className="flex items-stretch">
+                                    <div className="min-w-0 flex-1 p-2.5">
+                                      <p className="font-mono text-xs font-bold text-white truncate">{ec.coupon.code}</p>
+                                      <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
+                                        {COUPON_KIND_LABEL[ec.coupon.kind]}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => openEditExtraCoupon(ec, editingCampanhaRow)}
+                                        className="block text-[10px] font-semibold text-son-silver-dim hover:text-white mt-1"
+                                      >
+                                        Editar
+                                      </button>
+                                    </div>
+                                    <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
+                                    <div className="flex-shrink-0 p-2.5 flex flex-col items-center justify-center gap-1">
+                                      <span className="text-xs font-black text-purple-300 text-center">
+                                        {discountLabel(ec.coupon.discount_type, ec.coupon.discount_value) ??
+                                          discountLabel(ec.coupon.shipping_discount_type, ec.coupon.shipping_discount_value) ??
+                                          `${ec.coupon.product_discounts?.length ?? 0} prod.`}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleScheduleForm(key, ec.schedule_delay_days, ec.schedule_hour)}
+                                        className={`flex items-center gap-0.5 text-[10px] font-semibold ${scheduled ? 'text-son-gold' : 'text-son-silver-dim hover:text-white'}`}
+                                      >
+                                        <Clock className="w-3 h-3" /> Agendar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeCampanhaExtraCoupon(ec, editingCampanhaRow)}
+                                        className="text-son-silver-dim hover:text-son-pink"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {scheduled && scheduleOpenKey !== key && (
+                                    <p className="px-2.5 pb-2 text-[10px] text-son-gold">
+                                      Agendado: dispara {ec.schedule_delay_days}d após o gatilho, às {String(ec.schedule_hour).padStart(2, '0')}:00
+                                    </p>
+                                  )}
+                                  {scheduleOpenKey === key && (
+                                    <ScheduleForm
+                                      delay={scheduleDelayInput}
+                                      hour={scheduleHourInput}
+                                      onDelayChange={setScheduleDelayInput}
+                                      onHourChange={setScheduleHourInput}
+                                      error={scheduleError}
+                                      saving={savingSchedule}
+                                      onSave={() => saveCouponSchedule('extra', ec.id, editingCampanhaRow.segment_id)}
+                                      onClear={
+                                        scheduled
+                                          ? () => {
+                                              setScheduleDelayInput('')
+                                              setScheduleHourInput('')
+                                              saveCouponSchedule('extra', ec.id, editingCampanhaRow.segment_id)
+                                            }
+                                          : undefined
+                                      }
+                                    />
+                                  )}
                                 </div>
-                              </div>
-                            )}
-                            {editingCampanhaRow.extra_coupons.map((ec) => (
-                              <div key={ec.id} className="rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch">
-                                <div className="min-w-0 flex-1 p-2.5">
-                                  <p className="font-mono text-xs font-bold text-white truncate">{ec.coupon.code}</p>
-                                  <span className="inline-block px-1.5 py-0.5 rounded-full bg-white/10 text-son-silver-dim text-[9px] mt-1">
-                                    {COUPON_KIND_LABEL[ec.coupon.kind]}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => openEditExtraCoupon(ec, editingCampanhaRow)}
-                                    className="block text-[10px] font-semibold text-son-silver-dim hover:text-white mt-1"
-                                  >
-                                    Editar
-                                  </button>
-                                </div>
-                                <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
-                                <div className="flex-shrink-0 p-2.5 flex flex-col items-center justify-center gap-1">
-                                  <span className="text-xs font-black text-purple-300 text-center">
-                                    {discountLabel(ec.coupon.discount_type, ec.coupon.discount_value) ??
-                                      discountLabel(ec.coupon.shipping_discount_type, ec.coupon.shipping_discount_value) ??
-                                      `${ec.coupon.product_discounts?.length ?? 0} prod.`}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeCampanhaExtraCoupon(ec, editingCampanhaRow)}
-                                    className="text-son-silver-dim hover:text-son-pink"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
+                              )
+                            })}
                           </>
                         )
                       })()}
