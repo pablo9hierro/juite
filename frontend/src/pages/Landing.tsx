@@ -98,6 +98,7 @@ export default function Landing() {
   const [badges, setBadges] = useState<LandingBadge[]>(DEFAULT_BADGES)
   const [badgesLayout, setBadgesLayout] = useState<BadgesLayout>('row')
   const [badgesGap, setBadgesGap] = useState(8)
+  const [badgesOffsetY, setBadgesOffsetY] = useState(0)
 
   useEffect(() => {
     api.storeStatus.get().then(setStoreStatus).catch(() => setStoreStatus(null))
@@ -107,6 +108,7 @@ export default function Landing() {
         if (s.badges.length > 0) setBadges(s.badges)
         setBadgesLayout(s.badges_layout)
         setBadgesGap(s.badges_gap)
+        setBadgesOffsetY(s.badges_offset_y)
       })
       .catch(() => {})
   }, [])
@@ -138,8 +140,8 @@ export default function Landing() {
 
       <section className="relative z-10 max-w-4xl mx-auto px-6 sm:px-10 pt-8 sm:pt-10 pb-20 text-center">
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 16 + badgesOffsetY }}
+          animate={{ opacity: 1, y: badgesOffsetY }}
           transition={{ duration: 0.6 }}
           className="flex flex-wrap justify-center items-center"
           style={{ flexDirection: badgesLayout === 'column' ? 'column' : 'row', gap: `${badgesGap}px` }}
@@ -156,29 +158,6 @@ export default function Landing() {
               </span>
             </span>
           ))}
-          {/* Vira botão de verdade (não só decorativo como os badges) —
-              abre o endereço no Google Maps. Efeito de clique exato da
-              referência (seta entrando/saindo + círculo expandindo +
-              texto deslizando), recolorido pro dourado do site (era
-              azul #1f387e). Sempre por último, fora da lista editável
-              (é um link de verdade, não um badge de texto). */}
-          <a
-            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-              'Rua Rosa de Paula Barbosa, 16 - José Américo de Almeida, João Pessoa - PB'
-            )}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="sunset-maps-btn text-xs sm:text-sm"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="arr-2" viewBox="0 0 24 24">
-              <path d="M16.1716 10.9999L10.8076 5.63589L12.2218 4.22168L20 11.9999L12.2218 19.778L10.8076 18.3638L16.1716 12.9999H4V10.9999H16.1716Z" />
-            </svg>
-            <span className="text">📍 R. Rosa de Paula Barbosa, 16 - José Américo de Almeida. João Pessoa - PB</span>
-            <span className="circle" />
-            <svg xmlns="http://www.w3.org/2000/svg" className="arr-1" viewBox="0 0 24 24">
-              <path d="M16.1716 10.9999L10.8076 5.63589L12.2218 4.22168L20 11.9999L12.2218 19.778L10.8076 18.3638L16.1716 12.9999H4V10.9999H16.1716Z" />
-            </svg>
-          </a>
         </motion.div>
 
         <motion.div
@@ -202,10 +181,30 @@ export default function Landing() {
               />
             </svg>
           </Link>
-          <Link to="/consultar" className="btn-secondary sunset-glow-btn text-base px-8 py-4 w-full sm:w-auto">
+          <Link to="/consultar" className="btn-secondary sunset-glow-btn sunset-glow-btn-no-reflect text-base px-8 py-4 w-full sm:w-auto">
             Acompanhar meu pedido
           </Link>
         </motion.div>
+
+        {/* Botão do Maps — antes ficava dentro da lista de badges;
+            agora renderiza sozinho, embaixo dos dois botões acima. */}
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+            'Rua Rosa de Paula Barbosa, 16 - José Américo de Almeida, João Pessoa - PB'
+          )}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="sunset-maps-btn text-xs sm:text-sm mt-4"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="arr-2" viewBox="0 0 24 24">
+            <path d="M16.1716 10.9999L10.8076 5.63589L12.2218 4.22168L20 11.9999L12.2218 19.778L10.8076 18.3638L16.1716 12.9999H4V10.9999H16.1716Z" />
+          </svg>
+          <span className="text">📍 R. Rosa de Paula Barbosa, 16 - José Américo de Almeida. João Pessoa - PB</span>
+          <span className="circle" />
+          <svg xmlns="http://www.w3.org/2000/svg" className="arr-1" viewBox="0 0 24 24">
+            <path d="M16.1716 10.9999L10.8076 5.63589L12.2218 4.22168L20 11.9999L12.2218 19.778L10.8076 18.3638L16.1716 12.9999H4V10.9999H16.1716Z" />
+          </svg>
+        </a>
       </section>
 
       <section className="relative z-10 max-w-2xl mx-auto px-6 sm:px-10 pb-16 flex flex-col gap-2">

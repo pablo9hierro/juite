@@ -110,6 +110,7 @@ export interface LocalDb {
   badges: LandingBadge[]
   badgesLayout: BadgesLayout
   badgesGap: number
+  badgesOffsetY: number
   storeHours: StoreHourDay[]
   storeManuallyClosed: boolean
   storeManualClosedReason: string | null
@@ -207,6 +208,7 @@ function seedDb(): LocalDb {
     ],
     badgesLayout: 'row',
     badgesGap: 8,
+    badgesOffsetY: 0,
     storeHours: Array.from({ length: 7 }, (_, day_of_week) => ({
       day_of_week,
       is_open: true,

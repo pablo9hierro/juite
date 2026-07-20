@@ -55,7 +55,7 @@ export const supabasePublicApi = {
       const { data } = await supabase
         .from('site_settings')
         .select(
-          'hero_image_url, bg_mode, bg_image_url, bg_scale, bg_x, bg_y, bg_fit, smoke_speed, smoke_count, smoke_width, smoke_height, badges, badges_layout, badges_gap'
+          'hero_image_url, bg_mode, bg_image_url, bg_scale, bg_x, bg_y, bg_fit, smoke_speed, smoke_count, smoke_width, smoke_height, badges, badges_layout, badges_gap, badges_offset_y'
         )
         .single()
       return {
@@ -73,6 +73,7 @@ export const supabasePublicApi = {
         badges: (data?.badges as LandingBadge[] | undefined) ?? [],
         badges_layout: (data?.badges_layout as BadgesLayout | undefined) ?? 'row',
         badges_gap: (data?.badges_gap as number | undefined) ?? 8,
+        badges_offset_y: (data?.badges_offset_y as number | undefined) ?? 0,
       }
     },
   },

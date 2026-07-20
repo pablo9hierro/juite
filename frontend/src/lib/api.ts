@@ -622,6 +622,7 @@ const remoteApi = {
           p_badges: settings.badges,
           p_layout: settings.badges_layout,
           p_gap: settings.badges_gap,
+          p_offset_y: settings.badges_offset_y,
         }),
     },
     storeStatus: {

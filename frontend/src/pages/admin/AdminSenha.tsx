@@ -555,6 +555,7 @@ function BadgesSettingsCard() {
   const [items, setItems] = useState<LandingBadge[] | null>(null)
   const [layout, setLayout] = useState<BadgesLayout>('row')
   const [gap, setGap] = useState(8)
+  const [offsetY, setOffsetY] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -564,6 +565,7 @@ function BadgesSettingsCard() {
       setItems(s.badges)
       setLayout(s.badges_layout)
       setGap(s.badges_gap)
+      setOffsetY(s.badges_offset_y)
     })
   }, [])
 
@@ -582,7 +584,7 @@ function BadgesSettingsCard() {
     setSaved(false)
     try {
       const cleaned = items.map((b) => ({ ...b, text: b.text.trim() })).filter((b) => b.text)
-      await api.admin.siteSettings.updateBadges({ badges: cleaned, badges_layout: layout, badges_gap: gap })
+      await api.admin.siteSettings.updateBadges({ badges: cleaned, badges_layout: layout, badges_gap: gap, badges_offset_y: offsetY })
       setItems(cleaned)
       setSaved(true)
     } catch (err) {
@@ -656,6 +658,19 @@ function BadgesSettingsCard() {
         <div>
           <label className="label">Espaçamento — {gap}px</label>
           <input type="range" min={0} max={32} step={1} value={gap} onChange={(e) => setGap(parseInt(e.target.value, 10))} className="w-full accent-son-pink" />
+        </div>
+
+        <div>
+          <label className="label">Posição vertical — {offsetY}px {offsetY < 0 ? '(mais pra cima)' : offsetY > 0 ? '(mais pra baixo)' : ''}</label>
+          <input
+            type="range"
+            min={-150}
+            max={100}
+            step={2}
+            value={offsetY}
+            onChange={(e) => setOffsetY(parseInt(e.target.value, 10))}
+            className="w-full accent-son-pink"
+          />
         </div>
 
         {error && <p className="error-msg">{error}</p>}

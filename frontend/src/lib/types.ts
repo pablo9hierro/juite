@@ -431,6 +431,7 @@ export interface BadgesSettings {
   badges: LandingBadge[]
   badges_layout: BadgesLayout
   badges_gap: number
+  badges_offset_y: number
 }
 
 export interface StoreHourInterval {

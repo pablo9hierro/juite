@@ -1829,6 +1829,7 @@ async function getSiteSettings(): Promise<{
   badges: LandingBadge[]
   badges_layout: BadgesLayout
   badges_gap: number
+  badges_offset_y: number
 }> {
   const db = loadDb()
   return {
@@ -1846,6 +1847,7 @@ async function getSiteSettings(): Promise<{
     badges: db.badges ?? [],
     badges_layout: db.badgesLayout ?? 'row',
     badges_gap: db.badgesGap ?? 8,
+    badges_offset_y: db.badgesOffsetY ?? 0,
   }
 }
 
@@ -1884,6 +1886,7 @@ async function updateBadges(settings: BadgesSettings): Promise<BadgesSettings> {
   db.badges = settings.badges
   db.badgesLayout = settings.badges_layout
   db.badgesGap = settings.badges_gap
+  db.badgesOffsetY = settings.badges_offset_y
   saveDb(db)
   return settings
 }

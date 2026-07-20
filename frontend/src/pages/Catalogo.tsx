@@ -379,21 +379,25 @@ export default function Catalogo() {
           )}
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-1 mb-6 scrollbar-hide">
+        {/* Uiverse.io by Yaya12085 — pílulas de radio dentro de uma trilha
+            com fundo próprio (era #EEE claro; aqui escuro, pro tema do
+            site), item ativo ganhando um fundo que contrasta com a
+            trilha + transição suave (era instantâneo via :checked). Os
+            estados ativo/inativo de cada categoria continuam exatamente
+            como já eram (sunset-bg / laranja pra "Promoção") — só a
+            "trilha" ao redor e a forma/transição de cada pílula vêm da
+            referência. */}
+        <div className="sunset-tabs overflow-x-auto mb-6 scrollbar-hide">
           <button
             onClick={() => setCategoryFilter('all')}
-            className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              categoryFilter === 'all' ? 'sunset-bg text-white' : 'bg-son-surface border border-white/5 text-son-silver hover:bg-son-surface-light'
-            }`}
+            className={`sunset-tab flex-shrink-0 ${categoryFilter === 'all' ? 'sunset-bg text-white' : 'text-son-silver hover:text-white'}`}
           >
             Todos
           </button>
           {promoByProduct.size > 0 && (
             <button
               onClick={() => setCategoryFilter('promo')}
-              className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                isPromo ? 'bg-orange-500 text-white' : 'bg-orange-500/10 border border-orange-500/40 text-orange-400 hover:bg-orange-500/20'
-              }`}
+              className={`sunset-tab flex-shrink-0 font-bold ${isPromo ? 'bg-orange-500 text-white' : 'text-orange-400 hover:text-orange-300'}`}
             >
               🔥 Promoção
             </button>
@@ -405,14 +409,14 @@ export default function Catalogo() {
               <button
                 key={c.id}
                 onClick={() => setCategoryFilter(c.id)}
-                className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                className={`sunset-tab flex-shrink-0 ${
                   hasPromo
                     ? active
                       ? 'bg-orange-500 text-white font-bold'
-                      : 'bg-orange-500/10 border border-orange-500/40 text-orange-400 hover:bg-orange-500/20 font-bold'
+                      : 'text-orange-400 hover:text-orange-300 font-bold'
                     : active
                       ? 'sunset-bg text-white'
-                      : 'bg-son-surface border border-white/5 text-son-silver hover:bg-son-surface-light'
+                      : 'text-son-silver hover:text-white'
                 }`}
               >
                 {hasPromo && '🔥 '}
