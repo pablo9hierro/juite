@@ -138,40 +138,15 @@ export default function Landing() {
 
       <section className="relative z-10 max-w-4xl mx-auto px-6 sm:px-10 pt-8 sm:pt-10 pb-20 text-center">
         <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.3 }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-4"
-        >
-          {/* "Continue" button — reproduzido fiel à referência (mesmo
-              pill + círculo com seta), recolorido pro dourado do site
-              (era branco/preto). Só na referência a seta desliza no
-              :hover; aqui virou loop automático e contínuo (pedido
-              explícito). */}
-          <Link to="/catalogo" className="sunset-continue-btn sunset-glow-btn w-full sm:w-auto">
-            <span>Ver catálogo</span>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 74 74" height={34} width={34}>
-              <circle strokeWidth={3} stroke="currentColor" r="35.5" cy={37} cx={37} />
-              <path
-                fill="currentColor"
-                d="M25 35.5C24.1716 35.5 23.5 36.1716 23.5 37C23.5 37.8284 24.1716 38.5 25 38.5V35.5ZM49.0607 38.0607C49.6464 37.4749 49.6464 36.5251 49.0607 35.9393L39.5147 26.3934C38.9289 25.8076 37.9792 25.8076 37.3934 26.3934C36.8076 26.9792 36.8076 27.9289 37.3934 28.5147L45.8787 37L37.3934 45.4853C36.8076 46.0711 36.8076 47.0208 37.3934 47.6066C37.9792 48.1924 38.9289 48.1924 39.5147 47.6066L49.0607 38.0607ZM25 38.5L48 38.5V35.5L25 35.5V38.5Z"
-              />
-            </svg>
-          </Link>
-          <Link to="/consultar" className="btn-secondary sunset-glow-btn text-base px-8 py-4 w-full sm:w-auto">
-            Acompanhar meu pedido
-          </Link>
-        </motion.div>
-
-        <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="flex flex-wrap justify-center items-center mt-10"
+          className="flex flex-wrap justify-center items-center"
           style={{ flexDirection: badgesLayout === 'column' ? 'column' : 'row', gap: `${badgesGap}px` }}
         >
           {/* Lista de badges editável em /admin/conta (texto + negrito +
-              layout lado-a-lado/empilhado + espaçamento). */}
+              layout lado-a-lado/empilhado + espaçamento). Fica entre o
+              banner e os botões de catálogo/consulta. */}
           {badges.map((b) => (
             <span key={b.id} className="sunset-shine-badge">
               <span
@@ -204,6 +179,32 @@ export default function Landing() {
               <path d="M16.1716 10.9999L10.8076 5.63589L12.2218 4.22168L20 11.9999L12.2218 19.778L10.8076 18.3638L16.1716 12.9999H4V10.9999H16.1716Z" />
             </svg>
           </a>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.3 }}
+          className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10"
+        >
+          {/* "Continue" button — reproduzido fiel à referência (mesmo
+              pill + círculo com seta), recolorido pro dourado do site
+              (era branco/preto). Só na referência a seta desliza no
+              :hover; aqui virou loop automático e contínuo (pedido
+              explícito). */}
+          <Link to="/catalogo" className="sunset-continue-btn sunset-glow-btn w-full sm:w-auto">
+            <span>Ver catálogo</span>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 74 74" height={34} width={34}>
+              <circle strokeWidth={3} stroke="currentColor" r="35.5" cy={37} cx={37} />
+              <path
+                fill="currentColor"
+                d="M25 35.5C24.1716 35.5 23.5 36.1716 23.5 37C23.5 37.8284 24.1716 38.5 25 38.5V35.5ZM49.0607 38.0607C49.6464 37.4749 49.6464 36.5251 49.0607 35.9393L39.5147 26.3934C38.9289 25.8076 37.9792 25.8076 37.3934 26.3934C36.8076 26.9792 36.8076 27.9289 37.3934 28.5147L45.8787 37L37.3934 45.4853C36.8076 46.0711 36.8076 47.0208 37.3934 47.6066C37.9792 48.1924 38.9289 48.1924 39.5147 47.6066L49.0607 38.0607ZM25 38.5L48 38.5V35.5L25 35.5V38.5Z"
+              />
+            </svg>
+          </Link>
+          <Link to="/consultar" className="btn-secondary sunset-glow-btn text-base px-8 py-4 w-full sm:w-auto">
+            Acompanhar meu pedido
+          </Link>
         </motion.div>
       </section>
 
