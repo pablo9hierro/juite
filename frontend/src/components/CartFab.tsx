@@ -2,7 +2,6 @@ import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { useCart } from '../store/cart'
 import SunsetCartIcon from './SunsetCartIcon'
-import FireLoader from './FireLoader'
 
 // 9 baforadas (5 * 1.7 arredondado) — a fumaça que antes subia no botão
 // de WhatsApp foi movida pra cá, em cima do #cart-icon. Fica dentro do
@@ -30,7 +29,6 @@ export default function CartFab() {
 
   return (
     <Link to="/checkout" className="fixed bottom-6 right-6 z-40 w-16 h-16 flex items-center justify-center" aria-label="Ir para o checkout">
-      <FireLoader />
       {SMOKE.map((s, i) => (
         <span
           key={s.left}
