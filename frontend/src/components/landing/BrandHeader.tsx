@@ -8,13 +8,18 @@ import './BrandHeader.css'
 // lado, sem ação por enquanto.
 export default function BrandHeader() {
   return (
-    <header className="relative z-20 flex items-center justify-center gap-4 px-6 pt-6">
-      <div className="sunset-brand-btn">
-        <span>Sunset Tabas</span>
+    <header className="relative z-20 grid grid-cols-3 items-center px-6 pt-6">
+      <div className="flex justify-start">
+        <button type="button" className="sunset-profile-btn w-11 h-11 flex items-center justify-center flex-shrink-0" aria-label="Perfil">
+          <User className="w-4 h-4" />
+        </button>
       </div>
-      <button type="button" className="sunset-profile-btn w-11 h-11 flex items-center justify-center flex-shrink-0" aria-label="Perfil">
-        <User className="w-4 h-4" />
-      </button>
+      <div className="flex justify-center">
+        <div className="sunset-brand-btn">
+          <span>Sunset Tabas</span>
+        </div>
+      </div>
+      <div />
     </header>
   )
 }

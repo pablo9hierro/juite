@@ -14,7 +14,6 @@
   font-weight: 900;
   letter-spacing: 2px;
   color: var(--color-son-silver);
-  -webkit-box-reflect: below 0px linear-gradient(transparent, rgba(0, 0, 0, 0.15));
   animation: sunset-brand-glow 5s ease-in-out infinite;
 }
 .sunset-brand-btn span {
