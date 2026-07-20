@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Clock, Image as ImageIcon, ImagePlus, KeyRound, Loader2, MessageCircle, Palette, Plus, Power, Trash2 } from 'lucide-react'
+import { Clock, Image as ImageIcon, ImagePlus, KeyRound, Loader2, MessageCircle, Palette, Plus, Power, Tags, Trash2, Wind } from 'lucide-react'
 import { api, ApiError } from '../../lib/api'
-import type { BgMode, BgSettings, StoreHourDay, StoreStatus } from '../../lib/types'
+import type { BadgesLayout, BgMode, BgSettings, LandingBadge, SmokeSettings, StoreHourDay, StoreStatus } from '../../lib/types'
 import { DAY_LABELS, isScheduledOpenNow } from '../../lib/storeHours'
 import WhatsAppConnection from '../../components/ui/WhatsAppConnection'
 import BackgroundScene from '../../components/BackgroundScene'
@@ -441,6 +441,235 @@ function BackgroundSettingsCard() {
   )
 }
 
+// Fumaça do botão do carrinho: velocidade, quantidade de baforadas,
+// largura do container onde elas se espalham (não de cada baforada) e
+// altura (distância que sobem). Fica salvo pra todo mundo, não é um
+// ajuste só do navegador do admin.
+function SmokeSettingsCard() {
+  const [draft, setDraft] = useState<SmokeSettings | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    api.siteSettings
+      .get()
+      .then((s) => setDraft({ smoke_speed: s.smoke_speed, smoke_count: s.smoke_count, smoke_width: s.smoke_width, smoke_height: s.smoke_height }))
+  }, [])
+
+  const patch = (p: Partial<SmokeSettings>) => setDraft((d) => (d ? { ...d, ...p } : d))
+
+  const save = async () => {
+    if (!draft) return
+    setSaving(true)
+    setError(null)
+    setSaved(false)
+    try {
+      await api.admin.siteSettings.updateSmoke(draft)
+      setSaved(true)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Erro ao salvar a fumaça.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!draft) {
+    return (
+      <div className="flex justify-center py-6">
+        <Loader2 className="w-5 h-5 animate-spin text-son-pink" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-lg space-y-4">
+      <div className="bg-son-surface border border-white/5 rounded-2xl p-6 space-y-4">
+        <div>
+          <label className="label">Velocidade — {draft.smoke_speed.toFixed(1)}s por baforada</label>
+          <input
+            type="range"
+            min={1}
+            max={8}
+            step={0.1}
+            value={draft.smoke_speed}
+            onChange={(e) => patch({ smoke_speed: parseFloat(e.target.value) })}
+            className="w-full accent-son-pink"
+          />
+        </div>
+        <div>
+          <label className="label">Quantidade — {draft.smoke_count} baforadas</label>
+          <input
+            type="range"
+            min={1}
+            max={24}
+            step={1}
+            value={draft.smoke_count}
+            onChange={(e) => patch({ smoke_count: parseInt(e.target.value, 10) })}
+            className="w-full accent-son-pink"
+          />
+        </div>
+        <div>
+          <label className="label">Largura do container — {draft.smoke_width}px</label>
+          <input
+            type="range"
+            min={20}
+            max={200}
+            step={2}
+            value={draft.smoke_width}
+            onChange={(e) => patch({ smoke_width: parseInt(e.target.value, 10) })}
+            className="w-full accent-son-pink"
+          />
+        </div>
+        <div>
+          <label className="label">Altura — sobe {draft.smoke_height}px</label>
+          <input
+            type="range"
+            min={20}
+            max={200}
+            step={2}
+            value={draft.smoke_height}
+            onChange={(e) => patch({ smoke_height: parseInt(e.target.value, 10) })}
+            className="w-full accent-son-pink"
+          />
+        </div>
+
+        {error && <p className="error-msg">{error}</p>}
+        {saved && <p className="text-green-500 text-sm">Fumaça salva — já vale pra todo mundo.</p>}
+        <button onClick={save} disabled={saving} className="btn-primary text-sm py-2.5 px-3">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          Salvar fumaça
+        </button>
+      </div>
+    </div>
+  )
+}
+
+const LAYOUT_OPTIONS: { value: BadgesLayout; label: string }[] = [
+  { value: 'row', label: 'Lado a lado' },
+  { value: 'column', label: 'Um abaixo do outro' },
+]
+
+// Badges de texto do topo da landing — lista livre (editar/criar/
+// remover), layout lado-a-lado ou empilhado, e espaçamento entre eles.
+function BadgesSettingsCard() {
+  const [items, setItems] = useState<LandingBadge[] | null>(null)
+  const [layout, setLayout] = useState<BadgesLayout>('row')
+  const [gap, setGap] = useState(8)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    api.siteSettings.get().then((s) => {
+      setItems(s.badges)
+      setLayout(s.badges_layout)
+      setGap(s.badges_gap)
+    })
+  }, [])
+
+  const patchItem = (id: string, p: Partial<LandingBadge>) =>
+    setItems((prev) => (prev ? prev.map((b) => (b.id === id ? { ...b, ...p } : b)) : prev))
+
+  const addItem = () =>
+    setItems((prev) => [...(prev ?? []), { id: crypto.randomUUID(), text: '', bold: false }])
+
+  const removeItem = (id: string) => setItems((prev) => (prev ? prev.filter((b) => b.id !== id) : prev))
+
+  const save = async () => {
+    if (!items) return
+    setSaving(true)
+    setError(null)
+    setSaved(false)
+    try {
+      const cleaned = items.map((b) => ({ ...b, text: b.text.trim() })).filter((b) => b.text)
+      await api.admin.siteSettings.updateBadges({ badges: cleaned, badges_layout: layout, badges_gap: gap })
+      setItems(cleaned)
+      setSaved(true)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Erro ao salvar os badges.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!items) {
+    return (
+      <div className="flex justify-center py-6">
+        <Loader2 className="w-5 h-5 animate-spin text-son-pink" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-lg space-y-4">
+      <div className="bg-son-surface border border-white/5 rounded-2xl p-6 space-y-4">
+        <div className="space-y-2">
+          {items.map((b) => (
+            <div key={b.id} className="flex items-center gap-2">
+              <input
+                className="input-field flex-1"
+                value={b.text}
+                onChange={(e) => patchItem(b.id, { text: e.target.value })}
+                placeholder="Texto do badge"
+              />
+              <label className="flex items-center gap-1 text-xs text-son-silver flex-shrink-0">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 accent-son-pink"
+                  checked={b.bold}
+                  onChange={(e) => patchItem(b.id, { bold: e.target.checked })}
+                />
+                Negrito
+              </label>
+              <button type="button" onClick={() => removeItem(b.id)} className="text-son-silver-dim hover:text-son-pink flex-shrink-0">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addItem}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg border border-dashed border-son-gold/40 text-son-gold text-xs font-semibold hover:bg-son-gold/10"
+          >
+            <Plus className="w-3.5 h-3.5" /> Novo badge
+          </button>
+        </div>
+
+        <div>
+          <label className="label">Layout</label>
+          <div className="flex gap-2">
+            {LAYOUT_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => setLayout(o.value)}
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-colors ${
+                  layout === o.value ? 'sunset-bg text-white border-transparent' : 'bg-son-surface-light border-white/10 text-son-silver'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Espaçamento — {gap}px</label>
+          <input type="range" min={0} max={32} step={1} value={gap} onChange={(e) => setGap(parseInt(e.target.value, 10))} className="w-full accent-son-pink" />
+        </div>
+
+        {error && <p className="error-msg">{error}</p>}
+        {saved && <p className="text-green-500 text-sm">Badges salvos — já vale pra todo mundo.</p>}
+        <button onClick={save} disabled={saving} className="btn-primary text-sm py-2.5 px-3">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          Salvar badges
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminSenha() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -541,6 +770,26 @@ export default function AdminSenha() {
           Escolha o coqueiro padrão, o synthwave, as estrelas, ou envie uma imagem própria — e ajuste tamanho/posição.
         </p>
         <BackgroundSettingsCard />
+      </div>
+
+      <div>
+        <h2 className="text-2xl font-black mb-1 flex items-center gap-2">
+          <Wind className="w-5 h-5" /> Fumaça do carrinho
+        </h2>
+        <p className="text-son-silver-dim text-sm mb-6">
+          Velocidade, quantidade de baforadas, largura do container e altura da subida.
+        </p>
+        <SmokeSettingsCard />
+      </div>
+
+      <div>
+        <h2 className="text-2xl font-black mb-1 flex items-center gap-2">
+          <Tags className="w-5 h-5" /> Badges da landing
+        </h2>
+        <p className="text-son-silver-dim text-sm mb-6">
+          Textos que aparecem no topo da página inicial — crie, edite, remova, escolha o layout e o espaçamento.
+        </p>
+        <BadgesSettingsCard />
       </div>
     </div>
   )

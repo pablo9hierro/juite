@@ -409,6 +409,30 @@ export interface BgSettings {
   bg_fit: BgFit
 }
 
+// Fumaça do botão do carrinho — velocidade, quantidade de baforadas,
+// largura do container (onde elas se espalham) e altura (distância que
+// sobem), ajustável em /admin/conta.
+export interface SmokeSettings {
+  smoke_speed: number
+  smoke_count: number
+  smoke_width: number
+  smoke_height: number
+}
+
+// Badges de texto da landing (hero) — lista livre + layout lado a lado
+// ou empilhado + espaçamento, ajustável em /admin/conta.
+export interface LandingBadge {
+  id: string
+  text: string
+  bold: boolean
+}
+export type BadgesLayout = 'row' | 'column'
+export interface BadgesSettings {
+  badges: LandingBadge[]
+  badges_layout: BadgesLayout
+  badges_gap: number
+}
+
 export interface StoreHourInterval {
   opens_at: string // 'HH:MM', formato 24h (0-24)
   closes_at: string

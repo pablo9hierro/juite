@@ -5,6 +5,7 @@ import { localApi } from './localApi'
 import { supabasePublicApi } from './supabasePublicApi'
 import { supabase } from './supabaseClient'
 import type {
+  BadgesSettings,
   BgSettings,
   CampanhaOrientation,
   Category,
@@ -31,6 +32,7 @@ import type {
   Promotion,
   PromotionType,
   ShippingSettings,
+  SmokeSettings,
   StoreHourDay,
   Vendedor,
   VendedorRelatorio,
@@ -605,6 +607,21 @@ const remoteApi = {
           p_bg_x: settings.bg_x,
           p_bg_y: settings.bg_y,
           p_bg_fit: settings.bg_fit,
+        }),
+      updateSmoke: (settings: SmokeSettings) =>
+        rpc<SmokeSettings>('admin_update_smoke_settings', {
+          p_token: adminToken(),
+          p_speed: settings.smoke_speed,
+          p_count: settings.smoke_count,
+          p_width: settings.smoke_width,
+          p_height: settings.smoke_height,
+        }),
+      updateBadges: (settings: BadgesSettings) =>
+        rpc<BadgesSettings>('admin_update_badges', {
+          p_token: adminToken(),
+          p_badges: settings.badges,
+          p_layout: settings.badges_layout,
+          p_gap: settings.badges_gap,
         }),
     },
     storeStatus: {

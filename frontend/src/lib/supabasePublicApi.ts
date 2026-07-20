@@ -1,6 +1,6 @@
 import { ApiError } from './apiError'
 import { supabase } from './supabaseClient'
-import type { BgFit, BgMode, Category, Coupon, DeliveryPosition, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
+import type { BadgesLayout, BgFit, BgMode, Category, Coupon, DeliveryPosition, LandingBadge, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new ApiError(400, result.error.message)
@@ -54,7 +54,9 @@ export const supabasePublicApi = {
     get: async () => {
       const { data } = await supabase
         .from('site_settings')
-        .select('hero_image_url, bg_mode, bg_image_url, bg_scale, bg_x, bg_y, bg_fit')
+        .select(
+          'hero_image_url, bg_mode, bg_image_url, bg_scale, bg_x, bg_y, bg_fit, smoke_speed, smoke_count, smoke_width, smoke_height, badges, badges_layout, badges_gap'
+        )
         .single()
       return {
         hero_image_url: (data?.hero_image_url as string | null) ?? null,
@@ -64,6 +66,13 @@ export const supabasePublicApi = {
         bg_x: (data?.bg_x as number | undefined) ?? 0,
         bg_y: (data?.bg_y as number | undefined) ?? 0,
         bg_fit: (data?.bg_fit as BgFit | undefined) ?? 'meet',
+        smoke_speed: (data?.smoke_speed as number | undefined) ?? 3,
+        smoke_count: (data?.smoke_count as number | undefined) ?? 9,
+        smoke_width: (data?.smoke_width as number | undefined) ?? 64,
+        smoke_height: (data?.smoke_height as number | undefined) ?? 70,
+        badges: (data?.badges as LandingBadge[] | undefined) ?? [],
+        badges_layout: (data?.badges_layout as BadgesLayout | undefined) ?? 'row',
+        badges_gap: (data?.badges_gap as number | undefined) ?? 8,
       }
     },
   },

@@ -7,8 +7,14 @@ import LiveTrackingMapMock from '../components/landing/LiveTrackingMapMock'
 import CouponTicketCard from '../components/landing/CouponTicketCard'
 import LandingWhatsAppCard from '../components/landing/LandingWhatsAppCard'
 import { api } from '../lib/api'
-import type { Promotion, StoreStatus } from '../lib/types'
+import type { BadgesLayout, LandingBadge, Promotion, StoreStatus } from '../lib/types'
 import { getStoreOpenState } from '../lib/storeHours'
+
+const DEFAULT_BADGES: LandingBadge[] = [
+  { id: '1', text: 'SUNSET • Desde 2023', bold: true },
+  { id: '2', text: '🔥 Experiência, vibe e essência', bold: false },
+  { id: '3', text: '👇 A vibe começa aqui', bold: false },
+]
 
 function BannerCarousel() {
   const navigate = useNavigate()
@@ -89,9 +95,20 @@ function BannerCarousel() {
 
 export default function Landing() {
   const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
+  const [badges, setBadges] = useState<LandingBadge[]>(DEFAULT_BADGES)
+  const [badgesLayout, setBadgesLayout] = useState<BadgesLayout>('row')
+  const [badgesGap, setBadgesGap] = useState(8)
 
   useEffect(() => {
     api.storeStatus.get().then(setStoreStatus).catch(() => setStoreStatus(null))
+    api.siteSettings
+      .get()
+      .then((s) => {
+        if (s.badges.length > 0) setBadges(s.badges)
+        setBadgesLayout(s.badges_layout)
+        setBadgesGap(s.badges_gap)
+      })
+      .catch(() => {})
   }, [])
 
   const openState = storeStatus ? getStoreOpenState(storeStatus) : null
@@ -150,13 +167,13 @@ export default function Landing() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="flex flex-wrap justify-center gap-2 mt-10"
+          className="flex flex-wrap justify-center items-center mt-10"
+          style={{ flexDirection: badgesLayout === 'column' ? 'column' : 'row', gap: `${badgesGap}px` }}
         >
-          {[
-            { text: 'SUNSET • Desde 2023', bold: true },
-            { text: '🔥 Experiência, vibe e essência' },
-          ].map((b) => (
-            <span key={b.text} className="sunset-shine-badge">
+          {/* Lista de badges editável em /admin/conta (texto + negrito +
+              layout lado-a-lado/empilhado + espaçamento). */}
+          {badges.map((b) => (
+            <span key={b.id} className="sunset-shine-badge">
               <span
                 className={`sunset-shine-badge-inner px-4 py-2 text-xs sm:text-sm ${b.bold ? 'font-bold' : 'font-medium'} text-son-gold`}
               >
@@ -164,11 +181,12 @@ export default function Landing() {
               </span>
             </span>
           ))}
-          {/* Vira botão de verdade (não só decorativo como os outros
-              badges) — abre o endereço no Google Maps. Efeito de clique
-              exato da referência (seta entrando/saindo + círculo
-              expandindo + texto deslizando), recolorido pro dourado do
-              site (era azul #1f387e). */}
+          {/* Vira botão de verdade (não só decorativo como os badges) —
+              abre o endereço no Google Maps. Efeito de clique exato da
+              referência (seta entrando/saindo + círculo expandindo +
+              texto deslizando), recolorido pro dourado do site (era
+              azul #1f387e). Sempre por último, fora da lista editável
+              (é um link de verdade, não um badge de texto). */}
           <a
             href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
               'Rua Rosa de Paula Barbosa, 16 - José Américo de Almeida, João Pessoa - PB'
@@ -186,13 +204,6 @@ export default function Landing() {
               <path d="M16.1716 10.9999L10.8076 5.63589L12.2218 4.22168L20 11.9999L12.2218 19.778L10.8076 18.3638L16.1716 12.9999H4V10.9999H16.1716Z" />
             </svg>
           </a>
-          {[{ text: '👇 A vibe começa aqui' }].map((b) => (
-            <span key={b.text} className="sunset-shine-badge">
-              <span className="sunset-shine-badge-inner px-4 py-2 text-xs sm:text-sm font-medium text-son-gold">
-                {b.text}
-              </span>
-            </span>
-          ))}
         </motion.div>
       </section>
 

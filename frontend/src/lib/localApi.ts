@@ -27,9 +27,12 @@ import { isScheduledOpenNow } from './storeHours'
 import { useAdminAuth } from '../store/adminAuth'
 import { useMotoboyAuth } from '../store/motoboyAuth'
 import type {
+  BadgesLayout,
+  BadgesSettings,
   BgFit,
   BgMode,
   BgSettings,
+  LandingBadge,
   Promotion,
   Category,
   Coupon,
@@ -45,6 +48,7 @@ import type {
   Product,
   ShippingEstimate,
   ShippingSettings,
+  SmokeSettings,
   StatusCount,
   StoreHourDay,
   StoreStatus,
@@ -1818,6 +1822,13 @@ async function getSiteSettings(): Promise<{
   bg_x: number
   bg_y: number
   bg_fit: BgFit
+  smoke_speed: number
+  smoke_count: number
+  smoke_width: number
+  smoke_height: number
+  badges: LandingBadge[]
+  badges_layout: BadgesLayout
+  badges_gap: number
 }> {
   const db = loadDb()
   return {
@@ -1828,6 +1839,13 @@ async function getSiteSettings(): Promise<{
     bg_x: db.bgX ?? 0,
     bg_y: db.bgY ?? 0,
     bg_fit: db.bgFit ?? 'meet',
+    smoke_speed: db.smokeSpeed ?? 3,
+    smoke_count: db.smokeCount ?? 9,
+    smoke_width: db.smokeWidth ?? 64,
+    smoke_height: db.smokeHeight ?? 70,
+    badges: db.badges ?? [],
+    badges_layout: db.badgesLayout ?? 'row',
+    badges_gap: db.badgesGap ?? 8,
   }
 }
 
@@ -1847,6 +1865,25 @@ async function updateBackground(settings: BgSettings): Promise<BgSettings> {
   db.bgX = settings.bg_x
   db.bgY = settings.bg_y
   db.bgFit = settings.bg_fit
+  saveDb(db)
+  return settings
+}
+
+async function updateSmokeSettings(settings: SmokeSettings): Promise<SmokeSettings> {
+  const db = loadDb()
+  db.smokeSpeed = settings.smoke_speed
+  db.smokeCount = settings.smoke_count
+  db.smokeWidth = settings.smoke_width
+  db.smokeHeight = settings.smoke_height
+  saveDb(db)
+  return settings
+}
+
+async function updateBadges(settings: BadgesSettings): Promise<BadgesSettings> {
+  const db = loadDb()
+  db.badges = settings.badges
+  db.badgesLayout = settings.badges_layout
+  db.badgesGap = settings.badges_gap
   saveDb(db)
   return settings
 }
@@ -2304,7 +2341,7 @@ export const localApi = {
     },
     orders: { list: adminListOrders, updateStatus: adminUpdateStatus, notifyReady: async () => {} },
     shippingSettings: { get: getShippingSettings, update: updateShippingSettings },
-    siteSettings: { updateHeroImage, updateBackground },
+    siteSettings: { updateHeroImage, updateBackground, updateSmoke: updateSmokeSettings, updateBadges },
     storeStatus: { get: getStoreStatus, setHours: setStoreHours, setManualStatus: setStoreManualStatus },
     financeiro: { get: financeiro, timeseries: financeiroTimeseries },
     crm: { customers: adminCrmCustomers },

@@ -1,6 +1,7 @@
 import { distanciaKm } from './geo/rotas'
 import { FALLBACK as STORE_LOCATION } from './geo/mapa'
 import type {
+  BadgesLayout,
   BgFit,
   BgMode,
   CampanhaOrientation,
@@ -8,6 +9,7 @@ import type {
   Coupon,
   CrmFilterCriteria,
   CrmSegment,
+  LandingBadge,
   Motoboy,
   MotoboyRun,
   MotoboySettlement,
@@ -101,6 +103,13 @@ export interface LocalDb {
   bgX: number
   bgY: number
   bgFit: BgFit
+  smokeSpeed: number
+  smokeCount: number
+  smokeWidth: number
+  smokeHeight: number
+  badges: LandingBadge[]
+  badgesLayout: BadgesLayout
+  badgesGap: number
   storeHours: StoreHourDay[]
   storeManuallyClosed: boolean
   storeManualClosedReason: string | null
@@ -187,6 +196,17 @@ function seedDb(): LocalDb {
     bgX: 0,
     bgY: 0,
     bgFit: 'meet',
+    smokeSpeed: 3,
+    smokeCount: 9,
+    smokeWidth: 64,
+    smokeHeight: 70,
+    badges: [
+      { id: '1', text: 'SUNSET • Desde 2023', bold: true },
+      { id: '2', text: '🔥 Experiência, vibe e essência', bold: false },
+      { id: '3', text: '👇 A vibe começa aqui', bold: false },
+    ],
+    badgesLayout: 'row',
+    badgesGap: 8,
     storeHours: Array.from({ length: 7 }, (_, day_of_week) => ({
       day_of_week,
       is_open: true,
