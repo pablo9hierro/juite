@@ -24,12 +24,18 @@ export default function SunsetBackdrop() {
           overflow: 'hidden',
         }}
       >
+      {/* xMidYMax "slice" (não "meet") — cobre o container inteiro em vez
+          de encolher pra caber, garantindo que o coqueiro sempre fique
+          "plantado" rente ao rodapé (Y-max) E que o topo dele sempre
+          ultrapasse a metade da tela verticalmente, em qualquer
+          proporção de viewport (o corte sobra é nas laterais, cortado
+          pelo overflow:hidden do container). */}
       <svg
         className="absolute inset-0 w-full h-full"
         version="1.0"
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 1312.000000 876.000000"
-        preserveAspectRatio="xMidYMax meet"
+        preserveAspectRatio="xMidYMax slice"
       >
         <defs>
           <linearGradient id="sunsetMyGradient" gradientTransform="rotate(90)">

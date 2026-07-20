@@ -6,20 +6,28 @@ const WHATSAPP_URL =
 const INSTAGRAM_URL = 'https://www.instagram.com/tabassunset'
 
 // Floating WhatsApp button — fixed to the viewport (follows scroll).
-// Fumaça sobe atrás dele em loop. Uiverse.io by Mohammad-Rahme-576 —
-// "tooltip-container": na referência o tooltip com os ícones de rede
-// abria no :hover; aqui abre AO CLICAR (pedido explícito, celular não
-// tem hover) e mostra só 2 redes — WhatsApp (mesmo link de sempre) e
-// Instagram (@tabassunset) — no estilo ícone-preenche+tooltip de
-// Uiverse.io by wilsondesouza (example-2), recolorido por rede.
+// Uiverse.io by Mohammad-Rahme-576 — "tooltip-container": na referência
+// o tooltip com os ícones de rede abria no :hover; aqui abre AO CLICAR
+// (pedido explícito, celular não tem hover) e mostra só 2 redes —
+// WhatsApp (mesmo link de sempre) e Instagram (@tabassunset) — no
+// estilo ícone-preenche+tooltip de Uiverse.io by wilsondesouza
+// (example-2), recolorido por rede. A fumaça que subia daqui foi
+// movida pro botão do carrinho (CartFab).
 export default function WhatsAppFab() {
   const [open, setOpen] = useState(false)
 
   return (
     <div className="fixed bottom-6 left-6 z-40">
+      {/* z-index BAIXO de propósito — esse backdrop só existe pra fechar
+          o tooltip num clique fora dele. Com z-30 (mais alto que o
+          tooltip/botão) ele ficava por CIMA dos ícones de rede e
+          engolia o clique antes de chegar neles (bug reportado: "clico
+          e não acontece nada"). Ficando abaixo do tooltip (z-20) e do
+          botão (z-20), continua cobrindo o resto da página pra fechar
+          no clique fora, mas não intercepta mais nada aqui dentro. */}
       {open && (
         <div
-          className="fixed inset-0 z-30"
+          className="fixed inset-0 z-0"
           onClick={() => setOpen(false)}
           aria-hidden="true"
         />
@@ -59,15 +67,10 @@ export default function WhatsAppFab() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="sunset-bubbles group relative w-16 h-16"
+        className="sunset-bubbles group relative z-20 w-16 h-16"
         aria-label="Falar no WhatsApp ou ver redes sociais"
         aria-expanded={open}
       >
-        <span className="sunset-smoke" style={{ left: '22%', animationDelay: '0s' }} />
-        <span className="sunset-smoke" style={{ left: '38%', animationDelay: '0.6s' }} />
-        <span className="sunset-smoke" style={{ left: '50%', animationDelay: '1.2s' }} />
-        <span className="sunset-smoke" style={{ left: '62%', animationDelay: '1.8s' }} />
-        <span className="sunset-smoke" style={{ left: '78%', animationDelay: '2.4s' }} />
         <div className="relative z-10 w-16 h-16 rounded-full overflow-hidden bg-son-black glow group-hover:scale-105 transition-transform">
           <img src={logoSrc} alt="" className="w-full h-full object-cover" />
         </div>

@@ -318,7 +318,7 @@ export default function Checkout() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader />
+      <SiteHeader showCart={false} />
       <PageTransition className="max-w-xl mx-auto px-5 sm:px-10 pb-24">
         <h1 className="text-2xl sm:text-3xl font-black mb-6">Checkout</h1>
 
@@ -345,7 +345,7 @@ export default function Checkout() {
           <div>
             <label className="label">Seu nome *</label>
             <input
-              className="input-field"
+              className="input-field sunset-checkout-input"
               value={customer.name}
               onChange={(e) => customer.set({ name: e.target.value })}
               placeholder="Nome completo"
@@ -355,7 +355,7 @@ export default function Checkout() {
           <div>
             <label className="label">WhatsApp *</label>
             <input
-              className="input-field"
+              className="input-field sunset-checkout-input"
               value={customer.whatsapp}
               onChange={(e) => customer.set({ whatsapp: formatPhone(e.target.value) })}
               type="tel"
@@ -412,7 +412,7 @@ export default function Checkout() {
             <div>
               <label className="label">Ponto de referência</label>
               <input
-                className="input-field"
+                className="input-field sunset-checkout-input"
                 value={customer.referencePoint}
                 onChange={(e) => customer.set({ referencePoint: e.target.value })}
                 placeholder="Número da casa/Condomínio, observações de entrega..."
@@ -496,7 +496,7 @@ export default function Checkout() {
                 {autoCoupon?.combinable_with_public && (
                   <div className="flex gap-2 mt-2">
                     <input
-                      className="input-field flex-1 uppercase"
+                      className="input-field sunset-checkout-input flex-1 uppercase"
                       value={couponInput}
                       onChange={(e) => setCouponInput(e.target.value)}
                       placeholder="Ou digite outro código"
@@ -537,7 +537,7 @@ export default function Checkout() {
                 )}
                 <div className="flex gap-2">
                   <input
-                    className="input-field flex-1 uppercase"
+                    className="input-field sunset-checkout-input flex-1 uppercase"
                     value={couponInput}
                     onChange={(e) => setCouponInput(e.target.value)}
                     placeholder="Código do cupom"
@@ -627,7 +627,7 @@ export default function Checkout() {
 
           {error && <p className="error-msg">{error}</p>}
 
-          <button onClick={handleSubmit} disabled={submitting} className="btn-primary w-full text-base py-4">
+          <button onClick={handleSubmit} disabled={submitting} className="btn-primary sunset-checkout-submit w-full text-base py-4">
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Finalizar pedido
           </button>

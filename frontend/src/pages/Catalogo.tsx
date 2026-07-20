@@ -198,7 +198,7 @@ export default function Catalogo() {
         className="bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex flex-col hover:border-son-pink/30 transition-colors"
       >
         <Link to={`/produto/${product.id}`} className="flex flex-col flex-1">
-          <div className="sunset-card-open-img aspect-square bg-son-surface-light flex items-center justify-center overflow-hidden">
+          <div className="aspect-square bg-son-surface-light flex items-center justify-center overflow-hidden">
             {product.image_url ? (
               <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
             ) : (

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import WhatsAppFab from '../components/WhatsAppFab'
@@ -10,70 +10,15 @@ import { api } from '../lib/api'
 import type { Promotion, StoreStatus } from '../lib/types'
 import { getStoreOpenState } from '../lib/storeHours'
 
-// Um giro completo em 20s parado (igual a referência) quando ninguém
-// mexe — arrastando, a velocidade/direção passa a seguir o dedo 1:1.
-const AUTO_DEG_PER_MS = 360 / 20000
-const DRAG_DEG_PER_PX = 0.6
-
 function BannerCarousel() {
   const navigate = useNavigate()
   const [heroUrl, setHeroUrl] = useState<string | null>(null)
   const [promotions, setPromotions] = useState<Promotion[]>([])
-  const ringRef = useRef<HTMLDivElement>(null)
-  const centerRef = useRef<HTMLDivElement>(null)
-  const rotationRef = useRef(0)
-  const draggingRef = useRef(false)
-  const lastXRef = useRef(0)
 
   useEffect(() => {
     api.siteSettings.get().then((s) => setHeroUrl(s.hero_image_url)).catch(() => setHeroUrl(null))
     api.promotions.listActive().then(setPromotions).catch(() => setPromotions([]))
   }, [])
-
-  // Gira sozinho pra sempre (rAF, não CSS animation — precisa poder ser
-  // "assumido" pelo arrasto a qualquer momento sem travar/reiniciar).
-  // Arrastar NUNCA para o carrossel: enquanto o dedo está em cima, a
-  // rotação segue o movimento 1:1; ao soltar, volta a girar sozinho de
-  // onde parou, na mesma direção de sempre.
-  useEffect(() => {
-    let raf: number
-    let last = performance.now()
-    function tick(now: number) {
-      const dt = now - last
-      last = now
-      if (!draggingRef.current) {
-        rotationRef.current += AUTO_DEG_PER_MS * dt
-      }
-      if (ringRef.current) {
-        ringRef.current.style.transform = `perspective(800px) rotateY(${rotationRef.current}deg)`
-      }
-      // O texto do centro é filho do anel (participa do mesmo espaço 3D,
-      // fica "dentro do cilindro"), mas gira na direção CONTRÁRIA do
-      // anel — cancela a rotação do pai, então ele fica sempre de frente
-      // pra câmera, suspenso no meio, com os cards passando ao redor.
-      if (centerRef.current) {
-        centerRef.current.style.transform = `translate(-50%, -50%) rotateY(${-rotationRef.current}deg)`
-      }
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
-
-  function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
-    draggingRef.current = true
-    lastXRef.current = e.clientX
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }
-  function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
-    if (!draggingRef.current) return
-    const dx = e.clientX - lastXRef.current
-    lastXRef.current = e.clientX
-    rotationRef.current += dx * DRAG_DEG_PER_PX
-  }
-  function endDrag() {
-    draggingRef.current = false
-  }
 
   const firstPromo = promotions[0]
   const bannerImage = firstPromo?.image_url ?? heroUrl
@@ -83,53 +28,35 @@ function BannerCarousel() {
     { key: 'hero', image: bannerImage, label: firstPromo ? firstPromo.title : 'Sunset Tabas', onClick: firstPromo ? () => navigate(`/banner?promocao=${firstPromo.id}`) : undefined },
     ...restPromos.map((p) => ({ key: p.id, image: p.image_url, label: p.title, onClick: () => navigate(`/banner?promocao=${p.id}`) })),
   ].filter((it) => it.image)
-  const n = Math.max(items.length, 1)
 
   return (
-    <div className="sunset-3d-carousel-wrap">
-      {/* Uiverse.io by musashi-13 — anel 3D giratório (mesmo perspective/
-          rotateY/translateZ, mesma pulsação de brilho por card), mas a
-          rotação é 100% controlada via JS (rAF) em vez de @keyframes CSS,
-          pra poder responder ao arrasto do dedo sem nunca "travar" o
-          carrossel — ele sempre volta a girar sozinho ao soltar. */}
-      <div
-        ref={ringRef}
-        className="sunset-3d-carousel"
-        style={{ '--quantity': n } as CSSProperties}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onPointerLeave={endDrag}
-      >
-        {items.map((it, i) => (
-          <div
-            key={it.key}
-            className="sunset-3d-carousel-item"
-            role={it.onClick ? 'button' : undefined}
-            tabIndex={it.onClick ? 0 : undefined}
-            onClick={it.onClick}
-            style={
-              {
-                transform: `translate(-50%, -50%) rotateY(${(360 / n) * i}deg) translateZ(85px)`,
-                '--delay': `${-(i * (20 / n))}s`,
-                backgroundImage: `url(${it.image})`,
-              } as CSSProperties
-            }
-            aria-label={it.label}
-          >
-            <span className="sunset-3d-carousel-item-label">{it.label}</span>
+    <div className="sunset-book-row">
+      {/* Uiverse.io by dalbrechtmartin — "book" (capa .cover na frente,
+          página .inner que desliza pra fora, texto base .text por trás
+          de tudo). Na referência só abria no :hover; aqui vira loop
+          automático (:hover -> keyframes infinite) com delay escalonado
+          por card, pra manter a sensação de "carrossel vivo" mesmo sem
+          giro contínuo. Clique continua levando pro checkout da
+          promoção, como no carrossel 3D anterior. */}
+      {items.map((it, i) => (
+        <div
+          key={it.key}
+          className="sunset-book"
+          style={{ '--book-delay': `${i * 0.4}s` } as CSSProperties}
+          role={it.onClick ? 'button' : undefined}
+          tabIndex={it.onClick ? 0 : undefined}
+          onClick={it.onClick}
+          aria-label={it.label}
+        >
+          <p className="sunset-book-text">🌅</p>
+          <div className="sunset-book-inner">
+            <p className="sunset-book-text">{it.label}</p>
           </div>
-        ))}
-        {/* Testando: fica DENTRO do espaço 3D do anel (translateZ(0), no
-            eixo exato em que os cards giram ao redor), mas com rotação
-            própria cancelando a do anel a cada frame — sempre de frente
-            pra câmera, "suspenso" no meio do cilindro em vez de colado
-            na tela por cima de tudo. */}
-        <div ref={centerRef} className="sunset-3d-carousel-center">
-          TEXTO
+          <div className="sunset-book-cover" style={{ backgroundImage: `url(${it.image})` }}>
+            <p className="sunset-book-text">Toque para ver</p>
+          </div>
         </div>
-      </div>
+      ))}
     </div>
   )
 }

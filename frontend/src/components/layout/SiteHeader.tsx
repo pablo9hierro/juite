@@ -5,7 +5,7 @@ import { useCart } from '../../store/cart'
 
 // O logo clicável (header > div > a > img) foi retirado de todas as
 // páginas de cliente a pedido — só sobra o "Voltar" do lado esquerdo.
-export default function SiteHeader({ showBack = true }: { showBack?: boolean }) {
+export default function SiteHeader({ showBack = true, showCart = true }: { showBack?: boolean; showCart?: boolean }) {
   const navigate = useNavigate()
   const count = useCart((s) => s.items.reduce((sum, i) => sum + i.quantity, 0))
 
@@ -31,19 +31,22 @@ export default function SiteHeader({ showBack = true }: { showBack?: boolean }) 
           texto "Sacola" ao redor. overflow-hidden + flex centering é
           necessário: o #cart-icon tem 140x120 nativos, e sem conter isso
           ele "vaza" pra fora da área pequena do header (ficava enorme e
-          desalinhado, como reportado). */}
-      <Link
-        to="/checkout"
-        className="relative w-11 h-11 flex items-center justify-center overflow-hidden"
-        aria-label="Ver sacola"
-      >
-        <SunsetCartIcon scale={0.32} />
-        {count > 0 && (
-          <span className="absolute top-0 right-0 z-10 w-5 h-5 flex items-center justify-center text-xs font-bold sunset-bg text-white rounded-full">
-            {count}
-          </span>
-        )}
-      </Link>
+          desalinhado, como reportado). Escondido em /checkout — não faz
+          sentido linkar pro carrinho estando já dentro dele. */}
+      {showCart && (
+        <Link
+          to="/checkout"
+          className="relative w-11 h-11 flex items-center justify-center overflow-hidden"
+          aria-label="Ver sacola"
+        >
+          <SunsetCartIcon scale={0.32} />
+          {count > 0 && (
+            <span className="absolute top-0 right-0 z-10 w-5 h-5 flex items-center justify-center text-xs font-bold sunset-bg text-white rounded-full">
+              {count}
+            </span>
+          )}
+        </Link>
+      )}
     </header>
   )
 }

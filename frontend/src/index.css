@@ -236,6 +236,39 @@ a {
   }
 }
 
+/* From Uiverse.io by Shoh2008 — só o campo/botão do checkout ganham esse
+   visual (não o .input-field/.btn-primary inteiro, usados em outras 18
+   páginas). Fora de @layer de propósito: estilo sem @layer sempre vence
+   sobre @apply dentro de @layer components no Tailwind v4, então isso
+   sobrepõe o .input-field/.btn-primary sem precisar de !important (mesmo
+   motivo documentado acima no .btn-primary). Cor "orange" da referência
+   já É a cor de destaque do site — mantida literal, sem recolorir. */
+.sunset-checkout-input {
+  border: 2px solid var(--color-son-orange);
+  background: transparent;
+  transition: background 0.35s ease, color 0.35s ease;
+}
+.sunset-checkout-input:focus {
+  background: var(--color-son-orange);
+  color: var(--color-son-black);
+  box-shadow: none;
+}
+.sunset-checkout-input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+.sunset-checkout-input:focus::placeholder {
+  color: rgba(8, 25, 18, 0.6);
+}
+.sunset-checkout-submit {
+  background: var(--color-son-orange);
+  color: #fff;
+}
+.sunset-checkout-submit:hover,
+.sunset-checkout-submit:focus-visible {
+  background: var(--color-son-gold);
+  color: var(--color-son-black);
+}
+
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
@@ -499,116 +532,130 @@ a {
   gap: 6px;
 }
 
-/* Uiverse.io by musashi-13 — anel 3D giratório (mesmo perspective(800px)/
-   rotateY/translateZ(150px), mesma pulsação de brightness por card).
-   Diferente da referência: a rotação do anel (.sunset-3d-carousel) NÃO
-   é mais a @keyframes CSS dela — vira inline style, controlada via JS
-   (rAF) no Landing.tsx, pra poder responder o arrasto do dedo sem nunca
-   parar de girar (arrastar muda a rotação na hora; ao soltar, volta a
-   girar sozinho de onde parou). Cada card mostra a imagem real da
-   promoção/banner cadastrado, com o mesmo scrim escuro + título do
-   marquee anterior por cima (a imagem pode ter qualquer proporção). */
-.sunset-3d-carousel-wrap {
+/* Uiverse.io by dalbrechtmartin — "book": capa (.cover) na frente com a
+   imagem da promoção, "página" (.inner) que desliza pra fora revelando
+   o título, texto base (.text) por trás de tudo. Na referência só abria
+   no :hover; aqui vira loop automático (:hover -> @keyframes infinite),
+   com --book-delay escalonado por card (setado inline no Landing.tsx)
+   pra não abrirem todos ao mesmo tempo — mantém a sensação de
+   "carrossel vivo" sem o giro 3D contínuo de antes. */
+.sunset-book-row {
   position: relative;
   z-index: 10;
   display: flex;
-  justify-content: center;
-  padding: 4.5rem 0 2rem;
+  gap: 28px;
+  padding: 3.5rem 1.5rem 2.5rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  perspective: 700px;
 }
-/* Fica DENTRO do espaço 3D do anel (é filho de .sunset-3d-carousel, que
-   tem transform-style:preserve-3d) — sem offset de translateZ, ou seja,
-   bem no eixo em volta do qual os cards giram. O transform (posição +
-   contra-rotação) é setado via JS a cada frame, não aqui. */
-.sunset-3d-carousel-center {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  pointer-events: none;
-  color: var(--color-son-gold);
-  font-weight: 900;
-  font-size: 1.1rem;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
-  white-space: nowrap;
+.sunset-book-row::-webkit-scrollbar {
+  display: none;
 }
-.sunset-3d-carousel {
+.sunset-book {
   position: relative;
-  width: 400px;
-  max-width: 100%;
-  height: 200px;
-  transform-style: preserve-3d;
-  transform: perspective(800px);
-  touch-action: pan-y;
-  cursor: grab;
-  will-change: transform;
-}
-.sunset-3d-carousel:active {
-  cursor: grabbing;
-}
-.sunset-3d-carousel-item {
-  position: absolute;
-  width: 110px;
-  height: 154px;
-  top: 50%;
-  left: 50%;
-  transform-origin: center center;
-  border-radius: 0.75rem;
-  overflow: hidden;
+  flex: 0 0 auto;
+  scroll-snap-align: center;
+  width: 170px;
+  height: 230px;
+  border-radius: 10px;
   background-color: var(--color-son-surface);
-  background-repeat: no-repeat;
+  box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.6), 0 0 24px -8px var(--color-son-orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  animation: sunset-book-tilt 6s ease-in-out infinite;
+  animation-delay: var(--book-delay, 0s);
+}
+.sunset-book-cover,
+.sunset-book-inner {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  text-align: center;
+  transform-origin: 0;
   background-size: cover;
   background-position: center;
-  border: solid 2px rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
-  animation: sunset-3d-brightness 20s linear infinite;
-  animation-delay: var(--delay);
-  cursor: pointer;
-  will-change: transform, filter;
 }
-.sunset-3d-carousel-item::after {
+.sunset-book-inner {
+  background: linear-gradient(160deg, var(--color-son-purple), var(--color-son-black));
+  animation: sunset-book-inner-slide 6s ease-in-out infinite;
+  animation-delay: var(--book-delay, 0s);
+}
+.sunset-book-cover {
+  background-color: var(--color-son-surface);
+  animation: sunset-book-cover-flip 6s ease-in-out infinite;
+  animation-delay: var(--book-delay, 0s);
+}
+.sunset-book-cover::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(8, 25, 18, 0.85) 0%, rgba(8, 25, 18, 0.25) 55%, transparent 80%);
+  border-radius: 10px;
+  background: linear-gradient(to top, rgba(8, 25, 18, 0.85), rgba(8, 25, 18, 0.1) 55%);
 }
-.sunset-3d-carousel-item-label {
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  bottom: 6px;
+.sunset-book-text {
+  position: relative;
   z-index: 1;
-  color: #fff;
-  font-size: 0.68rem;
+  margin: 0;
+  font-size: 0.95rem;
   font-weight: 700;
-  line-height: 1.2;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  color: var(--color-son-gold);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
 }
-@keyframes sunset-3d-brightness {
-  10% {
-    filter: brightness(1);
+.sunset-book-cover .sunset-book-text {
+  color: #fff;
+}
+@keyframes sunset-book-tilt {
+  0%,
+  12% {
+    transform: rotateZ(0deg);
   }
-  50% {
-    filter: brightness(0.1);
+  35%,
+  55% {
+    transform: rotateZ(-10deg);
   }
-  90% {
-    filter: brightness(1);
+  80%,
+  100% {
+    transform: rotateZ(0deg);
   }
 }
-
-/* From Uiverse.io by Praashoo7 — era um card que crescia inteiro no
-   :hover empurrando o conteúdo ao redor; dentro de uma grade de produtos
-   isso quebraria o layout dos vizinhos, então só a IMAGEM aumenta de
-   zoom (contida pelo `overflow-hidden` que a célula já tem), preservando
-   a grade. Só o PRIMEIRO produto da lista ganha isso (:first-child). */
-.catalogo-grid > div:first-child .sunset-card-open-img {
-  transition: transform 0.4s ease-in-out;
+@keyframes sunset-book-cover-flip {
+  0%,
+  12% {
+    transform: rotateY(0deg);
+  }
+  35%,
+  55% {
+    transform: rotateY(-70deg);
+  }
+  80%,
+  100% {
+    transform: rotateY(0deg);
+  }
 }
-.catalogo-grid > div:first-child:hover .sunset-card-open-img,
-.catalogo-grid > div:first-child.is-open .sunset-card-open-img {
-  transform: scale(1.18);
+@keyframes sunset-book-inner-slide {
+  0%,
+  12% {
+    transform: rotateZ(0) rotateX(0) rotateY(0) translateX(0);
+    box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.6);
+  }
+  35%,
+  55% {
+    transform: rotateZ(10deg) rotateX(-3deg) rotateY(-10deg) translateX(110px);
+    box-shadow: 1px 1px 20px rgba(0, 0, 0, 0.7);
+  }
+  80%,
+  100% {
+    transform: rotateZ(0) rotateX(0) rotateY(0) translateX(0);
+    box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.6);
+  }
 }
 
 /* From Uiverse.io by devkatyall — cores trocadas pra paleta sunset (era
@@ -664,84 +711,10 @@ a {
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.8);
 }
 
-/* From Uiverse.io by abhinav_7137 — reproduzido fiel à referência: mesmo
-   carrinho SVG, mesmos 5 itens caindo em sequência (celular, notebook,
-   tablet, headphone, mixer) com os mesmos timings/rotações, traço do
-   carrinho recolorido de #334155 pra ficar visível no fundo escuro do
-   site. Sem o texto "Loading..." (não faz sentido num botão fixo que
-   não representa um estado de carregamento). */
-.cart-loader {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 160px;
-  height: 180px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-}
-.items-container {
-  position: absolute;
-  top: 20px;
-  left: 0;
-  width: 100%;
-  height: 100px;
-  z-index: 1;
-}
-.item {
-  position: absolute;
-  opacity: 0;
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-  animation: sunset-cart-drop-item 4s cubic-bezier(0.3, 0, 0.5, 1) infinite;
-}
-#item-mobile {
-  top: -15px;
-  left: 58px;
-  width: 20px;
-  height: 32px;
-  --end-rot: -15deg;
-  animation-delay: 0.05s;
-  background-image: url("data:image/svg+xml,%3Csvg%20viewBox='0%200%2024%2036'%20xmlns='http://www.w3.org/2000/svg'%3E%3Crect%20x='2'%20y='2'%20width='20'%20height='32'%20rx='3'%20fill='%233b82f6'/%3E%3Crect%20x='4'%20y='4'%20width='16'%20height='25'%20rx='1'%20fill='%23eff6ff'/%3E%3Ccircle%20cx='12'%20cy='31.5'%20r='1.5'%20fill='%23eff6ff'/%3E%3C/svg%3E");
-}
-#item-laptop {
-  top: -10px;
-  left: 70px;
-  width: 35px;
-  height: 26px;
-  --end-rot: 10deg;
-  animation-delay: 0.8s;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 40 30' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='6' y='4' width='28' height='18' rx='1' fill='%2364748b'/%3E%3Crect x='8' y='6' width='24' height='14' fill='%23cbd5e1'/%3E%3Cpolygon points='2,24 38,24 40,28 0,28' fill='%23334155' stroke-linejoin='round'/%3E%3C/svg%3E");
-}
-#item-tab {
-  top: -20px;
-  left: 85px;
-  width: 24px;
-  height: 32px;
-  --end-rot: 25deg;
-  animation-delay: 1.6s;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 32 40' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='2' y='2' width='28' height='36' rx='2' fill='%23a855f7'/%3E%3Crect x='4' y='4' width='24' height='32' fill='%23faf5ff'/%3E%3C/svg%3E");
-}
-#item-headphone {
-  top: -15px;
-  left: 58px;
-  width: 28px;
-  height: 28px;
-  --end-rot: -5deg;
-  animation-delay: 2.4s;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M 6 16 C 6 4, 26 4, 26 16' fill='none' stroke='%23ef4444' stroke-width='4'/%3E%3Crect x='2' y='14' width='8' height='14' rx='4' fill='%23ef4444'/%3E%3Crect x='22' y='14' width='8' height='14' rx='4' fill='%23ef4444'/%3E%3C/svg%3E");
-}
-#item-mixer {
-  top: -25px;
-  left: 75px;
-  width: 26px;
-  height: 34px;
-  --end-rot: 5deg;
-  animation-delay: 3.2s;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 32 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M 8 20 L 24 20 L 28 36 L 4 36 Z' fill='%2314b8a6' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='28' r='4' fill='%23ccfbf1'/%3E%3Cpolygon points='10,20 22,20 24,8 8,8' fill='%23cbd5e1'/%3E%3Crect x='6' y='4' width='20' height='4' rx='2' fill='%230f766e'/%3E%3Cpath d='M 8 10 L 3 10 L 3 18 L 8 18' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E");
-}
+/* From Uiverse.io by abhinav_7137 — só o carrinho SVG ficou (os 5 itens
+   caindo foram removidos e substituídos pela fumaça que subia em cima
+   do botão de WhatsApp — ver .sunset-smoke abaixo). Traço do carrinho
+   recolorido de #334155 pra ficar visível no fundo escuro do site. */
 #cart-icon {
   position: relative;
   z-index: 2;
@@ -754,25 +727,6 @@ a {
   filter: drop-shadow(0 0 1.5px #081912) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
   animation: sunset-cart-bounce 0.8s ease-in-out infinite;
   animation-delay: 0.2s;
-}
-@keyframes sunset-cart-drop-item {
-  0% {
-    transform: translateY(-20px) scale(0.8) rotate(0deg);
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-    transform: translateY(20px) scale(1) rotate(calc(var(--end-rot) / 2));
-  }
-  25% {
-    transform: translateY(55px) scale(1) rotate(var(--end-rot));
-    opacity: 1;
-  }
-  35%,
-  100% {
-    transform: translateY(75px) scale(0.9) rotate(var(--end-rot));
-    opacity: 0;
-  }
 }
 @keyframes sunset-cart-bounce {
   0%,
@@ -887,6 +841,9 @@ a {
   transform: translateX(-50%);
   filter: blur(5px);
   animation: sunset-smoke-rise 3s infinite ease-in-out;
+  /* Decorativo — clicar nela nunca deve acionar o link/botão por baixo,
+     só clicar em cima do ícone de verdade conta. */
+  pointer-events: none;
 }
 
 /* Uiverse.io by Mohammad-Rahme-576 — "tooltip-container" (share button
@@ -900,9 +857,9 @@ a {
   left: 50%;
   bottom: calc(100% + 14px);
   display: flex;
-  gap: 14px;
+  gap: 18px;
   margin: 0;
-  padding: 10px 14px;
+  padding: 14px 18px;
   border-radius: 18px;
   list-style: none;
   background: var(--color-son-black);
@@ -912,7 +869,10 @@ a {
   pointer-events: none;
   transform: translateX(-50%) translateY(8px) scale(0.92);
   transition: opacity 0.22s ease, transform 0.22s ease;
-  z-index: 5;
+  /* Acima do backdrop (z-0) e do botão (z-20) — sem isso o backdrop que
+     fecha o tooltip no clique-fora ficava por cima e engolia o clique
+     nos ícones ("clico e não acontece nada"). */
+  z-index: 21;
 }
 .sunset-share-tooltip::after {
   content: '';
@@ -936,8 +896,8 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   color: var(--color-son-silver);
   background: rgba(255, 255, 255, 0.06);
