@@ -344,132 +344,188 @@ a {
   -webkit-backdrop-filter: blur(10px);
 }
 
-/* From Uiverse.io (dashboard "Income" card) — só a parte de cima
-   (heading + valor "digitando" + badge + comparação) ficou; tags,
-   gráfico de barras e botão foram removidos a pedido. Borda em
-   gradiente animado recolorida pro dourado/laranja do site (era
-   arco-íris magenta/roxo/ciano). */
-.sunset-income-card {
-  border-radius: 12px;
-  padding: 5px;
-  width: 136px;
-  max-width: 100%;
-  flex-shrink: 0;
-  background: var(--color-son-black);
+/* Uiverse.io by dexter-st — ticket perfurado com bump-map SVG (relevo
+   de "papel") + máscaras radiais formando os furinhos do topo/base, o
+   entalhe lateral e a linha pontilhada de corte, + camada holográfica
+   com blend modes. Clone exato da técnica, só DEITADO (era vertical
+   180x320 — aqui os furos do topo/base e o entalhe lateral continuam
+   fazendo sentido geometricamente, só recalculados pra um card baixo e
+   largo) e recolorido pro dourado/laranja do site (era magenta/ciano).
+   O "hover" da referência já era loop infinito incondicional (não
+   :hover de verdade) — mantido como estava. */
+.sunset-ticket-card {
+  --width: 190px;
+  --height: 116px;
+  --perforation-size: 7px;
+  --cutouts-adjust: 33px;
+
   position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 0.4rem;
+  grid-template-areas: 'header' 'body' 'footer';
+
+  width: var(--width);
+  max-width: 100%;
+  height: var(--height);
+  padding: var(--perforation-size) 0;
+  flex-shrink: 0;
+
+  font-family: 'Inter', sans-serif;
   user-select: none;
   overflow: hidden;
+
+  filter: drop-shadow(0 2px 1px #00000025) drop-shadow(0 4px 3px #00000025) drop-shadow(0 10px 9px #00000025);
+  animation: sunset-ticket-hover 3s ease infinite;
+  will-change: transform, filter;
 }
-.sunset-income-card::before,
-.sunset-income-card::after {
+@keyframes sunset-ticket-hover {
+  50% {
+    filter: drop-shadow(0 4px 3px #00000015) drop-shadow(0 6px 6px #00000015) drop-shadow(0 16px 14px #00000015);
+    transform: translateY(-3px) scale(1.015);
+  }
+}
+.sunset-ticket-filter {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.sunset-ticket-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: #fff;
+  filter: url(#sunsetTicketBump);
+  mask:
+    radial-gradient(circle at 50% 0, #fff0 calc(var(--perforation-size) - 3px), #000 calc(var(--perforation-size) - 2px)),
+    radial-gradient(circle at 50% 100%, #fff0 calc(var(--perforation-size) - 3px), #000 calc(var(--perforation-size) - 2px)),
+    radial-gradient(circle 6px at left center, #000 98%, #0000 100%),
+    radial-gradient(circle 6px at right center, #000 98%, #0000 100%),
+    repeating-linear-gradient(90deg, #000 6px, #000 9px, #0000 10px, #0000 15px);
+  mask-repeat: repeat-x, repeat-x, no-repeat, no-repeat, repeat-x;
+  mask-size:
+    calc(var(--perforation-size) * 2) 100%,
+    calc(var(--perforation-size) * 2) 100%,
+    12px 12px,
+    12px 12px,
+    7px 2px;
+  mask-position:
+    calc(0.5 * var(--perforation-size)) top,
+    calc(0.5 * var(--perforation-size)) bottom,
+    left var(--cutouts-adjust),
+    right var(--cutouts-adjust),
+    0 calc(var(--cutouts-adjust) + 5px);
+  mask-composite: intersect, exclude, add, add;
+}
+.sunset-ticket-holographic {
+  background-image:
+    linear-gradient(to bottom, #ffd23d55, 90%, #0002),
+    conic-gradient(at 60% 50%, #fff3d0, #ffd23d, #ffb703, #f3e6c9, #e08a3a, #fff3d0, #e08a3a, #ffd23d, #0002, #e08a3a, #f3e6c9, #b57c27, #fff3d0);
+}
+.sunset-ticket-holographic::before {
   content: '';
   position: absolute;
-  left: 0px;
-  top: 0px;
-  border-radius: 12px;
-  background: linear-gradient(45deg, #ffd23d, #ffb703, #e08a3a, #fff3d0, #d5aa45, #b57c27, #d5aa45, #e08a3a, #ffb703, #ffd23d);
-  background-size: 400%;
-  width: 100%;
-  height: 100%;
-  z-index: -1;
-  animation: sunset-income-steam 40s linear infinite;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 70% 20%, #ffd23d, #0000),
+    repeating-radial-gradient(circle at 30% 80%, #fff, #e08a3a 24px, #f3e6c9 70px);
+  mix-blend-mode: color-burn;
 }
-@keyframes sunset-income-steam {
-  0% {
-    background-position: 0 0;
+.sunset-ticket-holographic::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, #e08a3a55, #ffb703, #b57c27, #e08a3a55);
+  mix-blend-mode: difference;
+  animation: sunset-ticket-bg-pos 3s ease-in-out infinite alternate;
+  background-position: 0 0;
+  background-size: 100% 300%;
+  background-repeat: repeat;
+}
+@keyframes sunset-ticket-bg-pos {
+  to {
+    background-position: 0 200px;
   }
-  50% {
-    background-position: 400% 0;
-  }
-  100% {
-    background-position: 0 0;
-  }
 }
-.sunset-income-card::after {
-  filter: blur(20px);
+.sunset-ticket-header {
+  position: relative;
+  grid-area: header;
+  margin: 0 8px;
+  padding-top: 2px;
+  text-align: center;
+  z-index: 1;
+  font-family: Impact, sans-serif;
+  font-size: 0.85rem;
+  line-height: 1.05;
+  letter-spacing: 1px;
+  color: #ffffff9f;
+  -webkit-text-stroke: #fff 0.4px;
+  mix-blend-mode: difference;
 }
-.sunset-income-flex {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
+.sunset-ticket-body {
+  grid-area: body;
+  margin: 0 0.7em;
+  font-size: 0.56rem;
+  line-height: 1.35;
+  font-weight: 300;
+  color: #1a1006;
+  z-index: 1;
 }
-.sunset-income-tag {
-  fill: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 14px;
-  width: 14px;
-  flex-shrink: 0;
-  box-shadow: 2px 2px 2px rgba(0, 0, 0, 0.65);
+.sunset-ticket-footer {
+  grid-area: footer;
+  z-index: 1;
+  margin: 0 0.7em 0.35em 0.7em;
 }
-.sunset-income-bg-custom {
-  background: linear-gradient(to right, #3a2410, #020202);
-  padding: 8px;
-  border-radius: 8px;
-  box-shadow: inset -3px -3px 6px rgba(58, 36, 16, 0.5), inset 3px 3px 6px rgba(20, 20, 20, 0.6);
-  overflow: hidden;
+.sunset-ticket-number {
+  margin-bottom: 0.3rem;
+  text-align: center;
+  color: #1a1006;
+  font-size: 0.58rem;
+  font-weight: 300;
 }
-.sunset-income-card .sunset-income-heading {
-  margin: 0;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--color-son-silver);
-  text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.65);
+.sunset-ticket-bold {
+  font-weight: 700;
 }
-.sunset-income-amount {
-  font-size: 15px;
-  font-weight: bold;
-  margin: 4px 0;
-  line-height: 1.2;
+.sunset-ticket-barcode {
+  justify-self: center;
+  margin: 0 auto;
+  width: 0;
+  height: 16px;
+  box-shadow:
+    0px 0 0 1px #000, 2px 0 0 1px #000, 4px 0 0 1px #000, 6px 0 0 1px #000, 8px 0 0 1px #000, 8px 0 0 1px #000,
+    11px 0 0 1px #000, 14px 0 0 1px #000, 15px 0 0 1px #000, 18px 0 0 1px #000, 18px 0 0 1px #000, 20px 0 0 1px #000,
+    22px 0 0 1px #000, 24px 0 0 1px #000, 25px 0 0 1px #000, 28px 0 0 1px #000, 30px 0 0 1px #000, 30px 0 0 1px #000,
+    32px 0 0 1px #000, 35px 0 0 1px #000, 35px 0 0 1px #000, 37px 0 0 1px #000;
+  transform: translateX(19px);
+}
+.sunset-ticket-symbol {
+  position: absolute;
+  top: 0.15em;
+  right: 2px;
+  rotate: 185deg;
+  font-size: 0.7em;
   color: #fff;
-  text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.65);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  line-height: 0.5;
+  opacity: 0.25;
 }
-.sunset-income-typing {
+.sunset-ticket-notes {
+  position: absolute;
+  inset: 0;
   overflow: hidden;
-  white-space: nowrap;
-  border-right: 2px solid #fff;
-  display: inline-block;
-  animation: sunset-income-typing 8s steps(20) infinite, sunset-income-blink 1.2s step-end infinite;
+  font-size: 1.8rem;
+  color: #e7e7e7;
+  mix-blend-mode: color-burn;
+  transform: translateY(20%);
+  z-index: 1;
+  opacity: 0.5;
 }
-@keyframes sunset-income-typing {
-  0% {
-    width: 0;
-  }
-  40% {
-    width: 62px;
-  }
-  60% {
-    width: 62px;
-  }
-  100% {
-    width: 0;
-  }
+.sunset-ticket-notes:nth-child(2) {
+  transform: translateY(40%);
 }
-@keyframes sunset-income-blink {
-  50% {
-    border-color: transparent;
-  }
-}
-.sunset-income-main-pr {
-  font-size: 8px;
-  color: var(--color-son-orange);
-  margin-left: 3px;
-  font-weight: 500;
-  background: rgba(224, 138, 58, 0.25);
-  border-radius: 4px;
-  padding: 1px 3px;
-  white-space: nowrap;
-}
-.sunset-income-compare {
-  font-size: 7px;
-  color: var(--color-son-silver);
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.65);
-  line-height: 1.3;
+.sunset-ticket-notes:nth-child(3) {
+  transform: translateY(60%);
 }
 
 /* From Uiverse.io by ashwin_5681 — esteira infinita (itens absolutos que
@@ -643,24 +699,6 @@ a {
 .sunset-jcard-footer-text p:last-child {
   font-size: 0.72rem;
   color: rgba(255, 255, 255, 0.55);
-}
-/* Ícone do botão "Coqueiro (padrão)" em /admin/conta — balança que nem
-   o coqueiro de verdade do fundo, só pra identificar o modo de longe. */
-.sunset-coqueiro-icon {
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-  transform-origin: bottom center;
-  animation: sunset-coqueiro-sway 2.6s ease-in-out infinite;
-}
-@keyframes sunset-coqueiro-sway {
-  0%,
-  100% {
-    transform: rotate(-8deg);
-  }
-  50% {
-    transform: rotate(8deg);
-  }
 }
 .sunset-jcard-arrow {
   width: 1.5rem;
