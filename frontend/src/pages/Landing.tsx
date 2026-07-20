@@ -140,31 +140,10 @@ export default function Landing() {
 
       <section className="relative z-10 max-w-4xl mx-auto px-6 sm:px-10 pt-8 sm:pt-10 pb-20 text-center">
         <motion.div
-          initial={{ opacity: 0, y: 16 + badgesOffsetY }}
-          animate={{ opacity: 1, y: badgesOffsetY }}
-          transition={{ duration: 0.6 }}
-          className="flex flex-wrap justify-center items-center"
-          style={{ flexDirection: badgesLayout === 'column' ? 'column' : 'row', gap: `${badgesGap}px` }}
-        >
-          {/* Lista de badges editável em /admin/conta (texto + negrito +
-              layout lado-a-lado/empilhado + espaçamento). Fica entre o
-              banner e os botões de catálogo/consulta. */}
-          {badges.map((b) => (
-            <span key={b.id} className="sunset-shine-badge">
-              <span
-                className={`sunset-shine-badge-inner px-4 py-2 text-xs sm:text-sm ${b.bold ? 'font-bold' : 'font-medium'} text-son-gold`}
-              >
-                {b.text}
-              </span>
-            </span>
-          ))}
-        </motion.div>
-
-        <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.3 }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10"
+          className="flex flex-col sm:flex-row items-center justify-center gap-4"
         >
           {/* "Continue" button — reproduzido fiel à referência (mesmo
               pill + círculo com seta), recolorido pro dourado do site
@@ -186,8 +165,29 @@ export default function Landing() {
           </Link>
         </motion.div>
 
-        {/* Botão do Maps — antes ficava dentro da lista de badges;
-            agora renderiza sozinho, embaixo dos dois botões acima. */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 + badgesOffsetY }}
+          animate={{ opacity: 1, y: badgesOffsetY }}
+          transition={{ duration: 0.6 }}
+          className="flex flex-wrap justify-center items-center mt-10"
+          style={{ flexDirection: badgesLayout === 'column' ? 'column' : 'row', gap: `${badgesGap}px` }}
+        >
+          {/* Lista de badges editável em /admin/conta (texto + negrito +
+              layout lado-a-lado/empilhado + espaçamento + posição
+              vertical). Fica embaixo dos botões de catálogo/consulta. */}
+          {badges.map((b) => (
+            <span key={b.id} className="sunset-shine-badge">
+              <span
+                className={`sunset-shine-badge-inner px-4 py-2 text-xs sm:text-sm ${b.bold ? 'font-bold' : 'font-medium'} text-son-gold`}
+              >
+                {b.text}
+              </span>
+            </span>
+          ))}
+        </motion.div>
+
+        {/* Botão do Maps — fora da lista de badges, sempre embaixo de
+            tudo (é link de verdade, não item editável). */}
         <a
           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
             'Rua Rosa de Paula Barbosa, 16 - José Américo de Almeida, João Pessoa - PB'
