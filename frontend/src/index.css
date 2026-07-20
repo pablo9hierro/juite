@@ -939,6 +939,12 @@ a {
     background-size: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%;
   }
 }
+/* --drift (setado por baforada no CartFab) faz cada foco de fumaça
+   desviar pro lado de um jeito diferente enquanto sobe, com uma curva
+   no meio do caminho (55%) em vez de uma reta — fica com trajetórias
+   diagonais/inclinadas variadas, tipo fumaça de verdade, em vez de
+   todas subindo empilhadas retas (que com várias baforadas juntas lia
+   como um espiral). */
 @keyframes sunset-smoke-rise {
   0% {
     transform: translate(-50%, 0) scale(0.4);
@@ -949,9 +955,10 @@ a {
   }
   55% {
     opacity: 0.6;
+    transform: translate(calc(-50% + var(--drift, 0px) * 0.45), -40px) scale(0.8);
   }
   100% {
-    transform: translate(-50%, -70px) scale(1);
+    transform: translate(calc(-50% + var(--drift, 0px)), -70px) scale(1);
     opacity: 0;
   }
 }

@@ -1,0 +1,89 @@
+/* Uiverse.io by SelfMadeSystem — "fire" loader: 100 bolinhas com uma
+   seed --n cada (mesmos 100 valores exatos da referência), posição e
+   fase de animação derivadas via mod()/calc() a partir dessa seed, +
+   camadas de blur/brightness(10) formando o efeito "metaball" que funde
+   as bolinhas numa chama coesa. Clone exato da técnica/valores — só o
+   tamanho final é bem menor que os 200px da referência (fica pendurado
+   em cima do #cart-icon, não a tela toda) e o `.sunset-fire-loader-wrap`
+   ganha overflow:hidden numa área pequena: sem isso, o inset:-999px do
+   overlay/blur vaza brightness(10) por cima do resto da página de
+   verdade (mesmo bug já visto antes com esse tipo de filtro).
+   Decorativo/pointer-events:none — clicar aqui não aciona o link, só
+   clicar em cima do #cart-icon de verdade conta. */
+.sunset-fire-loader-wrap {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 42px;
+  height: 63px;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+.sunset-fire-loader {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  height: 200px;
+  max-height: 80%;
+  aspect-ratio: 2 / 3;
+  transform: translateX(-50%) scale(0.3);
+  transform-origin: bottom center;
+}
+.sunset-fire-ball {
+  position: absolute;
+  bottom: 0;
+  --a: 32.02135;
+  --w: 24px;
+  --m: 10px;
+  --b: mod(var(--n) * var(--a), 1);
+  left: calc((100% - var(--w)) * var(--b));
+  width: var(--w);
+  height: var(--w);
+  background: radial-gradient(closest-side, #fff, #f50, #f00, #f300);
+  border-radius: 0% 100%;
+  translate: calc(-1 * var(--m)) 0;
+  animation:
+    sunset-fire-ball-wee 2s calc(var(--n) * -2s) infinite linear,
+    sunset-fire-ball-bf 1.756s calc(mod(var(--n) * 6, 1) * -1.232s) ease-in-out infinite;
+}
+@keyframes sunset-fire-ball-wee {
+  from {
+    scale: 0;
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  15% {
+    scale: 1;
+  }
+  to {
+    left: calc(50% - var(--w) * 0.5 + (25%) * (var(--b) * 2 - 1));
+    bottom: calc(100% - 24px);
+    scale: 0;
+    rotation: 180deg;
+  }
+}
+@keyframes sunset-fire-ball-bf {
+  50% {
+    translate: var(--m) 0;
+  }
+}
+.sunset-fire-blur {
+  position: absolute;
+  inset: -999px;
+  z-index: 1;
+  pointer-events: none;
+}
+.sunset-fire-line {
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(var(--p));
+  mask: linear-gradient(0deg, #000 var(--s), #0000 var(--e));
+}
+.sunset-fire-overlay {
+  position: absolute;
+  inset: -999px;
+  backdrop-filter: blur(7px) brightness(10);
+}
