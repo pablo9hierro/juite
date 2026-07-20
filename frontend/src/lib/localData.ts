@@ -68,6 +68,8 @@ export interface LocalCampanhaCoupon {
   fired_at: string | null
   created_at: string
   last_synced_segment_criteria: CrmFilterCriteria | null
+  schedule_delay_days: number | null
+  schedule_hour: number | null
 }
 
 // Cupom extra de uma campanha (além do principal em LocalCampanhaCoupon.coupon_id).
@@ -78,6 +80,8 @@ export interface LocalCampanhaExtraCoupon {
   message_template: string
   end_criteria: CrmFilterCriteria | null
   created_at: string
+  schedule_delay_days: number | null
+  schedule_hour: number | null
 }
 
 export interface LocalDb {

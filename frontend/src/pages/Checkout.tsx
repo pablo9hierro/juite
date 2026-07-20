@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CreditCard, Gift, Home, Loader2, MapPin, QrCode, Tag, Wallet } from 'lucide-react'
+import { CreditCard, Gift, Home, Loader2, MapPin, Phone, QrCode, StickyNote, Tag, User, Wallet } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
 import PageTransition from '../components/layout/PageTransition'
 import LocationPicker from '../components/checkout/LocationPicker'
@@ -344,25 +344,35 @@ export default function Checkout() {
         <div className="bg-son-black/75 backdrop-blur-md border border-white/10 rounded-3xl p-4 sm:p-6 space-y-5">
           <div>
             <label className="label">Seu nome *</label>
-            <input
-              className="input-field sunset-checkout-input"
-              value={customer.name}
-              onChange={(e) => customer.set({ name: e.target.value })}
-              placeholder="Nome completo"
-            />
+            <div className="sunset-input-icon-wrap">
+              <input
+                className="input-field sunset-checkout-input pr-11"
+                value={customer.name}
+                onChange={(e) => customer.set({ name: e.target.value })}
+                placeholder="Nome completo"
+              />
+              <span className="sunset-input-icon">
+                <User />
+              </span>
+            </div>
           </div>
 
           <div>
             <label className="label">WhatsApp *</label>
-            <input
-              className="input-field sunset-checkout-input"
-              value={customer.whatsapp}
-              onChange={(e) => customer.set({ whatsapp: formatPhone(e.target.value) })}
-              type="tel"
-              inputMode="numeric"
-              placeholder="(83) 99999-9999"
-              maxLength={15}
-            />
+            <div className="sunset-input-icon-wrap">
+              <input
+                className="input-field sunset-checkout-input pr-11"
+                value={customer.whatsapp}
+                onChange={(e) => customer.set({ whatsapp: formatPhone(e.target.value) })}
+                type="tel"
+                inputMode="numeric"
+                placeholder="(83) 99999-9999"
+                maxLength={15}
+              />
+              <span className="sunset-input-icon">
+                <Phone />
+              </span>
+            </div>
           </div>
 
           <div>
@@ -411,12 +421,17 @@ export default function Checkout() {
           {!pickupAtStore && (
             <div>
               <label className="label">Ponto de referência</label>
-              <input
-                className="input-field sunset-checkout-input"
-                value={customer.referencePoint}
-                onChange={(e) => customer.set({ referencePoint: e.target.value })}
-                placeholder="Número da casa/Condomínio, observações de entrega..."
-              />
+              <div className="sunset-input-icon-wrap">
+                <input
+                  className="input-field sunset-checkout-input pr-11"
+                  value={customer.referencePoint}
+                  onChange={(e) => customer.set({ referencePoint: e.target.value })}
+                  placeholder="Número da casa/Condomínio, observações de entrega..."
+                />
+                <span className="sunset-input-icon">
+                  <StickyNote />
+                </span>
+              </div>
             </div>
           )}
 

@@ -138,7 +138,7 @@ export default function Landing() {
       <WhatsAppFab />
       <CartFab />
 
-      <section className="relative z-10 max-w-4xl mx-auto px-6 sm:px-10 pt-8 sm:pt-10 pb-20 text-center">
+      <section className="relative z-10 max-w-4xl mx-auto px-6 sm:px-10 pt-2 pb-20 text-center">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}

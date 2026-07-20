@@ -121,6 +121,11 @@ export interface CrmCampanhaExtraCoupon {
   // segmento, mesmo mecanismo do gatilho) — null = sem encerramento
   // automático.
   end_criteria: CrmFilterCriteria | null
+  // Agendamento de disparo — null = notifica na hora que concede (de
+  // sempre). Preenchido = espera N dias (a partir da concessão) e só
+  // dispara na hora configurada (0-23, horário de Brasília).
+  schedule_delay_days: number | null
+  schedule_hour: number | null
 }
 
 export interface CrmCampanhaCoupon {
@@ -149,6 +154,10 @@ export interface CrmCampanhaCoupon {
   fired_at: string | null
   created_at: string
   extra_coupons: CrmCampanhaExtraCoupon[]
+  // Agendamento de disparo do cupom PRINCIPAL — mesma regra do extra
+  // (ver CrmCampanhaExtraCoupon.schedule_delay_days).
+  schedule_delay_days: number | null
+  schedule_hour: number | null
   // "Retrato" do filter_criteria do segmento no momento em que o
   // trigger_criteria foi calibrado pela última vez (criação ou edição) —
   // compara com o filter_criteria ATUAL do segmento pra saber exatamente

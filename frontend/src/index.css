@@ -266,6 +266,31 @@ a {
 .sunset-checkout-input:focus::placeholder {
   color: rgba(8, 25, 18, 0.6);
 }
+/* Uiverse.io by Yaya12085 — ícone dentro do canto do campo (era e-mail/
+   cadeado num form claro; aqui é usuário/telefone/nota, recolorido pro
+   dourado do site em vez do cinza #9CA3AF original, layout/posição
+   idênticos ao da referência). */
+.sunset-input-icon-wrap {
+  position: relative;
+}
+.sunset-input-icon {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: grid;
+  place-content: center;
+  padding: 0 0.9rem;
+  pointer-events: none;
+  color: var(--color-son-gold);
+  opacity: 0.75;
+}
+.sunset-input-icon svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.sunset-checkout-input:focus ~ .sunset-input-icon {
+  color: var(--color-son-black);
+  opacity: 0.85;
+}
 .sunset-checkout-submit {
   background: var(--color-son-orange);
   color: #fff;
@@ -423,7 +448,8 @@ a {
   z-index: 10;
   display: flex;
   justify-content: center;
-  padding: 3.5rem 1.5rem 2.5rem;
+  /* Espaço até o botão "Ver catálogo" reduzido em 75% (era 2.5rem). */
+  padding: 3.5rem 1.5rem 0.625rem;
 }
 .sunset-jcard {
   position: relative;
@@ -991,8 +1017,8 @@ a {
    WhatsAppFab), virou um loop automático e contínuo balançando o BG pra
    lá e pra cá, em vez de esperar interação. */
 .sunset-wa-static {
-  width: 45px;
-  height: 45px;
+  width: 79px;
+  height: 79px;
   display: flex;
   align-items: center;
   justify-content: center;

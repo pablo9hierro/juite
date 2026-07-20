@@ -321,22 +321,35 @@ function isCampanhaStale(cc: CrmCampanhaCoupon, segment: CrmSegment | undefined)
   return getChangedFields(oldCriteria, segment.filter_criteria as unknown as FilterState).size > 0
 }
 
-// Regra da cadeia: gatilho só pode ser sucedido de cupom; cupom pode ser
-// sucedido de cupom ou gatilho; campanha evento sem gatilho ainda só libera
-// "novo gatilho" (precisa existir antes de qualquer cupom depender dele).
-function getCampanhaNovoOptions(cc: CrmCampanhaCoupon): { cupomEnabled: boolean; gatilhoEnabled: boolean; gatilhoFimEnabled: boolean } {
+// Regra da cadeia: gatilho só pode ser sucedido de cupom; campanha evento
+// sem gatilho ainda só libera "novo gatilho" (precisa existir antes de
+// qualquer cupom depender dele). Cupom encadeado direto no dashboard (cupom
+// -> novo cupom) NÃO existe mais pra campanha evento — a partir do primeiro
+// cupom, só dá pra seguir com gatilho/gatilho de encerramento por aqui; mais
+// de um cupom exclusivo por gatilho se define dentro do próprio formulário
+// do gatilho ("Cupons exclusivos deste gatilho").
+function getCampanhaNovoOptions(
+  cc: CrmCampanhaCoupon
+): { cupomEnabled: boolean; cupomDisabledReason?: string; gatilhoEnabled: boolean; gatilhoFimEnabled: boolean } {
   const lastNodeType: 'campanha' | 'gatilho' | 'cupom' =
     cc.coupon_id || cc.extra_coupons.length > 0
       ? 'cupom'
       : cc.orientation === 'evento' && cc.trigger_criteria
       ? 'gatilho'
       : 'campanha'
+  const isEvento = cc.orientation === 'evento'
+  const cupomEnabled = isEvento ? lastNodeType === 'gatilho' : true
   return {
-    cupomEnabled: !(cc.orientation === 'evento' && lastNodeType === 'campanha'),
-    gatilhoEnabled: cc.orientation === 'evento' && lastNodeType !== 'gatilho',
+    cupomEnabled,
+    cupomDisabledReason: cupomEnabled
+      ? undefined
+      : lastNodeType === 'campanha'
+      ? 'Defina o gatilho do evento primeiro'
+      : 'Mais de um cupom exclusivo agora se adiciona dentro do formulário do gatilho ("Cupons exclusivos deste gatilho")',
+    gatilhoEnabled: isEvento && lastNodeType !== 'gatilho',
     // Gatilho de encerramento é independente da posição na cadeia — só
     // não pode ter dois (edita o existente em vez de criar outro).
-    gatilhoFimEnabled: cc.orientation === 'evento' && !cc.end_criteria,
+    gatilhoFimEnabled: isEvento && !cc.end_criteria,
   }
 }
 
@@ -3444,7 +3457,7 @@ export default function AdminCrm() {
       <AnimatePresence>
         {campanhaNovoChooserCc && (() => {
           const cc = campanhaNovoChooserCc
-          const { cupomEnabled, gatilhoEnabled, gatilhoFimEnabled } = getCampanhaNovoOptions(cc)
+          const { cupomEnabled, cupomDisabledReason, gatilhoEnabled, gatilhoFimEnabled } = getCampanhaNovoOptions(cc)
           return (
             <motion.div
               initial={{ opacity: 0 }}
@@ -3477,7 +3490,7 @@ export default function AdminCrm() {
                       setCampanhaNovoChooserId(null)
                       openNewCampanhaExtraCoupon(cc)
                     }}
-                    title={!cupomEnabled ? 'Defina o gatilho do evento primeiro' : undefined}
+                    title={cupomDisabledReason}
                     className="w-full flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-purple-400/40 text-purple-300 text-sm font-semibold hover:bg-purple-500/10 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                   >
                     <Gift className="w-4 h-4" /> Cupom exclusivo

@@ -1152,7 +1152,14 @@ function campanhaExtraCoupons(db: LocalDb, campanhaId: string): import('./types'
     .map((ec) => {
       const coupon = (db.coupons ?? []).find((c) => c.id === ec.coupon_id)
       return coupon
-        ? { id: ec.id, coupon: withGrantCount(db, coupon), message_template: ec.message_template, end_criteria: ec.end_criteria ?? null }
+        ? {
+            id: ec.id,
+            coupon: withGrantCount(db, coupon),
+            message_template: ec.message_template,
+            end_criteria: ec.end_criteria ?? null,
+            schedule_delay_days: ec.schedule_delay_days ?? null,
+            schedule_hour: ec.schedule_hour ?? null,
+          }
         : null
     })
     .filter((x): x is import('./types').CrmCampanhaExtraCoupon => !!x)
@@ -1203,6 +1210,8 @@ async function createCampanha(payload: {
     fired_at: null,
     created_at: nowIso(),
     last_synced_segment_criteria: segment.filter_criteria,
+    schedule_delay_days: null,
+    schedule_hour: null,
   }
   db.campanhaCoupons.push(row)
   saveDb(db)
@@ -1459,6 +1468,8 @@ async function createCampanhaExtraCoupon(
       message_template: payload.message_template.trim(),
       end_criteria: null,
       created_at: nowIso(),
+      schedule_delay_days: null,
+      schedule_hour: null,
     })
     // A campanha já disparou antes (tem concessão do cupom principal)?
     // Esse cupom novo entra pra mesma turma na hora — desde que a
