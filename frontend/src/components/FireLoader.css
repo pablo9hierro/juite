@@ -1,21 +1,22 @@
 /* Uiverse.io by SelfMadeSystem — "fire" loader: 100 bolinhas com uma
    seed --n cada (mesmos 100 valores exatos da referência), posição e
    fase de animação derivadas via mod()/calc() a partir dessa seed, +
-   camadas de blur/brightness(10) formando o efeito "metaball" que funde
-   as bolinhas numa chama coesa. Clone exato da técnica/valores — só o
-   tamanho final é bem menor que os 200px da referência (fica pendurado
-   em cima do #cart-icon, não a tela toda) e o `.sunset-fire-loader-wrap`
-   ganha overflow:hidden numa área pequena: sem isso, o inset:-999px do
-   overlay/blur vaza brightness(10) por cima do resto da página de
-   verdade (mesmo bug já visto antes com esse tipo de filtro).
-   Decorativo/pointer-events:none — clicar aqui não aciona o link, só
-   clicar em cima do #cart-icon de verdade conta. */
+   camadas de blur/brightness formando o efeito "metaball" que funde as
+   bolinhas numa chama coesa. Clone exato da técnica/valores (só o
+   brightness(10) da referência foi reduzido — ver .sunset-fire-overlay
+   abaixo) — o tamanho final também é bem menor que os 200px da
+   referência (fica pendurado em cima do #cart-icon, não a tela toda) e
+   o `.sunset-fire-loader-wrap` ganha overflow:hidden numa área pequena
+   pra conter o inset:-999px do overlay/blur, que do contrário vaza por
+   cima do resto da página de verdade. Decorativo/pointer-events:none —
+   clicar aqui não aciona o link, só clicar em cima do #cart-icon de
+   verdade conta. */
 .sunset-fire-loader-wrap {
   position: absolute;
   left: 50%;
   bottom: 100%;
-  width: 42px;
-  height: 63px;
+  width: 60px;
+  height: 90px;
   overflow: hidden;
   pointer-events: none;
   transform: translateX(-50%);
@@ -27,7 +28,7 @@
   height: 200px;
   max-height: 80%;
   aspect-ratio: 2 / 3;
-  transform: translateX(-50%) scale(0.3);
+  transform: translateX(-50%) scale(0.42);
   transform-origin: bottom center;
 }
 .sunset-fire-ball {
@@ -85,5 +86,10 @@
 .sunset-fire-overlay {
   position: absolute;
   inset: -999px;
-  backdrop-filter: blur(7px) brightness(10);
+  /* Na referência é brightness(10): funciona lá porque o fundo atrás é
+     neutro. Aqui o fundo real é colorido (synthwave/estrelas/etc.) e
+     brightness(10) estourava tudo pra um borrão branco/rosa ilegível
+     ("uma coisa branca irreconhecível") — mesmo bug já visto antes com
+     esse filtro, reduzido do mesmo jeito. */
+  backdrop-filter: blur(7px) brightness(1.3);
 }
