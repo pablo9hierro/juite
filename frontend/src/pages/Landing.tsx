@@ -176,7 +176,7 @@ export default function Landing() {
             onClick={() => (customerAuth.token ? navigate('/consultar') : setShowAuthModal(true))}
             className="btn-secondary sunset-glow-btn text-base px-8 py-4 w-full sm:w-auto"
           >
-            Acompanhar meu pedido
+            Acompanhar entrega
           </button>
         </motion.div>
 

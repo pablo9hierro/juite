@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Minus, Package, Plus, ShoppingBag, Trash2 } from 'lucide-react'
+import { Minus, Package, Plus, Trash2 } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
 import PageTransition from '../components/layout/PageTransition'
 import { api } from '../lib/api'
@@ -32,12 +32,7 @@ export default function Carrinho() {
   return (
     <main className="min-h-screen text-white">
       <SiteHeader showCart={false} title="Meu carrinho" />
-      <PageTransition className="max-w-2xl mx-auto px-5 sm:px-10 pb-20">
-        <h1 className="text-2xl sm:text-3xl font-black mb-6 flex items-center gap-2">
-          <ShoppingBag className="w-6 h-6 text-son-pink" />
-          Sua sacola
-        </h1>
-
+      <PageTransition className="max-w-2xl mx-auto px-5 sm:px-10 pt-6 pb-20">
         {loading ? null : lines.length === 0 ? (
           <div className="text-center py-20 text-son-silver-dim">
             <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
