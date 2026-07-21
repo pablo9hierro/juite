@@ -1270,7 +1270,10 @@ a {
 /* Uiverse.io by Cornerstone-04 — cantinhos que abrem num contorno neon
    com glow. Recolorido de #0f0 pra dourado sunset; era só :hover, virou
    loop automático (mobile não tem hover de verdade). Usado no nome da
-   página em TODO navbar de cliente (não só a marca na landing). */
+   página em TODO navbar de cliente (não só a marca na landing). Antes
+   ficava pulsando pra sempre (infinite); agora toca UMA vez só (ao
+   entrar/recarregar a página) e congela no estado final (forwards) —
+   pedido explícito pra parar de ficar em loop reiterado. */
 .sunset-brand-btn {
   cursor: default;
   background: transparent;
@@ -1284,7 +1287,7 @@ a {
   font-weight: 900;
   letter-spacing: 2px;
   color: var(--color-son-silver);
-  animation: sunset-brand-glow 5s ease-in-out infinite;
+  animation: sunset-brand-glow 5s ease-in-out 1 forwards;
 }
 .sunset-brand-btn span {
   position: relative;
@@ -1303,11 +1306,11 @@ a {
 }
 .sunset-brand-btn::before {
   left: -20px;
-  animation: sunset-brand-before 5s ease-in-out infinite;
+  animation: sunset-brand-before 5s ease-in-out 1 forwards;
 }
 .sunset-brand-btn::after {
   right: -20px;
-  animation: sunset-brand-after 5s ease-in-out infinite;
+  animation: sunset-brand-after 5s ease-in-out 1 forwards;
 }
 @keyframes sunset-brand-glow {
   0%, 15% {
