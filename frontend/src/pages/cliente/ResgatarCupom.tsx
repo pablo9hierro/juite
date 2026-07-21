@@ -3,34 +3,101 @@ import { Link, Navigate } from 'react-router-dom'
 import { Loader2, PartyPopper } from 'lucide-react'
 import SiteHeader from '../../components/layout/SiteHeader'
 import PageTransition from '../../components/layout/PageTransition'
-import CyberCard from '../../components/CyberCard'
 import CouponTicket from '../../components/CouponTicket'
 import { api, ApiError } from '../../lib/api'
 import type { ClaimedCoupon } from '../../lib/types'
 import { useCustomerAuth } from '../../store/customerAuth'
 
-// Efeito "Raspadinha": igual uma raspadinha física de verdade, o prêmio
-// (CouponTicket, ver components/CouponTicket.tsx) já está TODO renderizado
-// por baixo desde o início — não é revelado por uma RPC depois de raspar,
-// é só coberto visualmente. O CyberCard (Uiverse.io by 00Kubi, clone
-// completo, pele dourada) é o "papel" que cobre; um <canvas> transparente
-// por cima captura o arrastar do dedo/mouse e serve só de MÁSCARA
-// (mask-image) pro wrapper do CyberCard — onde o canvas fica "apagado"
-// (destination-out), o CyberCard vira invisível ali e mostra o ticket por
-// baixo. resgatar_cupom (RPC) roda uma única vez, assim que a página
-// confirma que tem cupom pra resgatar — raspar é só a animação de
-// descobrir o que já foi concedido, não um gate pra decidir o prêmio.
+// Desenha o "papel dourado" direto no canvas (gradiente do golden-button
+// by elijahgummer + cantos em L + texto), em vez de ficar sincronizando
+// via mask-image/toDataURL um card React separado por cima. Essa página é
+// só pra celular — toDataURL() a cada frame (jeito antigo) é pesado
+// demais pra acompanhar um dedo arrastando rápido num aparelho fraco, o
+// resultado era a raspagem "sumir" sem nenhuma animação visível
+// (reportado). Raspando direto no canvas com destination-out é uma
+// operação de GPU baratíssima — o dourado desaparece exatamente onde o
+// dedo passa, em tempo real, sem etapa intermediária nenhuma.
+function drawGoldFoil(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  const r = 18
+  ctx.save()
+  ctx.beginPath()
+  ctx.moveTo(r, 0)
+  ctx.arcTo(w, 0, w, h, r)
+  ctx.arcTo(w, h, 0, h, r)
+  ctx.arcTo(0, h, 0, 0, r)
+  ctx.arcTo(0, 0, w, 0, r)
+  ctx.closePath()
+  ctx.clip()
+
+  const grad = ctx.createLinearGradient(0, 0, w * 0.65, h)
+  grad.addColorStop(0, '#a54e07')
+  grad.addColorStop(0.3, '#b47e11')
+  grad.addColorStop(0.55, '#fef1a2')
+  grad.addColorStop(0.78, '#bc881b')
+  grad.addColorStop(1, '#a54e07')
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, w, h)
+
+  const sheen = ctx.createLinearGradient(0, 0, w, h)
+  sheen.addColorStop(0.35, 'rgba(255,255,255,0)')
+  sheen.addColorStop(0.5, 'rgba(255,255,255,0.35)')
+  sheen.addColorStop(0.65, 'rgba(255,255,255,0)')
+  ctx.fillStyle = sheen
+  ctx.fillRect(0, 0, w, h)
+
+  ctx.strokeStyle = 'rgba(120,50,5,0.7)'
+  ctx.lineWidth = 2
+  const cl = 16
+  const inset = 10
+  ctx.beginPath()
+  ctx.moveTo(inset, inset + cl)
+  ctx.lineTo(inset, inset)
+  ctx.lineTo(inset + cl, inset)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.moveTo(w - inset - cl, inset)
+  ctx.lineTo(w - inset, inset)
+  ctx.lineTo(w - inset, inset + cl)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.moveTo(inset, h - inset - cl)
+  ctx.lineTo(inset, h - inset)
+  ctx.lineTo(inset + cl, h - inset)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.moveTo(w - inset - cl, h - inset)
+  ctx.lineTo(w - inset, h - inset)
+  ctx.lineTo(w - inset, h - inset - cl)
+  ctx.stroke()
+
+  ctx.fillStyle = 'rgba(120,50,5,0.92)'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = '700 17px system-ui, sans-serif'
+  ctx.fillText('RASPE AQUI', w / 2, h / 2 - 10)
+  ctx.font = '400 11px system-ui, sans-serif'
+  ctx.fillText('arraste o dedo pra revelar seu cupom', w / 2, h / 2 + 16)
+
+  ctx.restore()
+}
+
+// Igual uma raspadinha física, o prêmio (CouponTicket, ver
+// components/CouponTicket.tsx) já está TODO renderizado por baixo desde o
+// início — não é revelado por uma RPC depois de raspar, é só coberto
+// visualmente pelo papel dourado. resgatar_cupom (RPC) roda uma única vez,
+// assim que a página confirma que tem cupom pra resgatar; raspar é só a
+// animação de descobrir o que já foi concedido.
 export default function ResgatarCupom() {
   const { token } = useCustomerAuth()
   const [checking, setChecking] = useState(true)
   const [claimable, setClaimable] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [fading, setFading] = useState(false)
   const [revealed, setRevealed] = useState(false)
   const [claimed, setClaimed] = useState<ClaimedCoupon | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const maskWrapRef = useRef<HTMLDivElement>(null)
   const drawing = useRef(false)
   const lastPoint = useRef<{ x: number; y: number } | null>(null)
   const rafPending = useRef(false)
@@ -51,15 +118,11 @@ export default function ResgatarCupom() {
       .finally(() => setChecking(false))
   }, [token])
 
-  // O tamanho em pixels do <canvas> (o "bitmap" onde a raspagem é
-  // desenhada) precisa acompanhar o tamanho real renderizado do card, não
-  // só ser medido uma vez no mount — o ticket carrega/reflui a altura dele
-  // um instante depois (imagem, fontes), e um <canvas> com resolução presa
-  // num tamanho errado fazia a raspagem acontecer em coordenadas
-  // completamente diferentes de onde o dedo realmente passava (reportado).
-  // ResizeObserver mantém os dois sempre em sincronia.
+  // Resolução do canvas sempre em sincronia com o tamanho real renderizado
+  // (ResizeObserver, não uma medição única no mount) — o ticket embaixo
+  // pode reajustar a própria altura um instante depois (fonte/layout).
   useEffect(() => {
-    if (checking || !claimable) return
+    if (checking || !claimable || !claimed) return
     const canvas = canvasRef.current
     if (!canvas) return
 
@@ -72,38 +135,15 @@ export default function ResgatarCupom() {
       canvas.height = rect.height * dpr
       const ctx = canvas.getContext('2d')
       if (!ctx) return
-      ctx.scale(dpr, dpr)
-      ctx.fillStyle = '#fff'
-      ctx.fillRect(0, 0, rect.width, rect.height)
-      updateMask()
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      drawGoldFoil(ctx, rect.width, rect.height)
     }
 
     resize()
     const ro = new ResizeObserver(resize)
     ro.observe(canvas)
     return () => ro.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checking, claimable])
-
-  function updateMask() {
-    const canvas = canvasRef.current
-    const wrap = maskWrapRef.current
-    if (!canvas || !wrap) return
-    const url = `url(${canvas.toDataURL()})`
-    wrap.style.maskImage = url
-    wrap.style.setProperty('-webkit-mask-image', url)
-    wrap.style.maskSize = '100% 100%'
-    wrap.style.setProperty('-webkit-mask-size', '100% 100%')
-  }
-
-  function scheduleMaskUpdate() {
-    if (rafPending.current) return
-    rafPending.current = true
-    requestAnimationFrame(() => {
-      updateMask()
-      rafPending.current = false
-    })
-  }
+  }, [checking, claimable, claimed])
 
   function getPos(e: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current!
@@ -118,7 +158,7 @@ export default function ResgatarCupom() {
     ctx.globalCompositeOperation = 'destination-out'
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
-    ctx.lineWidth = 38
+    ctx.lineWidth = 42
     ctx.beginPath()
     ctx.moveTo(from.x, from.y)
     ctx.lineTo(to.x, to.y)
@@ -131,43 +171,50 @@ export default function ResgatarCupom() {
     if (!canvas || !ctx) return
     const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height)
     let cleared = 0
-    const total = data.length / 4
-    for (let i = 3; i < data.length; i += 4 * 12) {
-      // amostra 1 a cada 12 pixels — suficiente pra estimar % e bem mais rápido
+    let sampled = 0
+    for (let i = 3; i < data.length; i += 4 * 16) {
       if (data[i] < 40) cleared++
+      sampled++
     }
-    const pct = Math.min(100, Math.round((cleared / (total / 12)) * 100))
+    const pct = Math.min(100, Math.round((cleared / sampled) * 100))
     setProgress(pct)
     if (pct >= 55) completeReveal()
   }
 
+  function scheduleProgressCheck() {
+    if (rafPending.current) return
+    rafPending.current = true
+    requestAnimationFrame(() => {
+      computeProgress()
+      rafPending.current = false
+    })
+  }
+
   function completeReveal() {
-    if (revealed) return
-    setRevealed(true)
+    if (fading || revealed) return
+    setFading(true)
     setProgress(100)
-    const wrap = maskWrapRef.current
-    if (wrap) {
-      wrap.style.transition = 'opacity 0.6s ease'
-      wrap.style.opacity = '0'
-    }
+    window.setTimeout(() => setRevealed(true), 500)
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
-    if (revealed) return
+    if (revealed || fading) return
+    e.preventDefault()
     ;(e.target as HTMLCanvasElement).setPointerCapture(e.pointerId)
     drawing.current = true
     const p = getPos(e)
     lastPoint.current = p
     scratchLine(p, { x: p.x + 0.1, y: p.y + 0.1 })
-    scheduleMaskUpdate()
+    scheduleProgressCheck()
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
-    if (!drawing.current || revealed) return
+    if (!drawing.current || revealed || fading) return
+    e.preventDefault()
     const p = getPos(e)
     scratchLine(lastPoint.current ?? p, p)
     lastPoint.current = p
-    scheduleMaskUpdate()
+    scheduleProgressCheck()
   }
 
   function handlePointerUp() {
@@ -202,13 +249,10 @@ export default function ResgatarCupom() {
           <>
             <div className="sunset-scratch-wrap">
               <CouponTicket coupon={claimed} />
-              <div ref={maskWrapRef} className="absolute inset-0">
-                <CyberCard style={{ width: '100%', height: '100%' }} />
-              </div>
               {!revealed && (
                 <canvas
                   ref={canvasRef}
-                  className="sunset-scratch-canvas"
+                  className={`sunset-scratch-canvas ${fading ? 'sunset-scratch-canvas-fade' : ''}`}
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
@@ -219,7 +263,7 @@ export default function ResgatarCupom() {
 
             {!revealed && (
               <>
-                <p className="sunset-scratch-hint">Arraste o dedo (ou o mouse) sobre o cartão pra raspar e revelar seu cupom.</p>
+                <p className="sunset-scratch-hint">Arraste o dedo sobre o cartão pra raspar e revelar seu cupom.</p>
                 <div className="sunset-scratch-progress-track">
                   <div className="sunset-scratch-progress-fill" style={{ width: `${progress}%` }} />
                 </div>

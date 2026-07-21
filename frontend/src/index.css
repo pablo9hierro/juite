@@ -1721,216 +1721,34 @@ a {
   line-height: 1.5;
 }
 
-/* Uiverse.io by 00Kubi — "Cyber Card": grade 5x5 de tilt 3D + glare +
-   scanline + cantos em L + partículas de glow. Estrutura clonada, mas a
-   pele virou o dourado metálico do "golden-button" (Uiverse.io by
-   elijahgummer) — era roxo/ciano neon, trocado porque isso aqui é o
-   "papel" que cobre a raspadinha antes de raspar, e papel de raspadinha
-   é dourado/prateado, não roxo espacial. Sem interação (ou enquanto a
-   raspadinha ocupa o ponteiro), fica com tilt suave em loop contínuo;
-   passando o mouse célula a célula (desktop) dá o tilt dramático da
-   referência. */
-.sunset-cyber-card {
-  --rx: 0deg;
-  --ry: 0deg;
-  position: relative;
-  width: 320px;
-  max-width: 100%;
-  height: 190px;
-  border-radius: 18px;
-  background-image: linear-gradient(160deg, #a54e07, #b47e11, #fef1a2, #bc881b, #a54e07);
-  background-size: 220% 220%;
-  border: 1px solid #a55d07;
-  box-shadow:
-    0 20px 40px -10px rgba(0, 0, 0, 0.55),
-    0 3px 6px rgba(110, 80, 20, 0.4),
-    inset 0 -2px 5px 1px rgba(139, 66, 8, 0.9),
-    inset 0 -1px 1px 3px rgba(250, 227, 133, 0.9);
-  overflow: hidden;
-  transform: rotateX(var(--rx)) rotateY(var(--ry));
-  transition: transform 0.15s ease-out;
-  animation:
-    sunset-cyber-idle 6s ease-in-out infinite,
-    sunset-cyber-shimmer 8s ease-in-out infinite;
-  touch-action: none;
-  user-select: none;
-}
-.sunset-cyber-card-active {
-  animation: sunset-cyber-shimmer 8s ease-in-out infinite;
-}
-@keyframes sunset-cyber-idle {
-  0%,
-  100% {
-    transform: rotateX(6deg) rotateY(-8deg);
-  }
-  50% {
-    transform: rotateX(-6deg) rotateY(8deg);
-  }
-}
-@keyframes sunset-cyber-shimmer {
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-.sunset-cyber-card-grid {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(5, 1fr);
-  z-index: 5;
-}
-.sunset-cyber-card-glare {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at var(--glare-x, 50%) var(--glare-y, 50%), rgba(255, 255, 255, 0.35), transparent 45%);
-  opacity: 0;
-  transition: opacity 0.2s;
-  pointer-events: none;
-  z-index: 4;
-}
-.sunset-cyber-card-active .sunset-cyber-card-glare {
-  opacity: 1;
-}
-.sunset-cyber-card-scanline {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #fef1a2, transparent);
-  opacity: 0.7;
-  animation: sunset-cyber-scan 3s linear infinite;
-  z-index: 3;
-  pointer-events: none;
-}
-@keyframes sunset-cyber-scan {
-  0% {
-    top: 0%;
-  }
-  100% {
-    top: 100%;
-  }
-}
-.sunset-cyber-card-corner {
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgb(120, 50, 5);
-  opacity: 0.7;
-  z-index: 6;
-  pointer-events: none;
-}
-.sunset-cyber-card-corner-tl {
-  top: 8px;
-  left: 8px;
-  border-right: none;
-  border-bottom: none;
-}
-.sunset-cyber-card-corner-tr {
-  top: 8px;
-  right: 8px;
-  border-left: none;
-  border-bottom: none;
-}
-.sunset-cyber-card-corner-bl {
-  bottom: 8px;
-  left: 8px;
-  border-right: none;
-  border-top: none;
-}
-.sunset-cyber-card-corner-br {
-  bottom: 8px;
-  right: 8px;
-  border-left: none;
-  border-top: none;
-}
-.sunset-cyber-card-particles {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-.sunset-cyber-card-particle {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #fef1a2;
-  box-shadow: 0 0 8px 2px #fef1a2;
-  left: calc(15% + (var(--i) * 14%));
-  top: 80%;
-  opacity: 0;
-  animation: sunset-cyber-float 4s ease-in-out infinite;
-  animation-delay: calc(var(--i) * 0.5s);
-}
-@keyframes sunset-cyber-float {
-  0% {
-    opacity: 0;
-    transform: translateY(0);
-  }
-  20% {
-    opacity: 0.8;
-  }
-  80% {
-    opacity: 0.4;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-70px);
-  }
-}
-.sunset-cyber-card-content {
-  position: relative;
-  z-index: 3;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  color: rgb(120, 50, 5);
-  text-shadow: 0 2px 2px rgba(250, 227, 133, 0.9);
-  pointer-events: none;
-}
-.sunset-cyber-card-icon {
-  width: 34px;
-  height: 34px;
-  filter: drop-shadow(0 1px 1px rgba(250, 227, 133, 0.8));
-}
-.sunset-cyber-card-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: rgb(120, 50, 5);
-}
-
 /* O CouponTicket revelado por baixo da raspadinha fica em fluxo normal
-   (define a altura natural do wrap); o CyberCard + canvas de raspar ficam
-   absolutos por cima, cobrindo esse mesmo espaço via inset:0. */
+   (define a altura natural do wrap); o canvas do papel dourado fica
+   absoluto por cima, cobrindo esse mesmo espaço via inset:0. O papel é
+   desenhado DIRETO no canvas (ver drawGoldFoil em ResgatarCupom.tsx) — sem
+   mask-image/toDataURL por frame, raspar é uma operação de canvas nativa
+   (destination-out) e some exatamente onde o dedo passa, em tempo real. */
 .sunset-scratch-wrap {
   position: relative;
   width: 320px;
   max-width: 100%;
 }
 .sunset-scratch-canvas {
-  /* O canvas só existe pra gerar a máscara (mask-image) aplicada no
-     wrapper do CyberCard -- ele nunca deveria aparecer sozinho. opacity:0
-     mantém clique/arrasto funcionando (toDataURL lê o bitmap real, CSS
-     opacity não afeta isso) mas esconde o retângulo branco cru que
-     aparecia por cima de tudo (reportado: card virando uma caixa branca). */
   position: absolute;
   inset: 0;
   z-index: 10;
-  opacity: 0;
   border-radius: 18px;
   cursor: pointer;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.sunset-scratch-canvas-fade {
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
+  opacity: 0;
+  transform: scale(1.04);
+  pointer-events: none;
 }
 .sunset-scratch-hint {
   margin-top: 0.9rem;
