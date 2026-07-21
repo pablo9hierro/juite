@@ -1918,13 +1918,6 @@ a {
   width: 320px;
   max-width: 100%;
 }
-.sunset-scratch-placeholder {
-  min-height: 380px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 3rem;
-}
 .sunset-scratch-canvas {
   /* O canvas só existe pra gerar a máscara (mask-image) aplicada no
      wrapper do CyberCard -- ele nunca deveria aparecer sozinho. opacity:0

@@ -9,15 +9,17 @@ import { api, ApiError } from '../../lib/api'
 import type { ClaimedCoupon } from '../../lib/types'
 import { useCustomerAuth } from '../../store/customerAuth'
 
-// Efeito "Raspadinha": a raspadinha em si é o CyberCard (Uiverse.io by
-// 00Kubi, clone completo) sobreposto ao cupom azul revelado por baixo. Um
-// <canvas> transparente por cima captura o arrastar do dedo/mouse e serve
-// só de MÁSCARA (mask-image) pro wrapper do CyberCard — onde o canvas fica
-// "apagado" (destination-out), o CyberCard vira invisível ali e mostra o
-// cupom azul por baixo. Assim o card raspado continua sendo o componente
-// React de verdade (com toda a animação/tilt), não um desenho estático no
-// canvas. Ao passar de ~55% raspado, revela tudo de vez e chama a RPC de
-// resgate (o valor do cupom só existe no cliente DEPOIS de raspar).
+// Efeito "Raspadinha": igual uma raspadinha física de verdade, o prêmio
+// (CouponTicket, ver components/CouponTicket.tsx) já está TODO renderizado
+// por baixo desde o início — não é revelado por uma RPC depois de raspar,
+// é só coberto visualmente. O CyberCard (Uiverse.io by 00Kubi, clone
+// completo, pele dourada) é o "papel" que cobre; um <canvas> transparente
+// por cima captura o arrastar do dedo/mouse e serve só de MÁSCARA
+// (mask-image) pro wrapper do CyberCard — onde o canvas fica "apagado"
+// (destination-out), o CyberCard vira invisível ali e mostra o ticket por
+// baixo. resgatar_cupom (RPC) roda uma única vez, assim que a página
+// confirma que tem cupom pra resgatar — raspar é só a animação de
+// descobrir o que já foi concedido, não um gate pra decidir o prêmio.
 export default function ResgatarCupom() {
   const { token } = useCustomerAuth()
   const [checking, setChecking] = useState(true)
@@ -31,32 +33,55 @@ export default function ResgatarCupom() {
   const maskWrapRef = useRef<HTMLDivElement>(null)
   const drawing = useRef(false)
   const lastPoint = useRef<{ x: number; y: number } | null>(null)
-  const claimTriggered = useRef(false)
   const rafPending = useRef(false)
 
   useEffect(() => {
     if (!token) return
     api.customerAuth
       .hasClaimableCoupon(token)
-      .then(setClaimable)
+      .then((has) => {
+        setClaimable(has)
+        if (!has) return
+        return api.customerAuth
+          .claimCoupon(token)
+          .then(setClaimed)
+          .catch((err) => setError(err instanceof ApiError ? err.message : 'Não foi possível resgatar o cupom.'))
+      })
       .catch(() => setClaimable(false))
       .finally(() => setChecking(false))
   }, [token])
 
+  // O tamanho em pixels do <canvas> (o "bitmap" onde a raspagem é
+  // desenhada) precisa acompanhar o tamanho real renderizado do card, não
+  // só ser medido uma vez no mount — o ticket carrega/reflui a altura dele
+  // um instante depois (imagem, fontes), e um <canvas> com resolução presa
+  // num tamanho errado fazia a raspagem acontecer em coordenadas
+  // completamente diferentes de onde o dedo realmente passava (reportado).
+  // ResizeObserver mantém os dois sempre em sincronia.
   useEffect(() => {
     if (checking || !claimable) return
     const canvas = canvasRef.current
     if (!canvas) return
-    const rect = canvas.getBoundingClientRect()
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = rect.width * dpr
-    canvas.height = rect.height * dpr
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.scale(dpr, dpr)
-    ctx.fillStyle = '#fff'
-    ctx.fillRect(0, 0, rect.width, rect.height)
-    updateMask()
+
+    function resize() {
+      if (!canvas) return
+      const rect = canvas.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) return
+      const dpr = window.devicePixelRatio || 1
+      canvas.width = rect.width * dpr
+      canvas.height = rect.height * dpr
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctx.scale(dpr, dpr)
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, rect.width, rect.height)
+      updateMask()
+    }
+
+    resize()
+    const ro = new ResizeObserver(resize)
+    ro.observe(canvas)
+    return () => ro.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checking, claimable])
 
@@ -117,8 +142,7 @@ export default function ResgatarCupom() {
   }
 
   function completeReveal() {
-    if (claimTriggered.current || !token) return
-    claimTriggered.current = true
+    if (revealed) return
     setRevealed(true)
     setProgress(100)
     const wrap = maskWrapRef.current
@@ -126,10 +150,6 @@ export default function ResgatarCupom() {
       wrap.style.transition = 'opacity 0.6s ease'
       wrap.style.opacity = '0'
     }
-    api.customerAuth
-      .claimCoupon(token)
-      .then(setClaimed)
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Não foi possível resgatar o cupom.'))
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -167,9 +187,13 @@ export default function ResgatarCupom() {
           <div className="flex justify-center py-20">
             <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
           </div>
-        ) : !claimable && !claimed ? (
+        ) : !claimable || !claimed ? (
           <div className="text-center py-16 text-son-silver-dim">
-            <p>Você não tem nenhum cupom disponível pra resgatar no momento.</p>
+            {error ? (
+              <p className="error-msg">{error}</p>
+            ) : (
+              <p>Você não tem nenhum cupom disponível pra resgatar no momento.</p>
+            )}
             <Link to="/cliente/cupons" className="btn-primary inline-flex mt-4">
               Voltar pra meus cupons
             </Link>
@@ -177,7 +201,7 @@ export default function ResgatarCupom() {
         ) : (
           <>
             <div className="sunset-scratch-wrap">
-              {claimed ? <CouponTicket coupon={claimed} /> : <div className="sunset-scratch-placeholder">🎁</div>}
+              <CouponTicket coupon={claimed} />
               <div ref={maskWrapRef} className="absolute inset-0">
                 <CyberCard style={{ width: '100%', height: '100%' }} />
               </div>
@@ -204,20 +228,12 @@ export default function ResgatarCupom() {
 
             {revealed && (
               <div className="text-center mt-5">
-                {error ? (
-                  <p className="error-msg">{error}</p>
-                ) : claimed ? (
-                  <>
-                    <p className="flex items-center justify-center gap-2 text-lg font-bold sunset-text">
-                      <PartyPopper className="w-5 h-5" /> Cupom resgatado!
-                    </p>
-                    <p className="text-sm text-son-silver-dim mt-1">
-                      O cupom <span className="font-mono font-bold text-white">{claimed.code}</span> já está na sua carteira, pronto pra usar no checkout.
-                    </p>
-                  </>
-                ) : (
-                  <Loader2 className="w-6 h-6 animate-spin text-son-pink mx-auto" />
-                )}
+                <p className="flex items-center justify-center gap-2 text-lg font-bold sunset-text">
+                  <PartyPopper className="w-5 h-5" /> Cupom resgatado!
+                </p>
+                <p className="text-sm text-son-silver-dim mt-1">
+                  O cupom <span className="font-mono font-bold text-white">{claimed.code}</span> já está na sua carteira, pronto pra usar no checkout.
+                </p>
                 <Link to="/cliente/cupons" className="btn-primary inline-flex mt-4">
                   Ver meus cupons
                 </Link>
