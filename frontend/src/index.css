@@ -266,6 +266,33 @@ a {
 .sunset-checkout-input:focus::placeholder {
   color: rgba(8, 25, 18, 0.6);
 }
+
+/* Botão que abre a lista de cupons exclusivos do cliente no checkout —
+   visual dourado próprio (diferente do .btn-secondary cinza padrão) pra
+   deixar claro que é uma vantagem especial, não só um botão genérico de
+   formulário. */
+.sunset-coupon-select-btn {
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  border: 2px solid var(--color-son-gold);
+  background: rgba(255, 210, 61, 0.08);
+  color: var(--color-son-gold);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.sunset-coupon-select-btn:hover:not(:disabled) {
+  background: var(--color-son-gold);
+  color: var(--color-son-black);
+}
+.sunset-coupon-select-btn-open {
+  background: var(--color-son-gold);
+  color: var(--color-son-black);
+}
+.sunset-coupon-select-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* Uiverse.io by Yaya12085 — ícone dentro do canto do campo (era e-mail/
    cadeado num form claro; aqui é usuário/telefone/nota, recolorido pro
    dourado do site em vez do cinza #9CA3AF original, layout/posição

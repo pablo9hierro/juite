@@ -98,8 +98,10 @@ export default function Checkout() {
 
   // Identidade do cliente é sempre o telefone (chave primária de verdade,
   // não o nome digitado) — assim que o whatsapp completo é digitado, checa
-  // se esse número foi contemplado com algum cupom exclusivo e aplica na
-  // hora, sem precisar digitar código.
+  // se esse número foi contemplado com algum cupom exclusivo e alimenta o
+  // select. NÃO aplica sozinho — o cliente precisa selecionar/digitar um
+  // cupom ativamente (era auto-aplicado antes, reportado como indesejado:
+  // o campo "opcional" já vinha preenchido sem o cliente fazer nada).
   useEffect(() => {
     const digits = customer.whatsapp.replace(/\D/g, '')
     if (digits.length < 10) {
@@ -113,9 +115,7 @@ export default function Checkout() {
         .then((available) => {
           setCustomerCoupons(available)
           if (available.length === 0) return
-          const coupon = available[0]
-          setAutoCoupon(coupon)
-          setAppliedCoupon((current) => current ?? coupon)
+          setAutoCoupon(available[0])
         })
         .catch(() => {})
     }, 500)
@@ -597,16 +597,18 @@ export default function Checkout() {
                         type="button"
                         onClick={() => setCouponSelectOpen((o) => !o)}
                         disabled={customerCoupons.length === 0}
-                        className="btn-secondary px-4 flex-shrink-0 flex items-center gap-1.5 disabled:opacity-50"
+                        className={`sunset-coupon-select-btn px-4 flex-shrink-0 flex items-center gap-1.5 ${couponSelectOpen ? 'sunset-coupon-select-btn-open' : ''}`}
                       >
-                        Selecionar <ChevronDown className="w-3.5 h-3.5" />
+                        <Gift className="w-3.5 h-3.5" />
+                        Selecionar
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${couponSelectOpen ? 'rotate-180' : ''}`} />
                       </button>
                     )}
                   </div>
                   {couponSelectOpen && customerCoupons.length > 0 && (
                     <>
                       <div className="fixed inset-0 z-20" onClick={() => setCouponSelectOpen(false)} aria-hidden="true" />
-                      <div className="absolute right-0 top-full mt-1 z-30 w-full sm:w-64 bg-son-surface border border-white/10 rounded-xl shadow-xl overflow-hidden">
+                      <div className="absolute right-0 top-full mt-1 z-30 w-full sm:w-64 bg-son-surface border border-son-gold/40 rounded-xl shadow-xl overflow-hidden">
                         {customerCoupons.map((c) => (
                           <button
                             key={c.code}
