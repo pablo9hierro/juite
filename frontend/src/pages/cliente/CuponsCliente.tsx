@@ -50,7 +50,7 @@ export default function CuponsCliente() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader showCart={false} showProfile={false} title="Meus cupons" />
+      <SiteHeader showCart={false} title="Meus cupons" />
       <PageTransition className="max-w-2xl mx-auto px-5 sm:px-10 pt-6 pb-16">
         <div className="sunset-tabs overflow-x-auto scrollbar-hide">
           <button

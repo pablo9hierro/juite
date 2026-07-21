@@ -61,7 +61,7 @@ export default function FavoritosCliente() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader showCart={false} showProfile={false} title="Favoritos" />
+      <SiteHeader showCart={false} title="Favoritos" />
       <PageTransition className="max-w-6xl mx-auto px-5 sm:px-10 pt-6 pb-16">
         <div className="glass rounded-3xl p-4 sm:p-6">
           {loading ? (

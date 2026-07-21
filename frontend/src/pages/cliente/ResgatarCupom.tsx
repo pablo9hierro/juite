@@ -278,7 +278,7 @@ export default function ResgatarCupom() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader showCart={false} showProfile={false} title="Resgatar cupom" />
+      <SiteHeader showCart={false} title="Resgatar cupom" />
       <PageTransition className="max-w-lg mx-auto px-5 sm:px-10 pt-3 pb-4 flex flex-col items-center">
         {checking ? (
           <div className="flex justify-center py-20">

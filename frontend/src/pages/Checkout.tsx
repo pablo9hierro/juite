@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CreditCard, Gift, Home, Loader2, MapPin, Phone, QrCode, StickyNote, Tag, User, Wallet } from 'lucide-react'
+import { ChevronDown, CreditCard, Gift, Home, Loader2, MapPin, Phone, QrCode, StickyNote, Tag, User, Wallet } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
 import PageTransition from '../components/layout/PageTransition'
 import LocationPicker from '../components/checkout/LocationPicker'
@@ -64,6 +64,11 @@ export default function Checkout() {
   // saber se o que tá aplicado agora veio daqui (trava o campo manual, a
   // não ser que o próprio cupom libere combinar com um avulso).
   const [autoCoupon, setAutoCoupon] = useState<AppliedCoupon | null>(null)
+  // Cupons exclusivos desse cliente (já resgatados na raspadinha) — o
+  // select do campo de cupom lista esses, pra ele escolher em vez de ter
+  // que digitar o código na mão.
+  const [customerCoupons, setCustomerCoupons] = useState<AppliedCoupon[]>([])
+  const [couponSelectOpen, setCouponSelectOpen] = useState(false)
   // Produto(s) em promoção que já entraram no carrinho — mesmo destaque
   // laranja usado em /catalogo, desconto aplicado sozinho sem digitar cupom.
   const [promoProducts, setPromoProducts] = useState<PromotionalProduct[]>([])
@@ -99,12 +104,14 @@ export default function Checkout() {
     const digits = customer.whatsapp.replace(/\D/g, '')
     if (digits.length < 10) {
       setAutoCoupon(null)
+      setCustomerCoupons([])
       return
     }
     const timer = setTimeout(() => {
       api.coupons
         .listForCustomer(`55${digits}`)
         .then((available) => {
+          setCustomerCoupons(available)
           if (available.length === 0) return
           const coupon = available[0]
           setAutoCoupon(coupon)
@@ -245,13 +252,15 @@ export default function Checkout() {
   const shippingDiscount = Math.min(Math.max(promotionShippingDiscount + couponShippingDiscount, 0), shippingPrice)
   const total = subtotal - discountAmount + shippingPrice - shippingDiscount
 
-  const applyCoupon = async () => {
-    if (!couponInput.trim()) return
+  const applyCoupon = async (codeOverride?: string) => {
+    const code = codeOverride ?? couponInput
+    if (!code.trim()) return
     setCouponError(null)
+    setCouponSelectOpen(false)
     setCouponChecking(true)
     try {
       const digits = customer.whatsapp.replace(/\D/g, '')
-      const result = await api.coupons.validate(couponInput.trim(), promotion?.id, customer.birthdate, digits ? `55${digits}` : undefined)
+      const result = await api.coupons.validate(code.trim(), promotion?.id, customer.birthdate, digits ? `55${digits}` : undefined)
       setAppliedCoupon(result)
     } catch (e) {
       setAppliedCoupon(null)
@@ -333,7 +342,7 @@ export default function Checkout() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader showCart={false} title="Finalizar pedido" />
+      <SiteHeader showCart={false} title={'Finalizar\nPedido'} />
       <PageTransition className="max-w-xl mx-auto px-5 sm:px-10 pb-24">
         <h1 className="text-2xl sm:text-3xl font-black mb-6">Checkout</h1>
 
@@ -533,7 +542,7 @@ export default function Checkout() {
                     />
                     <button
                       type="button"
-                      onClick={applyCoupon}
+                      onClick={() => applyCoupon()}
                       disabled={couponChecking || !couponInput.trim()}
                       className="btn-secondary px-4"
                     >
@@ -565,21 +574,66 @@ export default function Checkout() {
                     Desconto de item(ns) em promoção já aplicado automaticamente — veja o detalhe no resumo abaixo.
                   </p>
                 )}
-                <div className="flex gap-2">
-                  <input
-                    className="input-field sunset-checkout-input flex-1 uppercase"
-                    value={couponInput}
-                    onChange={(e) => setCouponInput(e.target.value)}
-                    placeholder="Código do cupom"
-                  />
-                  <button
-                    type="button"
-                    onClick={applyCoupon}
-                    disabled={couponChecking || !couponInput.trim()}
-                    className="btn-secondary px-4"
-                  >
-                    {couponChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
-                  </button>
+                <div className="relative">
+                  <div className="flex gap-2">
+                    <input
+                      className="input-field sunset-checkout-input flex-1 uppercase"
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value)}
+                      placeholder="Código do cupom"
+                    />
+                    {couponInput.trim() ? (
+                      // Digitou algo — vira "Aplicar" pra validar o código avulso.
+                      <button
+                        type="button"
+                        onClick={() => applyCoupon()}
+                        disabled={couponChecking}
+                        className="btn-secondary px-4 flex-shrink-0"
+                      >
+                        {couponChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
+                      </button>
+                    ) : (
+                      // Campo vazio — vira "Selecionar", abre a lista dos
+                      // cupons exclusivos desse cliente (já resgatados).
+                      <button
+                        type="button"
+                        onClick={() => setCouponSelectOpen((o) => !o)}
+                        disabled={customerCoupons.length === 0}
+                        className="btn-secondary px-4 flex-shrink-0 flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        Selecionar <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {couponSelectOpen && customerCoupons.length > 0 && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={() => setCouponSelectOpen(false)} aria-hidden="true" />
+                      <div className="absolute right-0 top-full mt-1 z-30 w-full sm:w-64 bg-son-surface border border-white/10 rounded-xl shadow-xl overflow-hidden">
+                        {customerCoupons.map((c) => (
+                          <button
+                            key={c.code}
+                            type="button"
+                            onClick={() => {
+                              setCouponInput(c.code)
+                              applyCoupon(c.code)
+                            }}
+                            className="w-full text-left px-3 py-2.5 text-sm text-white hover:bg-white/5 flex items-center justify-between gap-2 border-b border-white/5 last:border-b-0"
+                          >
+                            <span className="font-mono font-semibold">{c.code}</span>
+                            <span className="text-xs text-son-silver-dim">
+                              {c.discount_type === 'percent'
+                                ? `-${c.discount_value}%`
+                                : c.discount_type != null && c.discount_value != null
+                                ? `-${currency(c.discount_value)}`
+                                : c.shipping_discount_type === 'percent'
+                                ? `-${c.shipping_discount_value}% frete`
+                                : 'Frete'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
