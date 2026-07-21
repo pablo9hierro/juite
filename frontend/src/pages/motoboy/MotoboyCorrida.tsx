@@ -131,7 +131,14 @@ export default function MotoboyCorrida() {
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return
     const map = L.map(mapDivRef.current, { zoomControl: false, zoomSnap: 0, zoomDelta: 0.5 }).setView([FALLBACK.lat, FALLBACK.lng], 15)
-    const tileLayer = L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20, keepBuffer: 4 }).addTo(map)
+    // updateWhenZooming:false -- com o gesto manual de pinça chamando
+    // setZoom() várias vezes por segundo (fracionário, zoomSnap:0), deixar
+    // o Leaflet tentar recarregar tiles a CADA uma dessas mudanças (padrão
+    // dele) é o que fazia o mapa "piscar"/trocar de cor durante o gesto.
+    // Com isso desligado, ele só busca os tiles do zoom novo depois que o
+    // gesto para de mudar — durante o pinça, continua mostrando os tiles
+    // já carregados (certos, escuros) só escalados via CSS.
+    const tileLayer = L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20, keepBuffer: 4, updateWhenZooming: false }).addTo(map)
     const pararMonitor = monitorarTiles(tileLayer, setTilesFailing)
     mapRef.current = map
     // Garante o tamanho certo mesmo se o layout mudar um pixel entre o

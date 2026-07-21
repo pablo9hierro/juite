@@ -53,7 +53,7 @@ function MapaCentro({
   useEffect(() => {
     if (!divRef.current) return
     const map = L.map(divRef.current, { zoomControl: false, zoomSnap: 0, zoomDelta: 0.5 }).setView([centro.lat, centro.lng], zoom)
-    const tileLayer = L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20, keepBuffer: 4 }).addTo(map)
+    const tileLayer = L.tileLayer(TILE_URL, { attribution: TILE_ATTR, maxZoom: 20, keepBuffer: 4, updateWhenZooming: false }).addTo(map)
     const pararMonitor = onTileStatus ? monitorarTiles(tileLayer, onTileStatus) : undefined
     if (onMoveStart) map.on('movestart', onMoveStart)
     if (onMoveEnd) map.on('moveend', () => onMoveEnd(map.getCenter()))

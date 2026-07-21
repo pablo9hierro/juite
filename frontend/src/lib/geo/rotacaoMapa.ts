@@ -66,9 +66,23 @@ export function anexarGestoMapa(el: HTMLElement, opcoes: GestoMapaOpcoes): () =>
   const enabled = opcoes.enabled ?? (() => true)
   const onInteract = opcoes.onInteract ?? (() => {})
 
-  let ultimoMeio: PontoTela | null = null
-  let ultimaDistancia: number | null = null
-  let ultimoAngulo: number | null = null
+  // touchmove pode disparar dezenas de vezes por segundo — bem mais rápido
+  // do que o navegador consegue de fato pintar um frame novo. Chamar
+  // map.setZoom() a cada evento (como era antes) faz o Leaflet recalcular
+  // e re-requisitar a grade de tiles várias vezes por frame, sem nenhuma
+  // dessas passagens ter tempo de assentar — o resultado visível é o mapa
+  // "piscando"/trocando de cor durante o pinça (reportado: parece um tile
+  // claro aparecendo por baixo do escuro por uma fração de segundo).
+  // A correção é desacoplar "receber o evento" de "aplicar no mapa":
+  // touchmove só atualiza o estado mais recente do gesto (barato, não
+  // toca no Leaflet), e um único requestAnimationFrame por frame real
+  // aplica de uma vez só o delta acumulado desde o último frame aplicado.
+  let ultimoMeioAplicado: PontoTela | null = null
+  let ultimaDistanciaAplicada: number | null = null
+  let ultimoAnguloAplicado: number | null = null
+
+  let touchAtual: { pontos: PontoTela[] } | null = null
+  let rafPendente = false
 
   function pan(dxTela: number, dyTela: number) {
     const [dx, dy] = rotacionarVetor(dxTela, dyTela, getRotation())
@@ -77,76 +91,95 @@ export function anexarGestoMapa(el: HTMLElement, opcoes: GestoMapaOpcoes): () =>
     map.panBy([-dx, -dy], { animate: false })
   }
 
-  function onTouchStart(e: TouchEvent) {
-    if (!enabled()) return
-    if (e.touches.length === 1) {
-      ultimoMeio = deTouch(e.touches[0])
-      ultimaDistancia = null
-      ultimoAngulo = null
-    } else if (e.touches.length === 2) {
-      const p0 = deTouch(e.touches[0])
-      const p1 = deTouch(e.touches[1])
-      ultimoMeio = centroide(p0, p1)
-      ultimaDistancia = distancia(p0, p1)
-      ultimoAngulo = anguloEntre(p0, p1)
-    } else {
-      ultimoMeio = null
-      ultimaDistancia = null
-      ultimoAngulo = null
-    }
+  function agendarFlush() {
+    if (rafPendente) return
+    rafPendente = true
+    requestAnimationFrame(() => {
+      rafPendente = false
+      flush()
+    })
   }
 
-  function onTouchMove(e: TouchEvent) {
-    if (!enabled()) return
-    if (e.touches.length === 1 && ultimoMeio) {
-      e.preventDefault()
-      const p = deTouch(e.touches[0])
-      pan(p.x - ultimoMeio.x, p.y - ultimoMeio.y)
-      ultimoMeio = p
-      onInteract()
+  function flush() {
+    if (!touchAtual) return
+    const { pontos } = touchAtual
+
+    if (pontos.length === 1) {
+      const p = pontos[0]
+      if (ultimoMeioAplicado) pan(p.x - ultimoMeioAplicado.x, p.y - ultimoMeioAplicado.y)
+      ultimoMeioAplicado = p
+      ultimaDistanciaAplicada = null
+      ultimoAnguloAplicado = null
       return
     }
 
-    if (e.touches.length === 2) {
-      e.preventDefault()
-      onInteract()
-      const p0 = deTouch(e.touches[0])
-      const p1 = deTouch(e.touches[1])
+    if (pontos.length === 2) {
+      const [p0, p1] = pontos
       const meio = centroide(p0, p1)
       const dist = distancia(p0, p1)
       const ang = anguloEntre(p0, p1)
 
-      if (ultimoMeio) pan(meio.x - ultimoMeio.x, meio.y - ultimoMeio.y)
+      if (ultimoMeioAplicado) pan(meio.x - ultimoMeioAplicado.x, meio.y - ultimoMeioAplicado.y)
 
-      if (ultimaDistancia != null && ultimaDistancia > 0) {
-        const fator = dist / ultimaDistancia
+      if (ultimaDistanciaAplicada != null && ultimaDistanciaAplicada > 0) {
+        const fator = dist / ultimaDistanciaAplicada
         if (Number.isFinite(fator) && fator > 0) {
           map.setZoom(map.getZoom() + Math.log2(fator), { animate: false })
         }
       }
 
-      if (ultimoAngulo != null) {
-        let delta = ang - ultimoAngulo
+      if (ultimoAnguloAplicado != null) {
+        let delta = ang - ultimoAnguloAplicado
         if (delta > 180) delta -= 360
         if (delta < -180) delta += 360
         onRotate(normalizarAngulo(getRotation() + delta))
       }
 
-      ultimoMeio = meio
-      ultimaDistancia = dist
-      ultimoAngulo = ang
+      ultimoMeioAplicado = meio
+      ultimaDistanciaAplicada = dist
+      ultimoAnguloAplicado = ang
     }
   }
 
+  function onTouchStart(e: TouchEvent) {
+    if (!enabled()) return
+    if (e.touches.length === 1) {
+      ultimoMeioAplicado = deTouch(e.touches[0])
+      ultimaDistanciaAplicada = null
+      ultimoAnguloAplicado = null
+    } else if (e.touches.length === 2) {
+      const p0 = deTouch(e.touches[0])
+      const p1 = deTouch(e.touches[1])
+      ultimoMeioAplicado = centroide(p0, p1)
+      ultimaDistanciaAplicada = distancia(p0, p1)
+      ultimoAnguloAplicado = anguloEntre(p0, p1)
+    } else {
+      ultimoMeioAplicado = null
+      ultimaDistanciaAplicada = null
+      ultimoAnguloAplicado = null
+    }
+    touchAtual = null
+  }
+
+  function onTouchMove(e: TouchEvent) {
+    if (!enabled()) return
+    if (e.touches.length !== 1 && e.touches.length !== 2) return
+    e.preventDefault()
+    onInteract()
+    touchAtual = { pontos: Array.from(e.touches).slice(0, 2).map(deTouch) }
+    agendarFlush()
+  }
+
   function onTouchEnd(e: TouchEvent) {
+    touchAtual = null
     if (e.touches.length === 0) {
-      ultimoMeio = null
-      ultimaDistancia = null
-      ultimoAngulo = null
+      ultimoMeioAplicado = null
+      ultimaDistanciaAplicada = null
+      ultimoAnguloAplicado = null
     } else if (e.touches.length === 1) {
-      ultimoMeio = deTouch(e.touches[0])
-      ultimaDistancia = null
-      ultimoAngulo = null
+      ultimoMeioAplicado = deTouch(e.touches[0])
+      ultimaDistanciaAplicada = null
+      ultimoAnguloAplicado = null
     }
   }
 
@@ -171,11 +204,26 @@ export function anexarGestoMapa(el: HTMLElement, opcoes: GestoMapaOpcoes): () =>
     arrastandoComMouse = false
     ultimoMouse = null
   }
+
+  // Roda do mouse também é coalescida num RAF só — vários "ticks" da roda
+  // chegando entre dois frames aplicavam um setZoom cada um antes (mesmo
+  // problema do touch, só que raramente perceptível no desktop).
+  let deltaWheelPendente = 0
   function onWheel(e: WheelEvent) {
     if (!enabled()) return
     e.preventDefault()
-    map.setZoom(map.getZoom() - Math.sign(e.deltaY) * 0.5, { animate: false })
     onInteract()
+    deltaWheelPendente += -Math.sign(e.deltaY) * 0.5
+    if (rafPendente) return
+    rafPendente = true
+    requestAnimationFrame(() => {
+      rafPendente = false
+      if (deltaWheelPendente !== 0) {
+        map.setZoom(map.getZoom() + deltaWheelPendente, { animate: false })
+        deltaWheelPendente = 0
+      }
+      flush()
+    })
   }
 
   el.addEventListener('touchstart', onTouchStart, { passive: true })
