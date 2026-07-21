@@ -440,17 +440,17 @@ export default function Catalogo() {
             como já eram (sunset-bg / laranja pra "Promoção") — só a
             "trilha" ao redor e a forma/transição de cada pílula vêm da
             referência. */}
-        <div className="sunset-tabs overflow-x-auto mb-6 scrollbar-hide">
+        <div className="sunset-tabs overflow-x-auto scrollbar-hide">
           <button
             onClick={() => setCategoryFilter('all')}
-            className={`sunset-tab flex-shrink-0 ${categoryFilter === 'all' ? 'sunset-bg text-white' : 'text-son-silver hover:text-white'}`}
+            className={`sunset-tab flex-shrink-0 ${categoryFilter === 'all' ? 'sunset-tab-active text-white' : 'text-son-silver hover:text-white'}`}
           >
             Todos
           </button>
           {promoByProduct.size > 0 && (
             <button
               onClick={() => setCategoryFilter('promo')}
-              className={`sunset-tab flex-shrink-0 font-bold ${isPromo ? 'bg-orange-500 text-white' : 'text-orange-400 hover:text-orange-300'}`}
+              className={`sunset-tab flex-shrink-0 font-bold ${isPromo ? 'sunset-tab-active text-orange-400' : 'text-orange-400 hover:text-orange-300'}`}
             >
               🔥 Promoção
             </button>
@@ -465,10 +465,10 @@ export default function Catalogo() {
                 className={`sunset-tab flex-shrink-0 ${
                   hasPromo
                     ? active
-                      ? 'bg-orange-500 text-white font-bold'
+                      ? 'sunset-tab-active text-orange-400 font-bold'
                       : 'text-orange-400 hover:text-orange-300 font-bold'
                     : active
-                      ? 'sunset-bg text-white'
+                      ? 'sunset-tab-active text-white'
                       : 'text-son-silver hover:text-white'
                 }`}
               >
@@ -481,8 +481,10 @@ export default function Catalogo() {
 
         {/* Painel translúcido com blur atrás de todo o resultado (ordenação +
             cards) — sem isso o fundo synthwave/coqueiro aparecia cru demais
-            entre os cards, ficando sem contraste nenhum. */}
-        <div className="glass rounded-3xl p-4 sm:p-6">
+            entre os cards, ficando sem contraste nenhum. Topo reto de
+            propósito — encosta direto nas abas acima (truque de fusão
+            german_7619). */}
+        <div className="glass rounded-b-3xl p-4 sm:p-6">
           {!loading && filtered.length > 0 && (
             <div className="flex items-center justify-end gap-2 mb-4">
               <div className="flex items-center gap-1 bg-son-surface border border-white/10 rounded-xl p-1">

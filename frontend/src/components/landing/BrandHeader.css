@@ -1,0 +1,96 @@
+/* Uiverse.io by Cornerstone-04 — cantinhos que abrem num contorno neon
+   com glow. Recolorido de #0f0 pra dourado sunset; era só :hover, virou
+   loop automático (mobile não tem hover de verdade). */
+.sunset-brand-btn {
+  cursor: default;
+  background: transparent;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 28px;
+  border: 2px solid var(--color-son-gold);
+  text-transform: uppercase;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: var(--color-son-silver);
+  animation: sunset-brand-glow 5s ease-in-out infinite;
+}
+.sunset-brand-btn span {
+  position: relative;
+  z-index: 100;
+  font-size: 1.1rem;
+}
+.sunset-brand-btn::before,
+.sunset-brand-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 2px;
+  background: var(--color-son-gold);
+}
+.sunset-brand-btn::before {
+  left: -20px;
+  animation: sunset-brand-before 5s ease-in-out infinite;
+}
+.sunset-brand-btn::after {
+  right: -20px;
+  animation: sunset-brand-after 5s ease-in-out infinite;
+}
+
+@keyframes sunset-brand-glow {
+  0%, 15% {
+    color: var(--color-son-silver);
+    box-shadow: none;
+  }
+  40%, 60% {
+    color: var(--color-son-black);
+    box-shadow: 0 0 10px var(--color-son-gold), 0 0 20px var(--color-son-gold), 0 0 40px var(--color-son-gold), 0 0 80px var(--color-son-gold);
+  }
+  85%, 100% {
+    color: var(--color-son-silver);
+    box-shadow: none;
+  }
+}
+@keyframes sunset-brand-before {
+  0%, 15% {
+    width: 20px;
+    height: 2px;
+    left: -20px;
+    box-shadow: 5px -8px 0 var(--color-son-gold), 5px 8px 0 var(--color-son-gold);
+  }
+  40%, 60% {
+    width: 60%;
+    height: 100%;
+    left: -2px;
+    box-shadow: 5px 0 0 var(--color-son-gold), 5px 0 0 var(--color-son-gold);
+  }
+  85%, 100% {
+    width: 20px;
+    height: 2px;
+    left: -20px;
+    box-shadow: 5px -8px 0 var(--color-son-gold), 5px 8px 0 var(--color-son-gold);
+  }
+}
+@keyframes sunset-brand-after {
+  0%, 15% {
+    width: 20px;
+    height: 2px;
+    right: -20px;
+    box-shadow: -5px -8px 0 var(--color-son-gold), -5px 8px 0 var(--color-son-gold);
+  }
+  40%, 60% {
+    width: 60%;
+    height: 102%;
+    right: -2px;
+    box-shadow: -5px 0 0 var(--color-son-gold), -5px 0 0 var(--color-son-gold);
+  }
+  85%, 100% {
+    width: 20px;
+    height: 2px;
+    right: -20px;
+    box-shadow: -5px -8px 0 var(--color-son-gold), -5px 8px 0 var(--color-son-gold);
+  }
+}
