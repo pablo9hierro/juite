@@ -6,9 +6,14 @@
 
 ALTER TABLE sunset.coupon_grants ADD COLUMN IF NOT EXISTS claimed_at text;
 
--- Existentes antes desta migration já eram "ativos" direto, sem resgate --
--- marca todos como já resgatados pra não sumirem da lista do cliente.
-UPDATE sunset.coupon_grants SET claimed_at = created_at WHERE claimed_at IS NULL;
+-- O backfill "grants antigos viram já-resgatados" rodou UMA VEZ só, na
+-- aplicação original desta migration -- por isso NÃO é um UPDATE aqui.
+-- Reaplicar este arquivo (ex: pra atualizar uma das funções abaixo) tem
+-- que ser seguro sem re-varrer a tabela; um UPDATE ...WHERE claimed_at IS
+-- NULL rodado de novo pegaria também grants novos ainda pendentes de
+-- resgate e os marcaria como resgatados por engano (foi exatamente isso
+-- que aconteceu com os cupons de teste seedados entre a 1ª e a 2ª vez que
+-- este arquivo rodou -- corrigido manualmente depois, ver histórico).
 
 CREATE OR REPLACE FUNCTION sunset.customer_list_coupons(p_token text)
  RETURNS jsonb
