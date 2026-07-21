@@ -1,45 +1,32 @@
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import {
-  ClipboardList,
-  LogOut,
-  Megaphone,
-  Package,
-  Settings,
-  ShoppingCart,
-  Truck,
-  Users,
-  Wallet,
-} from 'lucide-react'
+import { ClipboardList, LogOut, ShoppingCart, Wallet } from 'lucide-react'
 import Logo from '../ui/Logo'
-import { useAdminAuth } from '../../store/adminAuth'
+import { useVendedorAuth } from '../../store/vendedorAuth'
 
-// Exclusivo do admin — vendedor tem seu próprio layout/rota
-// (VendedorLayout, /funcionarios/vendedor/*) e motoboy também
-// (MotoboyLayout, /funcionarios/motoboy/*). Os três nunca mais dividem
-// componente de guarda nem prefixo de URL entre si (antes vendedor caía
-// dentro de /admin/... usando este mesmo layout, e mesmo com sessões
-// isoladas de verdade isso lia como "confundindo usuário" — reportado).
+// Layout 100% próprio do vendedor — nada compartilhado com AdminLayout
+// (nem componente, nem rota /admin/*). Antes vendedor logava e caía
+// dentro de /admin/pdv usando o MESMO layout/sidebar do admin (só
+// filtrando os itens de menu por role) — mesmo com sessões isoladas de
+// verdade (useVendedorAuth, chave própria), a URL/visual "/admin/..."
+// para o vendedor lia como "entrou na conta do admin" e foi reportado
+// como sessão se confundindo. Cada papel agora tem sua própria URL e seu
+// próprio componente de guarda, sem overlap nenhum.
 const NAV_ITEMS = [
-  { href: '/admin/pedidos', label: 'Pedidos', icon: ClipboardList },
-  { href: '/admin/pdv', label: 'PDV', icon: ShoppingCart },
-  { href: '/admin/produtos', label: 'Produtos', icon: Package },
-  { href: '/admin/motoboys', label: 'Funcionários', icon: Truck },
-  { href: '/admin/crm', label: 'CRM', icon: Users },
-  { href: '/admin/promocoes', label: 'Promoções', icon: Megaphone },
-  { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet },
-  { href: '/admin/conta', label: 'Configurações', icon: Settings },
+  { href: '/funcionarios/vendedor/pedidos', label: 'Pedidos', icon: ClipboardList },
+  { href: '/funcionarios/vendedor/pdv', label: 'PDV', icon: ShoppingCart },
+  { href: '/funcionarios/vendedor/financeiro', label: 'Financeiro', icon: Wallet },
 ] as const
 
-export default function AdminLayout() {
-  const { token, name, logout } = useAdminAuth()
+export default function VendedorLayout() {
+  const { token, name, logout } = useVendedorAuth()
   const location = useLocation()
   const navigate = useNavigate()
 
-  if (!token) return <Navigate to="/admin/login" state={{ from: location }} replace />
+  if (!token) return <Navigate to="/funcionarios/login" state={{ from: location }} replace />
 
   const handleLogout = () => {
     logout()
-    navigate('/admin/login')
+    navigate('/funcionarios/login')
   }
 
   return (

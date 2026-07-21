@@ -25,8 +25,8 @@ export default function FuncionarioLogin() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  if (motoboyToken) return <Navigate to="/admin/motoboy" replace />
-  if (vendedorToken) return <Navigate to="/admin/pdv" replace />
+  if (motoboyToken) return <Navigate to="/funcionarios/motoboy" replace />
+  if (vendedorToken) return <Navigate to="/funcionarios/vendedor" replace />
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,11 +36,11 @@ export default function FuncionarioLogin() {
       if (role === 'vendedor') {
         const res = await api.auth.vendedorLogin(email, password)
         vendedorLogin(res.token, res.name)
-        navigate('/admin/pdv')
+        navigate('/funcionarios/vendedor')
       } else {
         const res = await api.auth.motoboyLogin(email, password)
         motoboyLogin(res.token, res.name)
-        navigate('/admin/motoboy')
+        navigate('/funcionarios/motoboy')
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erro ao entrar.')

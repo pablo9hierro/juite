@@ -30,6 +30,7 @@ import MotoboyCorrida from './pages/motoboy/MotoboyCorrida'
 import MotoboyFinanceiro from './pages/motoboy/MotoboyFinanceiro'
 import MotoboyConta from './pages/motoboy/MotoboyConta'
 import AdminLayout from './components/layout/AdminLayout'
+import VendedorLayout from './components/layout/VendedorLayout'
 import MotoboyLayout from './components/layout/MotoboyLayout'
 
 // Só essa página puxa a lib de leitura de código de barras (~500KB) — carrega
@@ -49,7 +50,7 @@ function PdvFallback() {
 // telas de staff (admin/motoboy/logins) continuam no fundo sólido de sempre.
 function CustomerBackdrop() {
   const { pathname } = useLocation()
-  if (pathname.startsWith('/admin') || pathname === '/funcionarios/login') return null
+  if (pathname.startsWith('/admin') || pathname.startsWith('/funcionarios')) return null
   return <SunsetBackdrop />
 }
 
@@ -95,12 +96,32 @@ export default function App() {
           <Route path="conta" element={<AdminSenha />} />
         </Route>
 
-        {/* Motoboy loga em /funcionarios/login e cai no próprio dashboard em
-            /admin/motoboy. Redirect abaixo cobre quem ainda tem o link
-            antigo salvo (a rota costumava apontar pro login do admin). */}
+        {/* Vendedor e motoboy logam em /funcionarios/login e caem cada um no
+            próprio dashboard, cada um com prefixo e layout de guarda
+            totalmente próprios — nenhum dos dois mais passa por /admin/*
+            (era assim antes só pro vendedor, que reaproveitava AdminLayout;
+            mesmo com sessão isolada de verdade, a URL "/admin/..." lia como
+            "entrou como admin" e foi reportado como sessão se confundindo). */}
+        <Route path="/funcionarios/vendedor" element={<VendedorLayout />}>
+          <Route index element={<Navigate to="/funcionarios/vendedor/pedidos" replace />} />
+          <Route path="pedidos" element={<AdminPedidos />} />
+          <Route
+            path="pdv"
+            element={
+              <Suspense fallback={<PdvFallback />}>
+                <AdminPdv />
+              </Suspense>
+            }
+          />
+          <Route path="financeiro" element={<AdminFinanceiro />} />
+        </Route>
+
+        {/* Redirects pra quem tem link antigo salvo (a rota do motoboy já
+            morou em /motoboy/* e depois em /admin/motoboy). */}
         <Route path="/motoboy/login" element={<Navigate to="/funcionarios/login" replace />} />
-        <Route path="/motoboy/*" element={<Navigate to="/admin/motoboy" replace />} />
-        <Route path="/admin/motoboy" element={<MotoboyLayout />}>
+        <Route path="/motoboy/*" element={<Navigate to="/funcionarios/motoboy" replace />} />
+        <Route path="/admin/motoboy/*" element={<Navigate to="/funcionarios/motoboy" replace />} />
+        <Route path="/funcionarios/motoboy" element={<MotoboyLayout />}>
           <Route index element={<MotoboyFila />} />
           <Route path="corrida" element={<MotoboyCorrida />} />
           <Route path="financeiro" element={<MotoboyFinanceiro />} />

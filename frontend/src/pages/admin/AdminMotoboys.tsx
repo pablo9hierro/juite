@@ -536,8 +536,8 @@ export default function AdminMotoboys() {
                 </div>
               )}
               <p className="text-xs text-son-silver-dim">
-                O vendedor loga em /funcionarios/login (login próprio, separado do admin), mas só enxerga PDV e
-                Financeiro (suas vendas).
+                O vendedor loga em /funcionarios/login (login próprio, separado do admin) e cai no próprio painel em
+                /funcionarios/vendedor, com Pedidos, PDV e Financeiro (suas vendas).
               </p>
               <button onClick={saveVendedor} disabled={savingVendedor} className="btn-primary w-full mt-2">
                 {savingVendedor ? <Loader2 className="w-4 h-4 animate-spin" /> : null}

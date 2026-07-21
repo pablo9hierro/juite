@@ -7,9 +7,9 @@ import { useMotoboyAuth } from '../../store/motoboyAuth'
 import { useMotoboyTheme } from '../../store/motoboyTheme'
 
 const NAV_ITEMS = [
-  { href: '/admin/motoboy', label: 'Fila', icon: Truck },
-  { href: '/admin/motoboy/conta', label: 'Conta', icon: MessageCircle },
-  { href: '/admin/motoboy/financeiro', label: 'Financeiro', icon: Wallet },
+  { href: '/funcionarios/motoboy', label: 'Fila', icon: Truck },
+  { href: '/funcionarios/motoboy/conta', label: 'Conta', icon: MessageCircle },
+  { href: '/funcionarios/motoboy/financeiro', label: 'Financeiro', icon: Wallet },
 ]
 
 const ACTIVE_RUN_POLL_MS = 20000
@@ -81,9 +81,9 @@ export default function MotoboyLayout() {
           )
         })}
       </nav>
-      {hasActiveRun && location.pathname !== '/admin/motoboy/corrida' && (
+      {hasActiveRun && location.pathname !== '/funcionarios/motoboy/corrida' && (
         <button
-          onClick={() => navigate('/admin/motoboy/corrida')}
+          onClick={() => navigate('/funcionarios/motoboy/corrida')}
           className="sunset-bg w-full flex items-center justify-center gap-2 text-son-silver text-sm font-semibold py-2.5"
         >
           <Navigation className="w-4 h-4" />
