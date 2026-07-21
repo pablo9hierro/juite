@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, X } from 'lucide-react'
+import { Loader2, Lock, X } from 'lucide-react'
 import BirthdateInput from './checkout/BirthdateInput'
+import Logo from './ui/Logo'
 import { api, ApiError } from '../lib/api'
 import { useCustomer } from '../store/customer'
 import { useCustomerAuth } from '../store/customerAuth'
@@ -19,11 +20,19 @@ function formatPhone(value: string) {
 // nasce preenchido com nome/whatsapp/nascimento do rascunho de checkout
 // (store/customer.ts) — editável, só poupa redigitar o que já foi
 // escrito ali; e-mail não vem de lá (checkout não pede) e é digitado do zero.
-export default function CustomerAuthModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+export default function CustomerAuthModal({
+  onClose,
+  onSuccess,
+  initialMode = 'login',
+}: {
+  onClose: () => void
+  onSuccess: () => void
+  initialMode?: 'login' | 'register'
+}) {
   const navigate = useNavigate()
   const draft = useCustomer()
   const auth = useCustomerAuth()
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [mode, setMode] = useState<'login' | 'register'>(initialMode)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -107,12 +116,18 @@ export default function CustomerAuthModal({ onClose, onSuccess }: { onClose: () 
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="glass rounded-3xl p-6 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-white text-lg">{mode === 'login' ? 'Entrar' : 'Criar conta'}</h2>
-          <button type="button" onClick={onClose} className="text-son-silver-dim hover:text-white" aria-label="Fechar">
-            <X className="w-5 h-5" />
-          </button>
+      {/* Mesmo cartão do login do admin (Uiverse.io by KhelVers — flutua,
+          borda dourada, glow quente por dentro/fora) — só o formulário
+          muda, o "estojo" é o mesmo em toda tela de login do site. */}
+      <div className="sunset-login-card w-full max-w-sm rounded-2xl p-8" onClick={(e) => e.stopPropagation()}>
+        <button type="button" onClick={onClose} className="absolute top-4 right-4 text-son-silver-dim hover:text-white" aria-label="Fechar">
+          <X className="w-5 h-5" />
+        </button>
+        <div className="text-center mb-6">
+          <Logo size="md" />
+          <p className="text-son-silver-dim text-sm mt-2 flex items-center justify-center gap-1.5">
+            <Lock className="w-3.5 h-3.5" /> {mode === 'login' ? 'Entre pra continuar' : 'Crie sua conta'}
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-2 mb-5">

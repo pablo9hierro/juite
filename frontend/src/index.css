@@ -1692,3 +1692,28 @@ a {
 .sunset-menu-item-accent:hover svg {
   stroke: var(--color-son-gold);
 }
+
+/* Uiverse.io by devkatyall — botão de menu do visitante deslogado (verde
+   sólido na referência, aqui dourado sunset) com popup "Log In"/"Sign
+   Up". Reaproveita .sunset-menu-card/.sunset-menu-list/.sunset-menu-item
+   pro popup em si (mesmo container do menu de cliente logado) — só o
+   círculo do botão em si é próprio, sólido em vez do círculo escuro
+   translúcido do resto do navbar (chama mais atenção de propósito, pra
+   quem ainda não tem conta). */
+.sunset-guest-burger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-son-gold);
+  color: var(--color-son-black);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s ease-in-out;
+}
+.sunset-guest-burger:hover {
+  transform: scale(1.08);
+}
+.sunset-guest-burger:active {
+  transform: scale(0.95);
+}

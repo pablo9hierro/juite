@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Lock } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
 import PageTransition from '../components/layout/PageTransition'
+import Logo from '../components/ui/Logo'
 import { api, ApiError } from '../lib/api'
 
 function formatPhone(value: string) {
@@ -91,7 +92,14 @@ export default function RecuperarSenha() {
     <main className="min-h-screen text-white">
       <SiteHeader showCart={false} showProfile={false} title="Recuperar senha" />
       <PageTransition className="max-w-sm mx-auto px-5 sm:px-10 pt-10 pb-20">
-        <div className="glass rounded-3xl p-6">
+        {/* Mesmo cartão do login do admin/cliente (Uiverse.io by KhelVers). */}
+        <div className="sunset-login-card rounded-2xl p-8">
+          <div className="text-center mb-6">
+            <Logo size="md" />
+            <p className="text-son-silver-dim text-sm mt-2 flex items-center justify-center gap-1.5">
+              <Lock className="w-3.5 h-3.5" /> Recuperar senha
+            </p>
+          </div>
           {step === 'whatsapp' && (
             <div className="space-y-3">
               <p className="text-sm text-son-silver-dim">Informe o WhatsApp da sua conta — vamos mandar um código de 3 dígitos por lá.</p>
