@@ -2315,10 +2315,12 @@ export default function AdminCrm() {
             rows={4}
             value={couponForm.messageTemplate}
             onChange={(e) => setCouponForm({ ...couponForm, messageTemplate: e.target.value })}
-            placeholder={'Olá, /nome! Chegou seu cupom de aniversário /cupom 🎉'}
+            placeholder={
+              'Olá, /nome! Chegou seu cupom de aniversário /cupom 🎉 Pra resgatar, acesse /cliente/cupons e toque em "Resgatar cupom" — é uma raspadinha, raspe pra liberar seu desconto!'
+            }
           />
           <p className="text-xs text-son-silver-dim mt-1">
-            Precisa citar <code>/nome</code> e <code>/cupom</code>.
+            Precisa citar <code>/nome</code> e <code>/cupom</code>. Lembre de instruir o cliente a resgatar em /cliente/cupons (raspadinha) antes de poder usar.
           </p>
           <label className="flex items-center gap-2 text-sm text-son-silver mt-2">
             <input
@@ -3398,9 +3400,12 @@ export default function AdminCrm() {
                       rows={4}
                       value={campanhaEditForm.messageTemplate}
                       onChange={(e) => setCampanhaEditForm({ ...campanhaEditForm, messageTemplate: e.target.value })}
+                      placeholder={
+                        'Olá, /nome! Você ganhou o cupom /cupom 🎉 Pra resgatar, acesse /cliente/cupons e toque em "Resgatar cupom" — é uma raspadinha, raspe pra liberar seu desconto!'
+                      }
                     />
                     <p className="text-xs text-son-silver-dim mt-1">
-                      Precisa citar <code>/nome</code> e <code>/cupom</code>.
+                      Precisa citar <code>/nome</code> e <code>/cupom</code>. Lembre de instruir o cliente a resgatar em /cliente/cupons (raspadinha) antes de poder usar.
                     </p>
                   </div>
                   <div>
@@ -3784,10 +3789,12 @@ export default function AdminCrm() {
                     rows={4}
                     value={extraCouponForm.messageTemplate}
                     onChange={(e) => setExtraCouponForm({ ...extraCouponForm, messageTemplate: e.target.value })}
-                    placeholder={'Olá, /nome! Você também ganhou o cupom /cupom 🎁'}
+                    placeholder={
+                      'Olá, /nome! Você também ganhou o cupom /cupom 🎁 Pra resgatar, acesse /cliente/cupons e toque em "Resgatar cupom" — é uma raspadinha, raspe pra liberar seu desconto!'
+                    }
                   />
                   <p className="text-xs text-son-silver-dim mt-1">
-                    Precisa citar <code>/nome</code> e <code>/cupom</code>.
+                    Precisa citar <code>/nome</code> e <code>/cupom</code>. Lembre de instruir o cliente a resgatar em /cliente/cupons (raspadinha) antes de poder usar.
                   </p>
                 </div>
                 <div>

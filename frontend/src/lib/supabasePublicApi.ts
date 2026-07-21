@@ -250,6 +250,17 @@ export const supabasePublicApi = {
       if (error) throw new ApiError(400, error.message)
       return data as boolean
     },
+    // Só PRÉ-VISUALIZA os dados do próximo cupom pendente (pra desenhar o
+    // ticket por baixo do papel dourado) -- NÃO marca nada como resgatado.
+    // Chamado no carregamento da página, pode ser chamado várias vezes
+    // (recarregar não gasta cupom nenhum).
+    peekClaimableCoupon: async (token: string) => {
+      const { data, error } = await supabase.rpc('customer_peek_claimable_coupon', { p_token: token })
+      if (error) throw new ApiError(400, error.message)
+      return data as ClaimedCoupon
+    },
+    // Esse sim MARCA o grant como resgatado -- só deve ser chamado quando
+    // o cliente efetivamente termina de raspar a raspadinha.
     claimCoupon: async (token: string) => {
       const { data, error } = await supabase.rpc('customer_claim_coupon', { p_token: token })
       if (error) throw new ApiError(400, error.message)

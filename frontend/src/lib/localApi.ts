@@ -703,6 +703,37 @@ async function customerHasClaimableCoupon(token: string): Promise<boolean> {
   return (db.couponGrants ?? []).some((g) => g.customer_whatsapp === whatsapp && couponIsClaimable(g, couponById.get(g.coupon_id)))
 }
 
+// Só PRÉ-VISUALIZA (não marca claimed_at) -- pode ser chamada quantas
+// vezes o cliente recarregar a página da raspadinha, sem gastar cupom
+// nenhum. Resgate de verdade só acontece em customerClaimCoupon, chamada
+// apenas quando ele termina de raspar.
+async function customerPeekClaimableCoupon(token: string): Promise<import('./types').ClaimedCoupon> {
+  const db = loadDb()
+  const c = db.customers.find((x) => x.id === customerIdFromToken(token))
+  const whatsapp = c?.whatsapp ?? ''
+  const couponById = new Map(db.coupons.map((x) => [x.id, x]))
+  const grants = (db.couponGrants ?? [])
+    .filter((g) => g.customer_whatsapp === whatsapp && couponIsClaimable(g, couponById.get(g.coupon_id)))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+  const grant = grants[0]
+  if (!grant) throw new ApiError(400, 'no coupon available to claim')
+
+  const coupon = couponById.get(grant.coupon_id)
+  return {
+    grant_id: grant.id,
+    coupon_id: grant.coupon_id,
+    code: coupon?.code ?? '',
+    kind: coupon?.kind ?? 'desconto',
+    discount_type: coupon?.discount_type ?? null,
+    discount_value: coupon?.discount_value ?? null,
+    shipping_discount_type: coupon?.shipping_discount_type ?? null,
+    shipping_discount_value: coupon?.shipping_discount_value ?? null,
+    granted_uses: grant.granted_uses,
+    used_count: grant.used_count,
+    expires_at: coupon?.expires_at ?? null,
+  }
+}
+
 async function customerClaimCoupon(token: string): Promise<import('./types').ClaimedCoupon> {
   const db = loadDb()
   const c = db.customers.find((x) => x.id === customerIdFromToken(token))
@@ -2615,6 +2646,7 @@ export const localApi = {
     listCoupons: customerListCoupons,
     listOrders: customerListOrders,
     hasClaimableCoupon: customerHasClaimableCoupon,
+    peekClaimableCoupon: customerPeekClaimableCoupon,
     claimCoupon: customerClaimCoupon,
   },
   pdv: {

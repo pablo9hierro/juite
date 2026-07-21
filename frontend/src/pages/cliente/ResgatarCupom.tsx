@@ -109,10 +109,14 @@ export default function ResgatarCupom() {
       .then((has) => {
         setClaimable(has)
         if (!has) return
+        // Só espia os dados pra desenhar o ticket por baixo do papel
+        // dourado -- NÃO marca nada como resgatado ainda. Recarregar a
+        // página quantas vezes for não gasta cupom nenhum (o resgate de
+        // verdade só acontece em completeReveal, ao terminar de raspar).
         return api.customerAuth
-          .claimCoupon(token)
+          .peekClaimableCoupon(token)
           .then(setClaimed)
-          .catch((err) => setError(err instanceof ApiError ? err.message : 'Não foi possível resgatar o cupom.'))
+          .catch((err) => setError(err instanceof ApiError ? err.message : 'Não foi possível carregar o cupom.'))
       })
       .catch(() => setClaimable(false))
       .finally(() => setChecking(false))
@@ -195,6 +199,13 @@ export default function ResgatarCupom() {
     setFading(true)
     setProgress(100)
     window.setTimeout(() => setRevealed(true), 500)
+    // Só AGORA (terminou de raspar de verdade) o resgate é gravado no
+    // banco -- não no carregamento da página.
+    if (!token) return
+    api.customerAuth
+      .claimCoupon(token)
+      .then(setClaimed)
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'Não foi possível resgatar o cupom.'))
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -272,12 +283,18 @@ export default function ResgatarCupom() {
 
             {revealed && (
               <div className="text-center mt-5">
-                <p className="flex items-center justify-center gap-2 text-lg font-bold sunset-text">
-                  <PartyPopper className="w-5 h-5" /> Cupom resgatado!
-                </p>
-                <p className="text-sm text-son-silver-dim mt-1">
-                  O cupom <span className="font-mono font-bold text-white">{claimed.code}</span> já está na sua carteira, pronto pra usar no checkout.
-                </p>
+                {error ? (
+                  <p className="error-msg">{error}</p>
+                ) : (
+                  <>
+                    <p className="flex items-center justify-center gap-2 text-lg font-bold sunset-text">
+                      <PartyPopper className="w-5 h-5" /> Cupom resgatado!
+                    </p>
+                    <p className="text-sm text-son-silver-dim mt-1">
+                      O cupom <span className="font-mono font-bold text-white">{claimed.code}</span> já está na sua carteira, pronto pra usar no checkout.
+                    </p>
+                  </>
+                )}
                 <Link to="/cliente/cupons" className="btn-primary inline-flex mt-4">
                   Ver meus cupons
                 </Link>

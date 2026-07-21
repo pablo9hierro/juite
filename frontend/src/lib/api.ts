@@ -207,6 +207,7 @@ const remoteApi = {
     listCoupons: supabasePublicApi.customerAuth.listCoupons,
     listOrders: supabasePublicApi.customerAuth.listOrders,
     hasClaimableCoupon: supabasePublicApi.customerAuth.hasClaimableCoupon,
+    peekClaimableCoupon: supabasePublicApi.customerAuth.peekClaimableCoupon,
     claimCoupon: supabasePublicApi.customerAuth.claimCoupon,
   },
   // CRUD do admin e fila do motoboy falam direto com o Supabase via RPC
