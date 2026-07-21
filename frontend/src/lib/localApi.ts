@@ -25,7 +25,7 @@ import type { PromotionalProduct } from './supabasePublicApi'
 import { distanciaKm } from './geo/rotas'
 import { FALLBACK as STORE_LOCATION } from './geo/mapa'
 import { isScheduledOpenNow } from './storeHours'
-import { useAdminAuth } from '../store/adminAuth'
+import { useVendedorAuth } from '../store/vendedorAuth'
 import { useMotoboyAuth } from '../store/motoboyAuth'
 import type {
   BadgesLayout,
@@ -1928,13 +1928,14 @@ async function deletePromotion(id: string): Promise<void> {
   saveDb(db)
 }
 
-// Sessão local não distingue admin/vendedor por papel (token tem o prefixo
-// "local-vendedor:" ou é o fixo do admin) — o suficiente pra reconhecer
-// quem fez a venda nos relatórios em modo demonstração.
+// Admin e vendedor têm sessões locais separadas (useAdminAuth/
+// useVendedorAuth, cada uma com sua chave de localStorage) — o
+// suficiente pra reconhecer quem fez a venda nos relatórios em modo
+// demonstração.
 function pdvActorFromToken(): { role: 'admin' | 'vendedor'; id: string } {
-  const adminToken = useAdminAuth.getState().token
-  if (adminToken?.startsWith('local-vendedor:')) {
-    return { role: 'vendedor', id: adminToken.slice('local-vendedor:'.length) }
+  const vendedorToken = useVendedorAuth.getState().token
+  if (vendedorToken) {
+    return { role: 'vendedor', id: vendedorToken.replace('local-vendedor:', '') }
   }
   return { role: 'admin', id: 'admin' }
 }

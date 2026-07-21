@@ -9,23 +9,18 @@ import { useAdminAuth } from '../../store/adminAuth'
 // (isso causava logins acidentais na conta admin: o campo de e-mail vinha
 // pré-preenchido com o e-mail do admin e, se a senha digitada por um
 // vendedor/motoboy batesse por coincidência com a senha do admin, o login
-// "colava" na conta errada). Vendedor/motoboy logam em /funcionarios/login.
+// "colava" na conta errada). Vendedor/motoboy logam em /funcionarios/login,
+// cada um na própria sessão (useVendedorAuth/useMotoboyAuth) — useAdminAuth
+// aqui é 100% exclusivo do admin.
 export default function AdminLogin() {
-  const { token, role, login } = useAdminAuth()
+  const { token, login } = useAdminAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  if (token) {
-    return (
-      <Navigate
-        to={role === 'vendedor' ? '/admin/pdv' : role === 'motoboy' ? '/admin/motoboy' : '/admin/pedidos'}
-        replace
-      />
-    )
-  }
+  if (token) return <Navigate to="/admin/pedidos" replace />
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -33,7 +28,7 @@ export default function AdminLogin() {
     setLoading(true)
     try {
       const res = await api.auth.adminLogin(email, password)
-      login(res.token, res.name, 'admin')
+      login(res.token, res.name)
       navigate('/admin/pedidos')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erro ao entrar.')

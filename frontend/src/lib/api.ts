@@ -1,4 +1,5 @@
 import { useAdminAuth } from '../store/adminAuth'
+import { useVendedorAuth } from '../store/vendedorAuth'
 import { useMotoboyAuth } from '../store/motoboyAuth'
 import { ApiError } from './apiError'
 import { localApi } from './localApi'
@@ -108,12 +109,16 @@ async function callVercelPixApi(path: string, orderId: string): Promise<Order> {
   return body as Order
 }
 
+// admin e vendedor têm sessões separadas (useAdminAuth/useVendedorAuth,
+// cada uma com chave própria de localStorage) — RPCs "admin ou vendedor"
+// (PDV, financeiro) aceitam qualquer um dos dois tokens; a própria RPC
+// no banco valida o papel de verdade (sunset._require_admin_or_vendedor).
 function adminToken() {
-  return useAdminAuth.getState().token ?? undefined
+  return useAdminAuth.getState().token ?? useVendedorAuth.getState().token ?? undefined
 }
 // motoboy tem sessão própria (useMotoboyAuth, chave de localStorage
-// separada de useAdminAuth) — nunca se sobrescreve com a sessão de
-// admin/vendedor, mesmo com os dois logados ao mesmo tempo em
+// separada de admin/vendedor) — nunca se sobrescreve com a sessão dos
+// outros dois, mesmo com todos logados ao mesmo tempo em
 // abas/dispositivos diferentes.
 function motoboyToken() {
   return useMotoboyAuth.getState().token ?? undefined

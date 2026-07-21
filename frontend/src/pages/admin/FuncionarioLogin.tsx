@@ -3,7 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Loader2, Lock, Store, Truck } from 'lucide-react'
 import Logo from '../../components/ui/Logo'
 import { api, ApiError } from '../../lib/api'
-import { useAdminAuth } from '../../store/adminAuth'
+import { useVendedorAuth } from '../../store/vendedorAuth'
 import { useMotoboyAuth } from '../../store/motoboyAuth'
 
 type Role = 'vendedor' | 'motoboy'
@@ -12,12 +12,11 @@ type Role = 'vendedor' | 'motoboy'
 // (/admin/login) — cada aba chama SÓ a RPC daquele papel específico, sem
 // nenhuma tentativa em cascata contra outro papel. Elimina qualquer chance
 // de um funcionário acabar logado numa conta que não é a dele. Vendedor
-// grava em useAdminAuth (divide layout/sessão com o admin, por design);
-// motoboy grava em useMotoboyAuth, chave própria — as duas sessões nunca
-// se sobrescrevem, mesmo com abas/dispositivos diferentes logados ao
-// mesmo tempo.
+// grava em useVendedorAuth, motoboy em useMotoboyAuth — chaves de
+// localStorage totalmente separadas entre si e do admin (useAdminAuth):
+// logar ou deslogar qualquer um dos três nunca mais afeta os outros dois.
 export default function FuncionarioLogin() {
-  const { token, role: sessionRole, login } = useAdminAuth()
+  const { token: vendedorToken, login: vendedorLogin } = useVendedorAuth()
   const { token: motoboyToken, login: motoboyLogin } = useMotoboyAuth()
   const navigate = useNavigate()
   const [role, setRole] = useState<Role>('vendedor')
@@ -27,9 +26,7 @@ export default function FuncionarioLogin() {
   const [loading, setLoading] = useState(false)
 
   if (motoboyToken) return <Navigate to="/admin/motoboy" replace />
-  if (token) {
-    return <Navigate to={sessionRole === 'vendedor' ? '/admin/pdv' : '/admin/pedidos'} replace />
-  }
+  if (vendedorToken) return <Navigate to="/admin/pdv" replace />
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,7 +35,7 @@ export default function FuncionarioLogin() {
     try {
       if (role === 'vendedor') {
         const res = await api.auth.vendedorLogin(email, password)
-        login(res.token, res.name, 'vendedor')
+        vendedorLogin(res.token, res.name)
         navigate('/admin/pdv')
       } else {
         const res = await api.auth.motoboyLogin(email, password)

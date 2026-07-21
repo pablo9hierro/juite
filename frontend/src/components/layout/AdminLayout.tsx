@@ -12,15 +12,17 @@ import {
 } from 'lucide-react'
 import Logo from '../ui/Logo'
 import { useAdminAuth } from '../../store/adminAuth'
+import { useVendedorAuth } from '../../store/vendedorAuth'
 
 // Vendedor usa esse MESMO layout/sidebar (login separado, em
-// /funcionarios/login) só que enxergando um dashboard próprio: Pedidos +
-// PDV + Financeiro (só a parte de vendas de balcão dele) — sem acesso a
-// Produtos/Funcionários/Promoções/CRM/Configurações, que continuam
-// exclusivos do admin. O resto do menu nem aparece pra ele, e a guarda de
-// rota abaixo bloqueia acesso direto por URL também (defesa em
-// profundidade: cada RPC admin-only já rejeita o token de vendedor
-// sozinha, isso aqui é só pra não mostrar tela quebrada).
+// /funcionarios/login, sessão própria em useVendedorAuth) só que
+// enxergando um dashboard próprio: Pedidos + PDV + Financeiro (só a
+// parte de vendas de balcão dele) — sem acesso a Produtos/Funcionários/
+// Promoções/CRM/Configurações, que continuam exclusivos do admin. O
+// resto do menu nem aparece pra ele, e a guarda de rota abaixo bloqueia
+// acesso direto por URL também (defesa em profundidade: cada RPC
+// admin-only já rejeita o token de vendedor sozinha, isso aqui é só pra
+// não mostrar tela quebrada).
 const NAV_ITEMS = [
   { href: '/admin/pedidos', label: 'Pedidos', icon: ClipboardList, roles: ['admin', 'vendedor'] },
   { href: '/admin/pdv', label: 'PDV', icon: ShoppingCart, roles: ['admin', 'vendedor'] },
@@ -33,18 +35,21 @@ const NAV_ITEMS = [
 ] as const
 
 export default function AdminLayout() {
-  const { token, name, role, logout } = useAdminAuth()
+  const admin = useAdminAuth()
+  const vendedor = useVendedorAuth()
   const location = useLocation()
   const navigate = useNavigate()
 
-  if (!token) return <Navigate to="/admin/login" state={{ from: location }} replace />
+  // Admin e vendedor têm sessões 100% separadas (useAdminAuth/
+  // useVendedorAuth, cada uma com sua chave de localStorage) — aqui só
+  // resolve QUAL das duas está ativa pra decidir o que essa tela mostra.
+  const isVendedor = !admin.token && !!vendedor.token
+  const token = admin.token || vendedor.token
+  const name = admin.token ? admin.name : vendedor.name
+  const role: 'admin' | 'vendedor' = isVendedor ? 'vendedor' : 'admin'
+  const logout = isVendedor ? vendedor.logout : admin.logout
 
-  // Motoboy mora numa árvore de rotas totalmente separada (/admin/motoboy,
-  // ver App.tsx + MotoboyLayout) — se um token de
-  // motoboy cair aqui (ex: digitou /admin/produtos direto na barra), manda
-  // pro dashboard dele em vez de cair num loop (nenhum NAV_ITEMS aceita
-  // 'motoboy', então allowedPaths ficaria vazio pra sempre).
-  if (role === 'motoboy') return <Navigate to="/admin/motoboy" replace />
+  if (!token) return <Navigate to="/admin/login" state={{ from: location }} replace />
 
   const items = NAV_ITEMS.filter((item) => (item.roles as readonly string[]).includes(role))
   const allowedPaths: string[] = items.map((item) => item.href)

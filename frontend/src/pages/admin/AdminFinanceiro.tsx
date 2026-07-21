@@ -5,6 +5,7 @@ import { StatusBadge } from '../../components/ui/Badge'
 import UsageChart from '../../components/admin/UsageChart'
 import { api } from '../../lib/api'
 import { useAdminAuth } from '../../store/adminAuth'
+import { useVendedorAuth } from '../../store/vendedorAuth'
 import type { FinanceiroSummary, FinanceiroTimeseriesPoint, Order, VendedorRelatorio } from '../../lib/types'
 
 function currency(v: number) {
@@ -238,7 +239,12 @@ function OrderDetailModal({ order, onClose }: { order: Order; onClose: () => voi
 }
 
 export default function AdminFinanceiro() {
-  const { role } = useAdminAuth()
+  // Admin/vendedor têm sessões separadas (useAdminAuth/useVendedorAuth) —
+  // essa tela é compartilhada pelas duas telas de dashboard, então só
+  // resolve qual está ativa pra saber o que mostrar.
+  const adminToken = useAdminAuth((s) => s.token)
+  const vendedorToken = useVendedorAuth((s) => s.token)
+  const role: 'admin' | 'vendedor' = !adminToken && vendedorToken ? 'vendedor' : 'admin'
   const [data, setData] = useState<FinanceiroSummary | null>(null)
   const [timeseries, setTimeseries] = useState<FinanceiroTimeseriesPoint[]>([])
   const [loading, setLoading] = useState(role === 'admin')

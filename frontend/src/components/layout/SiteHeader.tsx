@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Heart } from 'lucide-react'
+import { Heart, LogIn, UserPlus } from 'lucide-react'
 import SunsetCartIcon from '../SunsetCartIcon'
 import WhatsAppFab from '../WhatsAppFab'
+import CustomerAuthModal from '../CustomerAuthModal'
 import { useCart } from '../../store/cart'
+import { useCustomerAuth } from '../../store/customerAuth'
 
 // O logo clicável (header > div > a > img) foi retirado de todas as
 // páginas de cliente a pedido — só sobra o "Voltar" do lado esquerdo.
@@ -21,6 +24,9 @@ export default function SiteHeader({
 }) {
   const navigate = useNavigate()
   const count = useCart((s) => s.items.reduce((sum, i) => sum + i.quantity, 0))
+  const customerAuth = useCustomerAuth()
+  const [guestMenuOpen, setGuestMenuOpen] = useState(false)
+  const [authMode, setAuthMode] = useState<'login' | 'register' | null>(null)
 
   return (
     <header className="px-5 sm:px-10 pt-5 max-w-6xl mx-auto">
@@ -62,12 +68,50 @@ export default function SiteHeader({
           )}
         </div>
         <div className="sunset-nav-slot sunset-nav-slot-end">
-          {/* Sem ação por enquanto — destino dos favoritos ainda não foi
-              definido. */}
+          {/* Logado: vai direto pros favoritos. Deslogado: abre o mesmo
+              popup "Entrar"/"Criar conta" da landing (BrandHeader), em
+              vez de navegar pra uma página que exige login. */}
           {showProfile && (
-            <button type="button" className="sunset-profile-btn w-11 h-11 flex items-center justify-center flex-shrink-0" aria-label="Favoritos">
-              <Heart className="w-4 h-4" />
-            </button>
+            <div className="relative">
+              {guestMenuOpen && (
+                <div className="fixed inset-0 z-20" onClick={() => setGuestMenuOpen(false)} aria-hidden="true" />
+              )}
+              <button
+                type="button"
+                onClick={() => (customerAuth.token ? navigate('/cliente/favoritos') : setGuestMenuOpen((o) => !o))}
+                className="sunset-profile-btn w-11 h-11 flex items-center justify-center flex-shrink-0 relative z-30"
+                aria-label="Favoritos"
+                aria-expanded={customerAuth.token ? undefined : guestMenuOpen}
+              >
+                <Heart className="w-4 h-4" />
+              </button>
+              {!customerAuth.token && guestMenuOpen && (
+                <div className="sunset-menu-card" style={{ left: 'auto', right: 0 }}>
+                  <ul className="sunset-menu-list">
+                    <li
+                      className="sunset-menu-item"
+                      onClick={() => {
+                        setGuestMenuOpen(false)
+                        setAuthMode('login')
+                      }}
+                    >
+                      <LogIn />
+                      <p className="sunset-menu-label">Entrar</p>
+                    </li>
+                    <li
+                      className="sunset-menu-item"
+                      onClick={() => {
+                        setGuestMenuOpen(false)
+                        setAuthMode('register')
+                      }}
+                    >
+                      <UserPlus />
+                      <p className="sunset-menu-label">Criar conta</p>
+                    </li>
+                  </ul>
+                </div>
+              )}
+            </div>
           )}
           {showWhatsApp && <WhatsAppFab inline />}
           {/* Igual ao botão flutuante — só o #cart-icon puro, sem pílula/
@@ -91,6 +135,7 @@ export default function SiteHeader({
           )}
         </div>
       </div>
+      {authMode && <CustomerAuthModal initialMode={authMode} onClose={() => setAuthMode(null)} onSuccess={() => setAuthMode(null)} />}
     </header>
   )
 }
