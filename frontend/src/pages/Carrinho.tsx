@@ -14,19 +14,28 @@ function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
 }
 
+type SortBy = 'padrao' | 'menor_preco' | 'maior_preco' | 'mais_vendido' | 'alfabetica'
+
 export default function Carrinho() {
   const navigate = useNavigate()
   const { items, changeQty, removeItem } = useCart()
   const [products, setProducts] = useState<Product[]>([])
   const [promoProducts, setPromoProducts] = useState<PromotionalProduct[]>([])
+  const [salesCounts, setSalesCounts] = useState<{ product_id: string; sold_count: number }[]>([])
   const [loading, setLoading] = useState(true)
   const [detailProduct, setDetailProduct] = useState<Product | null>(null)
+  // Estado 100% local desta página — mesmas opções do "Ordenar por..." de
+  // /catalogo, mas cada página tem o seu próprio useState, sem nenhuma
+  // ligação entre os dois: ordenar o carrinho aqui não muda a ordenação
+  // do catálogo, e vice-versa.
+  const [sortBy, setSortBy] = useState<SortBy>('padrao')
 
   useEffect(() => {
-    Promise.all([api.products.list(), api.coupons.listPromotionalProducts().catch(() => [])])
-      .then(([p, promo]) => {
+    Promise.all([api.products.list(), api.coupons.listPromotionalProducts().catch(() => []), api.products.salesCounts()])
+      .then(([p, promo, sales]) => {
         setProducts(p)
         setPromoProducts(promo)
+        setSalesCounts(sales)
       })
       .finally(() => setLoading(false))
   }, [])
@@ -37,10 +46,36 @@ export default function Carrinho() {
     for (const p of promoProducts) if (!map.has(p.product_id)) map.set(p.product_id, p)
     return map
   }, [promoProducts])
+  const salesByProduct = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const s of salesCounts) map.set(s.product_id, s.sold_count)
+    return map
+  }, [salesCounts])
 
   const lines = items
     .map((item) => ({ item, product: productById.get(item.productId) }))
     .filter((l): l is { item: typeof items[number]; product: Product } => !!l.product)
+
+  const sortedLines = useMemo(() => {
+    if (sortBy === 'padrao') return lines
+    const arr = [...lines]
+    switch (sortBy) {
+      case 'menor_preco':
+        arr.sort((a, b) => a.product.price - b.product.price)
+        break
+      case 'maior_preco':
+        arr.sort((a, b) => b.product.price - a.product.price)
+        break
+      case 'mais_vendido':
+        arr.sort((a, b) => (salesByProduct.get(b.product.id) ?? 0) - (salesByProduct.get(a.product.id) ?? 0))
+        break
+      case 'alfabetica':
+        arr.sort((a, b) => a.product.name.localeCompare(b.product.name))
+        break
+    }
+    return arr
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, sortBy, salesByProduct])
 
   const qtyInCart = (id: string) => items.find((i) => i.productId === id)?.quantity ?? 0
 
@@ -60,8 +95,22 @@ export default function Carrinho() {
           </div>
         ) : (
           <>
+            <div className="flex items-center justify-end mb-3">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortBy)}
+                className="input-field w-auto py-2 text-xs appearance-none cursor-pointer pr-8"
+                aria-label="Ordenar itens do carrinho"
+              >
+                <option value="padrao">Ordenar por...</option>
+                <option value="menor_preco">Menor preço</option>
+                <option value="maior_preco">Maior preço</option>
+                <option value="mais_vendido">Mais vendido</option>
+                <option value="alfabetica">Alfabética (A-Z)</option>
+              </select>
+            </div>
             <ul className="space-y-3 mb-6">
-              {lines.map(({ item, product }) => (
+              {sortedLines.map(({ item, product }) => (
                 <li key={product.id} className="flex items-center gap-3 bg-son-surface border border-white/5 rounded-2xl p-3">
                   {/* Igual em /catalogo — clicar no card (imagem+nome) abre
                       o mesmo toggle de detalhes do produto; os controles de
