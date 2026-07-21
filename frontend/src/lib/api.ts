@@ -206,6 +206,8 @@ const remoteApi = {
     listFavorites: supabasePublicApi.customerAuth.listFavorites,
     listCoupons: supabasePublicApi.customerAuth.listCoupons,
     listOrders: supabasePublicApi.customerAuth.listOrders,
+    hasClaimableCoupon: supabasePublicApi.customerAuth.hasClaimableCoupon,
+    claimCoupon: supabasePublicApi.customerAuth.claimCoupon,
   },
   // CRUD do admin e fila do motoboy falam direto com o Supabase via RPC
   // (ver supabase/sunset_admin_crud.sql), passando o token de

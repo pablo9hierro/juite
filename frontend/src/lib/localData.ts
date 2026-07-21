@@ -65,6 +65,9 @@ export interface LocalCouponGrant {
   granted_uses: number
   used_count: number
   created_at: string
+  // null/undefined = ainda não resgatado na raspadinha de
+  // /cliente/resgatarcupom — não aparece em Ativos/Inativos até resgatar.
+  claimed_at?: string | null
 }
 
 // "Campanha": notificação de WhatsApp + cupom exclusivo, atrelada a um

@@ -88,11 +88,6 @@ export default function ProductDetailModal({
         <button type="button" onClick={onClose} className="sunset-pd-close" aria-label="Fechar">
           <X className="w-4 h-4" />
         </button>
-        {onToggleFavorite && (
-          <div className="absolute top-2" style={{ right: promo ? '3rem' : '0.5rem' }}>
-            <FavoriteHeartButton checked={isFavorite} onChange={onToggleFavorite} />
-          </div>
-        )}
         {promo && <div className="sunset-pd-badge">{discountLabel(promo)}</div>}
         <div className="sunset-pd-content">
           <div className="sunset-pd-image">
@@ -102,6 +97,11 @@ export default function ProductDetailModal({
               <Package className="w-10 h-10 text-white/50" />
             )}
           </div>
+          {onToggleFavorite && (
+            <div className="flex">
+              <FavoriteHeartButton withLabel checked={isFavorite} onChange={onToggleFavorite} />
+            </div>
+          )}
           <div>
             <p className="sunset-pd-title">{product.name}</p>
             {product.category_name && <p className="sunset-pd-category">{product.category_name}</p>}

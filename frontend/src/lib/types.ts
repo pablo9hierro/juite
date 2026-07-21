@@ -216,6 +216,22 @@ export interface CustomerCoupons {
   inactive: CustomerCouponEntry[]
   history: CustomerCouponHistoryEntry[]
 }
+// Retorno de customer_claim_coupon — só existe DEPOIS de raspar a
+// raspadinha em /cliente/resgatarcupom, nada disso é visível antes.
+// (description NÃO entra aqui: é nota interna do admin, nunca vai pro cliente.)
+export interface ClaimedCoupon {
+  grant_id: string
+  coupon_id: string
+  code: string
+  kind: CouponKind
+  discount_type: DiscountType | null
+  discount_value: number | null
+  shipping_discount_type: DiscountType | null
+  shipping_discount_value: number | null
+  granted_uses: number
+  used_count: number
+  expires_at: string | null
+}
 
 export type PromotionType = 'selfie_service' | 'kit'
 

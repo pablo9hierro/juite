@@ -1,6 +1,6 @@
 import { ApiError } from './apiError'
 import { supabase } from './supabaseClient'
-import type { BadgesLayout, BgFit, BgMode, Category, Coupon, Customer, CustomerAuthResult, CustomerCoupons, DeliveryPosition, LandingBadge, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
+import type { BadgesLayout, BgFit, BgMode, Category, ClaimedCoupon, Coupon, Customer, CustomerAuthResult, CustomerCoupons, DeliveryPosition, LandingBadge, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new ApiError(400, result.error.message)
@@ -243,6 +243,17 @@ export const supabasePublicApi = {
       const { data, error } = await supabase.rpc('customer_list_orders', { p_token: token })
       if (error) throw new ApiError(400, error.message)
       return (data ?? []) as Order[]
+    },
+    // /cliente/cupons "Resgatar cupom" + /cliente/resgatarcupom.
+    hasClaimableCoupon: async (token: string) => {
+      const { data, error } = await supabase.rpc('customer_has_claimable_coupon', { p_token: token })
+      if (error) throw new ApiError(400, error.message)
+      return data as boolean
+    },
+    claimCoupon: async (token: string) => {
+      const { data, error } = await supabase.rpc('customer_claim_coupon', { p_token: token })
+      if (error) throw new ApiError(400, error.message)
+      return data as ClaimedCoupon
     },
   },
 }

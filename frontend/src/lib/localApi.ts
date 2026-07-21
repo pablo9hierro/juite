@@ -688,6 +688,52 @@ function couponIsUsable(grant: import('./localData').LocalCouponGrant, coupon: C
   return true
 }
 
+// Igual sunset.customer_has_claimable_coupon / customer_claim_coupon no
+// banco de verdade — grant concedido mas ainda não resgatado na raspadinha
+// não conta como usável nem aparece em Ativos/Inativos.
+function couponIsClaimable(grant: import('./localData').LocalCouponGrant, coupon: Coupon | undefined) {
+  return !grant.claimed_at && couponIsUsable(grant, coupon)
+}
+
+async function customerHasClaimableCoupon(token: string): Promise<boolean> {
+  const db = loadDb()
+  const c = db.customers.find((x) => x.id === customerIdFromToken(token))
+  const whatsapp = c?.whatsapp ?? ''
+  const couponById = new Map(db.coupons.map((x) => [x.id, x]))
+  return (db.couponGrants ?? []).some((g) => g.customer_whatsapp === whatsapp && couponIsClaimable(g, couponById.get(g.coupon_id)))
+}
+
+async function customerClaimCoupon(token: string): Promise<import('./types').ClaimedCoupon> {
+  const db = loadDb()
+  const c = db.customers.find((x) => x.id === customerIdFromToken(token))
+  const whatsapp = c?.whatsapp ?? ''
+  const couponById = new Map(db.coupons.map((x) => [x.id, x]))
+  const grants = (db.couponGrants ?? [])
+    .filter((g) => g.customer_whatsapp === whatsapp && couponIsClaimable(g, couponById.get(g.coupon_id)))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+  const grant = grants[0]
+  if (!grant) throw new ApiError(400, 'no coupon available to claim')
+
+  grant.claimed_at = nowIso()
+  saveDb(db)
+
+  // description NUNCA vai pro cliente (nota interna do admin sobre o cupom).
+  const coupon = couponById.get(grant.coupon_id)
+  return {
+    grant_id: grant.id,
+    coupon_id: grant.coupon_id,
+    code: coupon?.code ?? '',
+    kind: coupon?.kind ?? 'desconto',
+    discount_type: coupon?.discount_type ?? null,
+    discount_value: coupon?.discount_value ?? null,
+    shipping_discount_type: coupon?.shipping_discount_type ?? null,
+    shipping_discount_value: coupon?.shipping_discount_value ?? null,
+    granted_uses: grant.granted_uses,
+    used_count: grant.used_count,
+    expires_at: coupon?.expires_at ?? null,
+  }
+}
+
 async function customerListCoupons(token: string): Promise<import('./types').CustomerCoupons> {
   const db = loadDb()
   const customerId = customerIdFromToken(token)
@@ -714,8 +760,10 @@ async function customerListCoupons(token: string): Promise<import('./types').Cus
     }
   }
 
-  const active = grants.filter((g) => couponIsUsable(g, couponById.get(g.coupon_id))).map(toEntry)
-  const inactive = grants.filter((g) => !couponIsUsable(g, couponById.get(g.coupon_id))).map(toEntry)
+  // Grant ainda não resgatado na raspadinha (claimed_at null) não aparece
+  // em nenhuma das duas abas -- só some da lista até ser resgatado.
+  const active = grants.filter((g) => g.claimed_at && couponIsUsable(g, couponById.get(g.coupon_id))).map(toEntry)
+  const inactive = grants.filter((g) => g.claimed_at && !couponIsUsable(g, couponById.get(g.coupon_id))).map(toEntry)
   const history = db.orders
     .filter((o) => o.customer_whatsapp === whatsapp && o.coupon_code)
     .map((o) => ({
@@ -2566,6 +2614,8 @@ export const localApi = {
     listFavorites: customerListFavorites,
     listCoupons: customerListCoupons,
     listOrders: customerListOrders,
+    hasClaimableCoupon: customerHasClaimableCoupon,
+    claimCoupon: customerClaimCoupon,
   },
   pdv: {
     createSale: pdvCreateSale,

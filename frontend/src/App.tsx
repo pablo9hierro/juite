@@ -14,6 +14,7 @@ import Consultar from './pages/Consultar'
 import RecuperarSenha from './pages/RecuperarSenha'
 import FavoritosCliente from './pages/cliente/FavoritosCliente'
 import CuponsCliente from './pages/cliente/CuponsCliente'
+import ResgatarCupom from './pages/cliente/ResgatarCupom'
 import HistoricoCliente from './pages/cliente/HistoricoCliente'
 import AdminLogin from './pages/admin/AdminLogin'
 import FuncionarioLogin from './pages/admin/FuncionarioLogin'
@@ -69,6 +70,7 @@ export default function App() {
         <Route path="/recuperar-senha" element={<RecuperarSenha />} />
         <Route path="/cliente/favoritos" element={<FavoritosCliente />} />
         <Route path="/cliente/cupons" element={<CuponsCliente />} />
+        <Route path="/cliente/resgatarcupom" element={<ResgatarCupom />} />
         <Route path="/cliente/historico" element={<HistoricoCliente />} />
 
         <Route path="/admin/login" element={<AdminLogin />} />

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
-import { Loader2, Tag } from 'lucide-react'
+import { Navigate, useNavigate } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
+import { Gift, Loader2, Tag } from 'lucide-react'
 import SiteHeader from '../../components/layout/SiteHeader'
 import PageTransition from '../../components/layout/PageTransition'
+import NoCouponToggle from '../../components/NoCouponToggle'
 import { api } from '../../lib/api'
 import type { CustomerCoupons } from '../../lib/types'
 import { useCustomerAuth } from '../../store/customerAuth'
@@ -20,9 +22,12 @@ type Tab = 'ativos' | 'inativos' | 'historico'
 
 export default function CuponsCliente() {
   const { token } = useCustomerAuth()
+  const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('ativos')
   const [data, setData] = useState<CustomerCoupons | null>(null)
   const [loading, setLoading] = useState(true)
+  const [checkingClaim, setCheckingClaim] = useState(false)
+  const [showNoCoupon, setShowNoCoupon] = useState(false)
 
   useEffect(() => {
     if (!token) return
@@ -31,6 +36,19 @@ export default function CuponsCliente() {
       .then(setData)
       .finally(() => setLoading(false))
   }, [token])
+
+  const handleResgatarCupom = () => {
+    if (!token || checkingClaim) return
+    setCheckingClaim(true)
+    api.customerAuth
+      .hasClaimableCoupon(token)
+      .then((has) => {
+        if (has) navigate('/cliente/resgatarcupom')
+        else setShowNoCoupon(true)
+      })
+      .catch(() => setShowNoCoupon(true))
+      .finally(() => setCheckingClaim(false))
+  }
 
   if (!token) return <Navigate to="/" replace />
 
@@ -60,6 +78,17 @@ export default function CuponsCliente() {
         </div>
 
         <div className="glass rounded-b-3xl p-4 sm:p-6">
+          {tab === 'ativos' && (
+            <button
+              type="button"
+              onClick={handleResgatarCupom}
+              disabled={checkingClaim}
+              className="btn-primary w-full flex items-center justify-center gap-2 mb-4 disabled:opacity-60"
+            >
+              {checkingClaim ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gift className="w-4 h-4" />}
+              Resgatar cupom
+            </button>
+          )}
           {loading || !data ? (
             <div className="flex justify-center py-20">
               <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
@@ -118,6 +147,7 @@ export default function CuponsCliente() {
           )}
         </div>
       </PageTransition>
+      <AnimatePresence>{showNoCoupon && <NoCouponToggle onClose={() => setShowNoCoupon(false)} />}</AnimatePresence>
     </main>
   )
 }

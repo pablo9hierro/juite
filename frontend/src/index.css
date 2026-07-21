@@ -1597,6 +1597,379 @@ a {
   box-shadow: 84px -84px var(--color-son-purple);
   background-image: linear-gradient(45deg, var(--color-son-orange) 0%, var(--color-son-gold) 51%, var(--color-son-orange) 100%);
 }
+
+/* Uiverse.io by preet_7613 — cartão do rostinho triste (nenhum cupom pra
+   resgatar), traços em stroke-dasharray "desenhando" em loop, olhos
+   piscando, lágrima caindo. */
+.sunset-nocoupon-card {
+  position: relative;
+  width: min(320px, 100%);
+  background: var(--color-son-surface);
+  border-radius: 20px;
+  padding: 2rem 1.5rem 1.75rem;
+  border: 1px solid rgba(255, 210, 61, 0.2);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.45), 0 10px 10px -5px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.sunset-nocoupon-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-son-silver);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.sunset-nocoupon-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: white;
+}
+.sunset-nocoupon-face {
+  width: 110px;
+  height: 110px;
+  overflow: visible;
+}
+.sunset-nocoupon-outline,
+.sunset-nocoupon-mouth {
+  stroke: var(--color-son-gold);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  fill: none;
+}
+.sunset-nocoupon-outline {
+  stroke-dasharray: 240;
+  stroke-dashoffset: 240;
+  animation: sunset-nocoupon-draw 2.4s ease-in-out infinite;
+}
+.sunset-nocoupon-mouth {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: sunset-nocoupon-draw 2.4s ease-in-out infinite 0.3s;
+}
+.sunset-nocoupon-eye {
+  fill: var(--color-son-silver);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sunset-nocoupon-blink 3.2s ease-in-out infinite;
+}
+.sunset-nocoupon-eye-r {
+  animation-delay: 0.08s;
+}
+.sunset-nocoupon-tear {
+  fill: var(--color-son-orange);
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: top center;
+  animation: sunset-nocoupon-tear-fall 2.8s ease-in infinite 0.6s;
+}
+@keyframes sunset-nocoupon-draw {
+  0% {
+    stroke-dashoffset: 240;
+  }
+  55%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes sunset-nocoupon-blink {
+  0%,
+  85%,
+  100% {
+    transform: scaleY(1);
+  }
+  92% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes sunset-nocoupon-tear-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(14px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.8);
+  }
+}
+.sunset-nocoupon-title {
+  margin-top: 1rem;
+  font-weight: 700;
+  color: white;
+  font-size: 1rem;
+}
+.sunset-nocoupon-message {
+  margin-top: 0.4rem;
+  color: var(--color-son-silver-dim);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+/* Uiverse.io by 00Kubi — "Cyber Card": grade 5x5 de tilt 3D + glare +
+   scanline + cantos em L + partículas de glow, recolorido pro
+   laranja/dourado/roxo sunset (era ciano/roxo neon). Sem interação (ou
+   enquanto a raspadinha ocupa o ponteiro), fica com tilt suave em loop
+   contínuo; passando o mouse célula a célula (desktop) dá o tilt
+   dramático da referência. */
+.sunset-cyber-card {
+  --rx: 0deg;
+  --ry: 0deg;
+  position: relative;
+  width: 320px;
+  max-width: 100%;
+  height: 190px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #1b1030 0%, #241539 45%, #12081f 100%);
+  border: 1px solid rgba(255, 210, 61, 0.25);
+  box-shadow:
+    0 0 0 1px rgba(224, 138, 58, 0.15),
+    0 20px 40px -10px rgba(0, 0, 0, 0.6),
+    0 0 30px rgba(255, 210, 61, 0.08);
+  overflow: hidden;
+  transform: rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform 0.15s ease-out;
+  animation: sunset-cyber-idle 6s ease-in-out infinite;
+  touch-action: none;
+  user-select: none;
+}
+.sunset-cyber-card-active {
+  animation: none;
+}
+@keyframes sunset-cyber-idle {
+  0%,
+  100% {
+    transform: rotateX(6deg) rotateY(-8deg);
+  }
+  50% {
+    transform: rotateX(-6deg) rotateY(8deg);
+  }
+}
+.sunset-cyber-card-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  z-index: 5;
+}
+.sunset-cyber-card-glare {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--glare-x, 50%) var(--glare-y, 50%), rgba(255, 255, 255, 0.35), transparent 45%);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  z-index: 4;
+}
+.sunset-cyber-card-active .sunset-cyber-card-glare {
+  opacity: 1;
+}
+.sunset-cyber-card-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--color-son-gold), transparent);
+  opacity: 0.6;
+  animation: sunset-cyber-scan 3s linear infinite;
+  z-index: 3;
+  pointer-events: none;
+}
+@keyframes sunset-cyber-scan {
+  0% {
+    top: 0%;
+  }
+  100% {
+    top: 100%;
+  }
+}
+.sunset-cyber-card-corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-son-gold);
+  opacity: 0.8;
+  z-index: 6;
+  pointer-events: none;
+}
+.sunset-cyber-card-corner-tl {
+  top: 8px;
+  left: 8px;
+  border-right: none;
+  border-bottom: none;
+}
+.sunset-cyber-card-corner-tr {
+  top: 8px;
+  right: 8px;
+  border-left: none;
+  border-bottom: none;
+}
+.sunset-cyber-card-corner-bl {
+  bottom: 8px;
+  left: 8px;
+  border-right: none;
+  border-top: none;
+}
+.sunset-cyber-card-corner-br {
+  bottom: 8px;
+  right: 8px;
+  border-left: none;
+  border-top: none;
+}
+.sunset-cyber-card-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.sunset-cyber-card-particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-son-gold);
+  box-shadow: 0 0 8px 2px var(--color-son-gold);
+  left: calc(15% + (var(--i) * 14%));
+  top: 80%;
+  opacity: 0;
+  animation: sunset-cyber-float 4s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.5s);
+}
+@keyframes sunset-cyber-float {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  20% {
+    opacity: 0.8;
+  }
+  80% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-70px);
+  }
+}
+.sunset-cyber-card-content {
+  position: relative;
+  z-index: 3;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--color-son-gold);
+  pointer-events: none;
+}
+.sunset-cyber-card-icon {
+  width: 34px;
+  height: 34px;
+  filter: drop-shadow(0 0 6px rgba(255, 210, 61, 0.6));
+}
+.sunset-cyber-card-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-son-silver);
+}
+
+/* Cupom azul revelado por baixo da raspadinha + card de sucesso. */
+.sunset-scratch-wrap {
+  position: relative;
+  width: 320px;
+  max-width: 100%;
+  height: 190px;
+}
+.sunset-scratch-coupon {
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #1c4fa8 0%, #2f6fe0 55%, #1c4fa8 100%);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  color: white;
+  text-align: center;
+  padding: 1rem;
+  overflow: hidden;
+}
+.sunset-scratch-coupon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.5) 1.5px, transparent 1.5px);
+  background-size: 14px 14px;
+  opacity: 0.12;
+}
+.sunset-scratch-coupon-code {
+  font-family: monospace;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  position: relative;
+}
+.sunset-scratch-coupon-discount {
+  font-size: 1.6rem;
+  font-weight: 900;
+  position: relative;
+}
+.sunset-scratch-coupon-desc {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.85);
+  position: relative;
+}
+.sunset-scratch-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  border-radius: 18px;
+  cursor: pointer;
+  touch-action: none;
+}
+.sunset-scratch-hint {
+  margin-top: 0.9rem;
+  font-size: 0.75rem;
+  color: var(--color-son-silver-dim);
+  text-align: center;
+}
+.sunset-scratch-progress-track {
+  margin-top: 0.6rem;
+  width: 320px;
+  max-width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.sunset-scratch-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-son-orange), var(--color-son-gold));
+  transition: width 0.15s ease-out;
+}
 .sunset-pd-image {
   width: 100%;
   height: 160px;
@@ -1835,6 +2208,57 @@ a {
   100% {
     transform: scale(1);
   }
+}
+
+/* Versão com texto (referência completa do barisdogansutcu) — usada
+   dentro do toggle de detalhes do produto (.sunset-pd-content), onde tem
+   espaço horizontal pra pílula com "Adicionar aos favoritos"/"Adicionado
+   aos favoritos" trocando em crossfade. */
+.sunset-fav-heart-labeled label {
+  width: auto;
+  height: auto;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 0.6rem;
+  padding: 0.5rem 0.85rem 0.5rem 0.6rem;
+}
+.sunset-fav-heart-labeled label svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.sunset-fav-action {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sunset-fav-option-1,
+.sunset-fav-option-2 {
+  grid-column-start: 1;
+  grid-column-end: 1;
+  grid-row-start: 1;
+  grid-row-end: 1;
+  transition: all 0.5s;
+}
+.sunset-fav-option-1 {
+  transform: translate(0px, 0%);
+  opacity: 1;
+}
+.sunset-fav-checkbox:checked + label .sunset-fav-option-1 {
+  transform: translate(0px, -100%);
+  opacity: 0;
+}
+.sunset-fav-option-2 {
+  transform: translate(0px, 100%);
+  opacity: 0;
+}
+.sunset-fav-checkbox:checked + label .sunset-fav-option-2 {
+  transform: translate(0px, 0%);
+  opacity: 1;
 }
 
 /* Uiverse.io by Yaya12085 — cartão de confirmação (era claro, "desativar

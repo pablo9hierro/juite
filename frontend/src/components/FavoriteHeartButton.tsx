@@ -10,14 +10,20 @@ export default function FavoriteHeartButton({
   checked,
   onChange,
   className,
+  withLabel,
 }: {
   checked: boolean
   onChange: () => void
   className?: string
+  // Versão completa da referência (ícone + pílula com texto "Adicionar aos
+  // favoritos"/"Adicionado aos favoritos" trocando em crossfade) — usada
+  // onde tem espaço horizontal de sobra (dentro do toggle de detalhes do
+  // produto). Nos cards (cantinho da imagem) fica só o ícone compacto.
+  withLabel?: boolean
 }) {
   const id = useId()
   return (
-    <span className={`sunset-fav-heart ${className ?? ''}`}>
+    <span className={`sunset-fav-heart ${withLabel ? 'sunset-fav-heart-labeled' : ''} ${className ?? ''}`}>
       <input
         type="checkbox"
         id={id}
@@ -30,6 +36,12 @@ export default function FavoriteHeartButton({
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
         </svg>
+        {withLabel && (
+          <span className="sunset-fav-action">
+            <span className="sunset-fav-option-1">Adicionar aos favoritos</span>
+            <span className="sunset-fav-option-2">Adicionado aos favoritos</span>
+          </span>
+        )}
       </label>
     </span>
   )
