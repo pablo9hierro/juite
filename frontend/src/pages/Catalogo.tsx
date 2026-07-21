@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LayoutGrid, List, Loader2, Minus, Package, Plus, Search, X } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import SiteHeader from '../components/layout/SiteHeader'
 import PageTransition from '../components/layout/PageTransition'
 import CartFab from '../components/CartFab'
@@ -62,6 +62,87 @@ function PromoCards({ products, promoByProduct }: { products: Product[]; promoBy
   )
 }
 
+// Uiverse.io by SachinKumar666 — card com brilho/glow/badge, reaproveitado
+// como toggle de detalhes do produto (abre ao clicar na imagem ou no
+// bloco de texto do card do catálogo, fecha no X ou clicando fora).
+function ProductDetailModal({
+  product,
+  promo,
+  inCart,
+  outOfStock,
+  onAdd,
+  onRemove,
+  onClose,
+}: {
+  product: Product
+  promo: PromotionalProduct | undefined
+  inCart: number
+  outOfStock: boolean
+  onAdd: () => void
+  onRemove: () => void
+  onClose: () => void
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.92 }}
+        transition={{ duration: 0.22, ease: 'easeOut' }}
+        className="sunset-pd-card"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sunset-pd-shine" />
+        <div className="sunset-pd-glow" />
+        <button type="button" onClick={onClose} className="sunset-pd-close" aria-label="Fechar">
+          <X className="w-4 h-4" />
+        </button>
+        {promo && <div className="sunset-pd-badge">{discountLabel(promo)}</div>}
+        <div className="sunset-pd-content">
+          <div className="sunset-pd-image">
+            {product.image_url ? (
+              <img src={product.image_url} alt={product.name} />
+            ) : (
+              <Package className="w-10 h-10 text-white/50" />
+            )}
+          </div>
+          <div>
+            <p className="sunset-pd-title">{product.name}</p>
+            {product.category_name && <p className="sunset-pd-category">{product.category_name}</p>}
+          </div>
+          {product.description && <p className="sunset-pd-description">{product.description}</p>}
+          <div className="sunset-pd-footer">
+            {promo ? <PromoPriceBlock price={product.price} promo={promo} /> : <span className="sunset-pd-price">{currency(product.price)}</span>}
+            {outOfStock ? (
+              <span className="text-xs font-semibold text-son-silver-dim">Esgotado</span>
+            ) : inCart > 0 ? (
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={onRemove} className="sunset-pd-button">
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-sm font-semibold text-white w-4 text-center">{inCart}</span>
+                <button type="button" onClick={onAdd} disabled={inCart >= product.quantity} className="sunset-pd-button">
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={onAdd} className="sunset-pd-button" aria-label="Adicionar ao carrinho">
+                <Plus className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 export default function Catalogo() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -73,6 +154,7 @@ export default function Catalogo() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null)
 
   const { items, addItem, changeQty } = useCart()
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -184,7 +266,7 @@ export default function Catalogo() {
         transition={{ duration: 0.35, delay: Math.min(i * 0.03, 0.3) }}
         className="bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex flex-col hover:border-son-pink/30 transition-colors"
       >
-        <Link to={`/produto/${product.id}`} className="flex flex-col flex-1">
+        <button type="button" onClick={() => setDetailProduct(product)} className="flex flex-col flex-1 text-left">
           <div className="aspect-square bg-son-surface-light flex items-center justify-center overflow-hidden">
             {product.image_url ? (
               <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
@@ -199,7 +281,7 @@ export default function Catalogo() {
             </div>
             {promo ? <PromoPriceBlock price={product.price} promo={promo} /> : <p className="sunset-text font-bold mt-auto">{currency(product.price)}</p>}
           </div>
-        </Link>
+        </button>
         <div className="px-3 pb-3">
           {outOfStock ? (
             <span className="block text-xs font-semibold text-son-silver-dim text-center py-2">Esgotado</span>
@@ -243,18 +325,22 @@ export default function Catalogo() {
         transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.3) }}
         className="bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex items-center gap-4 p-3 hover:border-son-pink/30 transition-colors"
       >
-        <Link to={`/produto/${product.id}`} className="w-16 h-16 flex-shrink-0 rounded-xl bg-son-surface-light flex items-center justify-center overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setDetailProduct(product)}
+          className="w-16 h-16 flex-shrink-0 rounded-xl bg-son-surface-light flex items-center justify-center overflow-hidden"
+        >
           {product.image_url ? (
             <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
           ) : (
             <Package className="w-6 h-6 text-son-silver-dim/40" />
           )}
-        </Link>
-        <Link to={`/produto/${product.id}`} className="flex-1 min-w-0">
+        </button>
+        <button type="button" onClick={() => setDetailProduct(product)} className="flex-1 min-w-0 text-left">
           <p className="text-sm font-semibold text-white truncate">{product.name}</p>
           {product.category_name && <p className="text-xs text-son-silver-dim">{product.category_name}</p>}
           {promo ? <PromoPriceBlock price={product.price} promo={promo} /> : <p className="sunset-text font-bold mt-0.5">{currency(product.price)}</p>}
-        </Link>
+        </button>
         {outOfStock ? (
           <span className="text-xs font-semibold text-son-silver-dim px-3">Esgotado</span>
         ) : inCart > 0 ? (
@@ -468,6 +554,19 @@ export default function Catalogo() {
           )}
         </div>
       </PageTransition>
+      <AnimatePresence>
+        {detailProduct && (
+          <ProductDetailModal
+            product={detailProduct}
+            promo={promoByProduct.get(detailProduct.id)}
+            inCart={qtyInCart(detailProduct.id)}
+            outOfStock={detailProduct.quantity <= 0}
+            onAdd={() => addItem(detailProduct)}
+            onRemove={() => changeQty(detailProduct.id, -1)}
+            onClose={() => setDetailProduct(null)}
+          />
+        )}
+      </AnimatePresence>
     </main>
   )
 }

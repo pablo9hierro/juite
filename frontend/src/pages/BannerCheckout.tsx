@@ -174,7 +174,7 @@ export default function BannerCheckout() {
   if (loadError || !promotion) {
     return (
       <main className="min-h-screen text-white">
-        <SiteHeader title="Checkout da promoção" />
+        <SiteHeader title="Checkout da promoção" showCart={false} />
         <div className="max-w-xl mx-auto px-5 sm:px-10 py-16 text-center">
           <p className="error-msg inline-block">{loadError}</p>
         </div>
