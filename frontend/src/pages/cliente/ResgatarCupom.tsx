@@ -22,6 +22,26 @@ const SCRATCH_HEIGHT = 380
 // (reportado). Raspando direto no canvas com destination-out é uma
 // operação de GPU baratíssima — o dourado desaparece exatamente onde o
 // dedo passa, em tempo real, sem etapa intermediária nenhuma.
+// Converte um ângulo de CSS linear-gradient (0deg = "to top", cresce em
+// sentido horário) pros dois pontos que o canvas usa (createLinearGradient
+// só aceita start/end point, não ângulo) -- mesmo algoritmo que o CSS usa
+// por baixo dos panos, pra bater EXATAMENTE com a referência em vez de um
+// ponto "no olho".
+function gradientPontosPorAngulo(deg: number, w: number, h: number) {
+  const rad = (deg * Math.PI) / 180
+  const dx = Math.sin(rad)
+  const dy = -Math.cos(rad)
+  const comprimento = Math.abs(w * dx) + Math.abs(h * dy)
+  const metade = comprimento / 2
+  const cx = w / 2
+  const cy = h / 2
+  return { x0: cx - dx * metade, y0: cy - dy * metade, x1: cx + dx * metade, y1: cy + dy * metade }
+}
+
+// Uiverse.io by elijahgummer ("golden-button") clonado 1:1: mesmos 5 stops
+// de cor no mesmo ângulo (160deg), borda #a55d07, e as duas linhas de
+// "emboss" (inset shadow escura + inset highlight clara perto da borda de
+// baixo) que dão o relevo metálico da referência.
 function drawGoldFoil(ctx: CanvasRenderingContext2D, w: number, h: number) {
   const r = 18
   ctx.save()
@@ -34,14 +54,34 @@ function drawGoldFoil(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.closePath()
   ctx.clip()
 
-  const grad = ctx.createLinearGradient(0, 0, w * 0.65, h)
+  const p = gradientPontosPorAngulo(160, w, h)
+  const grad = ctx.createLinearGradient(p.x0, p.y0, p.x1, p.y1)
   grad.addColorStop(0, '#a54e07')
-  grad.addColorStop(0.3, '#b47e11')
-  grad.addColorStop(0.55, '#fef1a2')
-  grad.addColorStop(0.78, '#bc881b')
+  grad.addColorStop(0.25, '#b47e11')
+  grad.addColorStop(0.5, '#fef1a2')
+  grad.addColorStop(0.75, '#bc881b')
   grad.addColorStop(1, '#a54e07')
   ctx.fillStyle = grad
   ctx.fillRect(0, 0, w, h)
+
+  // inset -2px 5px rgba(139,66,8,1) -- sombra escura colada na borda de baixo
+  const shadowGrad = ctx.createLinearGradient(0, h - 10, 0, h)
+  shadowGrad.addColorStop(0, 'rgba(139,66,8,0)')
+  shadowGrad.addColorStop(1, 'rgba(139,66,8,0.9)')
+  ctx.fillStyle = shadowGrad
+  ctx.fillRect(0, h - 10, w, 10)
+
+  // inset -1px 1px 3px rgba(250,227,133,1) -- friso claro logo acima da sombra
+  ctx.strokeStyle = 'rgba(250,227,133,0.9)'
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+  ctx.moveTo(4, h - 4)
+  ctx.lineTo(w - 4, h - 4)
+  ctx.stroke()
+
+  ctx.strokeStyle = '#a55d07'
+  ctx.lineWidth = 1
+  ctx.strokeRect(0.5, 0.5, w - 1, h - 1)
 
   const sheen = ctx.createLinearGradient(0, 0, w, h)
   sheen.addColorStop(0.35, 'rgba(255,255,255,0)')

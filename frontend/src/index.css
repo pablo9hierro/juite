@@ -1751,8 +1751,24 @@ a {
   font-size: 8.5px;
 }
 .sunset-scratch-canvas {
+  /* <canvas> é elemento substituído (replaced element) -- os atributos
+     width/height (usados em JS pra resolução do buffer de desenho, em
+     pixels REAIS multiplicados pelo devicePixelRatio) também viram o
+     tamanho INTRÍNSECO dele. position:absolute + inset:0 sozinho NÃO
+     sobrescreve isso com confiabilidade num replaced element -- sem
+     width/height explícitos aqui, o navegador despreza o inset e
+     renderiza o canvas do tamanho do atributo (300*dpr, ex.: 600px num
+     aparelho com dpr 2), cortado só na parte que "cabe" no container por
+     causa do overflow:hidden do pai (era EXATAMENTE o bug relatado: só o
+     canto superior esquerdo do card aparecia, e o toque era medido contra
+     essa caixa gigante errada, raspando num lugar totalmente diferente
+     de onde o dedo realmente passava). width/height:100% aqui forçam o
+     tamanho CSS de exibição a bater com o container sempre, não importa
+     o valor dos atributos. */
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 10;
   border-radius: 18px;
   cursor: pointer;
