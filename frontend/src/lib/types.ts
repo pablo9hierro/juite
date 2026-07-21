@@ -174,6 +174,21 @@ export interface CouponGrant {
   created_at: string
 }
 
+// Conta de cliente (login por whatsapp+senha de 4 dígitos) — desacoplada
+// do rascunho de checkout em store/customer.ts (esse é só o formulário,
+// não exige login pra existir).
+export interface Customer {
+  id: string
+  name: string
+  whatsapp: string
+  email: string | null
+  birthdate: string | null
+}
+export interface CustomerAuthResult {
+  token: string
+  customer: Customer
+}
+
 export type PromotionType = 'selfie_service' | 'kit'
 
 // "Promoção" — o antigo "campanha": banner/carrossel da landing, kit ou

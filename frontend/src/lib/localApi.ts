@@ -15,6 +15,7 @@ import {
   uid,
   estimateShippingLocal,
   type LocalCampanhaCoupon,
+  type LocalCustomer,
   type LocalDb,
   type LocalMotoboy,
   type LocalRun,
@@ -37,6 +38,8 @@ import type {
   Category,
   Coupon,
   CouponGrant,
+  Customer,
+  CustomerAuthResult,
   DeliveryPosition,
   FinanceiroSummary,
   Motoboy,
@@ -545,6 +548,112 @@ async function motoboyLogin(email: string, password: string): Promise<{ token: s
 async function setAdminPassword(newPassword: string): Promise<void> {
   if (newPassword.trim().length < 6) throw new ApiError(400, 'new password must be at least 6 characters')
   ADMIN_CREDENTIALS.password = newPassword
+}
+
+// ---------- customer auth ----------
+// Sem sunset.sessions em modo demo: o token já carrega o id direto
+// ("local-customer:<id>"), mesmo truque do motoboyLogin acima.
+
+function toCustomer(c: LocalCustomer): Customer {
+  return { id: c.id, name: c.name, whatsapp: c.whatsapp, email: c.email, birthdate: c.birthdate }
+}
+
+function customerIdFromToken(token: string): string {
+  return token.startsWith('local-customer:') ? token.slice('local-customer:'.length) : ''
+}
+
+async function customerRegister(payload: {
+  whatsapp: string
+  password: string
+  name: string
+  email: string
+  birthdate: string
+}): Promise<CustomerAuthResult> {
+  if (!payload.name.trim()) throw new ApiError(400, 'name is required')
+  if (payload.whatsapp.replace(/\D/g, '').length < 10) throw new ApiError(400, 'a valid whatsapp is required')
+  if (!payload.email.trim()) throw new ApiError(400, 'email is required')
+  if (!payload.birthdate.trim()) throw new ApiError(400, 'birthdate is required')
+  if (!/^[0-9]{4}$/.test(payload.password)) throw new ApiError(400, 'password must be exactly 4 digits')
+
+  const db = loadDb()
+  db.customers = db.customers ?? []
+  let c = db.customers.find((x) => x.whatsapp === payload.whatsapp)
+  if (c?.password) throw new ApiError(400, 'this whatsapp is already registered')
+  if (c) {
+    c.name = payload.name.trim()
+    c.email = payload.email.trim()
+    c.birthdate = payload.birthdate
+    c.password = payload.password
+  } else {
+    c = {
+      id: uid(),
+      name: payload.name.trim(),
+      whatsapp: payload.whatsapp,
+      email: payload.email.trim(),
+      birthdate: payload.birthdate,
+      password: payload.password,
+      createdAt: nowIso(),
+    }
+    db.customers.push(c)
+  }
+  saveDb(db)
+  return { token: `local-customer:${c.id}`, customer: toCustomer(c) }
+}
+
+async function customerLogin(whatsapp: string, password: string): Promise<CustomerAuthResult> {
+  const db = loadDb()
+  const c = (db.customers ?? []).find((x) => x.whatsapp === whatsapp)
+  if (!c || !c.password || c.password !== password) throw new ApiError(401, 'invalid credentials')
+  return { token: `local-customer:${c.id}`, customer: toCustomer(c) }
+}
+
+async function customerMe(token: string): Promise<Customer> {
+  const db = loadDb()
+  const c = (db.customers ?? []).find((x) => x.id === customerIdFromToken(token))
+  if (!c) throw new ApiError(401, 'unauthorized')
+  return toCustomer(c)
+}
+
+// Modo demo não tem WhatsApp de verdade — gera e loga o código no console
+// (mesmo padrão do resto do app, ver README "[demo] WhatsApp para ...").
+async function customerRequestPasswordReset(whatsapp: string): Promise<void> {
+  const db = loadDb()
+  const c = (db.customers ?? []).find((x) => x.whatsapp === whatsapp && x.password)
+  if (!c) return
+  db.customerPasswordResets = db.customerPasswordResets ?? []
+  const code = String(Math.floor(Math.random() * 1000)).padStart(3, '0')
+  db.customerPasswordResets.push({
+    id: uid(),
+    customerId: c.id,
+    code,
+    expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+    used: false,
+  })
+  saveDb(db)
+  console.info(`[demo] WhatsApp para ${whatsapp}: seu código de recuperação é ${code}`)
+}
+
+function findValidResetCode(db: LocalDb, customerId: string, code: string) {
+  return (db.customerPasswordResets ?? []).find(
+    (r) => r.customerId === customerId && r.code === code && !r.used && new Date(r.expiresAt).getTime() > Date.now()
+  )
+}
+
+async function customerVerifyResetCode(whatsapp: string, code: string): Promise<void> {
+  const db = loadDb()
+  const c = (db.customers ?? []).find((x) => x.whatsapp === whatsapp)
+  if (!c || !findValidResetCode(db, c.id, code)) throw new ApiError(400, 'invalid code')
+}
+
+async function customerResetPassword(whatsapp: string, code: string, newPassword: string): Promise<void> {
+  if (!/^[0-9]{4}$/.test(newPassword)) throw new ApiError(400, 'password must be exactly 4 digits')
+  const db = loadDb()
+  const c = (db.customers ?? []).find((x) => x.whatsapp === whatsapp)
+  const reset = c && findValidResetCode(db, c.id, code)
+  if (!c || !reset) throw new ApiError(400, 'invalid code')
+  c.password = newPassword
+  reset.used = true
+  saveDb(db)
 }
 
 // ---------- admin ----------
@@ -2364,6 +2473,14 @@ export const localApi = {
     notifyCreated: async () => {},
   },
   auth: { adminLogin, motoboyLogin, vendedorLogin, setAdminPassword },
+  customerAuth: {
+    register: customerRegister,
+    login: customerLogin,
+    me: customerMe,
+    verifyResetCode: customerVerifyResetCode,
+    resetPassword: customerResetPassword,
+    requestPasswordReset: customerRequestPasswordReset,
+  },
   pdv: {
     createSale: pdvCreateSale,
     notifySale: async () => {},

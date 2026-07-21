@@ -10,6 +10,8 @@ import type { CouponPreview, PromotionalProduct } from '../lib/supabasePublicApi
 import type { Promotion, PaymentMethod, Product, ShippingEstimate } from '../lib/types'
 import { useCart } from '../store/cart'
 import { useCustomer } from '../store/customer'
+import { useCustomerAuth } from '../store/customerAuth'
+import CustomerAuthModal from '../components/CustomerAuthModal'
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
@@ -31,6 +33,7 @@ export default function Checkout() {
   const promotionId = searchParams.get('promocao')
   const { items, clear } = useCart()
   const customer = useCustomer()
+  const customerAuth = useCustomerAuth()
 
   const [products, setProducts] = useState<Product[]>([])
   const [pickupAtStore, setPickupAtStore] = useState(false)
@@ -39,6 +42,10 @@ export default function Checkout() {
   const [error, setError] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [shippingEstimate, setShippingEstimate] = useState<ShippingEstimate | null>(null)
+  // Finalizar exige login — sem sessão, abre o toggle de entrar/criar
+  // conta em vez de seguir com o pedido; ao logar/cadastrar com sucesso,
+  // tenta finalizar de novo sozinho.
+  const [showAuthModal, setShowAuthModal] = useState(false)
 
   // Checkout de promoção: veio de um clique no banner da landing, com o(s)
   // produto(s) e desconto já definidos pelo admin — ignora o carrinho normal
@@ -252,6 +259,14 @@ export default function Checkout() {
     } finally {
       setCouponChecking(false)
     }
+  }
+
+  const handleFinalizeClick = () => {
+    if (!customerAuth.token) {
+      setShowAuthModal(true)
+      return
+    }
+    handleSubmit()
   }
 
   const handleSubmit = async () => {
@@ -642,12 +657,21 @@ export default function Checkout() {
 
           {error && <p className="error-msg">{error}</p>}
 
-          <button onClick={handleSubmit} disabled={submitting} className="btn-primary sunset-checkout-submit w-full text-base py-4">
+          <button onClick={handleFinalizeClick} disabled={submitting} className="btn-primary sunset-checkout-submit w-full text-base py-4">
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Finalizar pedido
           </button>
         </div>
       </PageTransition>
+      {showAuthModal && (
+        <CustomerAuthModal
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={() => {
+            setShowAuthModal(false)
+            handleSubmit()
+          }}
+        />
+      )}
     </main>
   )
 }

@@ -231,3 +231,38 @@ pub async fn simulate_pix_paid(
         .ok_or_else(|| AppError::NotFound("order not found".to_string()))?;
     Ok(Json(dto))
 }
+
+#[derive(Debug, Deserialize)]
+pub struct RequestPasswordResetInput {
+    pub whatsapp: String,
+}
+
+/// Público de propósito — cliente deslogado que esqueceu a senha ainda não
+/// tem nenhum token. Gera o código de 3 dígitos direto no banco
+/// (sunset._create_customer_reset_code — sem GRANT pra anon/authenticated,
+/// só alcançável por SQL direto, que é como o Rust fala com o Postgres) e
+/// manda por WhatsApp. Sempre responde 204, mesmo se o whatsapp não tiver
+/// cadastro (a função RAISE EXCEPTION nesse caso; vira Err aqui, ignorado
+/// de propósito) — não revela quais números têm conta.
+pub async fn request_customer_password_reset(
+    State(state): State<AppState>,
+    Json(input): Json<RequestPasswordResetInput>,
+) -> Result<StatusCode, AppError> {
+    let row: Option<(String, String, String)> = sqlx::query_as(
+        "SELECT customer_id, customer_name, code FROM sunset._create_customer_reset_code($1)",
+    )
+    .bind(&input.whatsapp)
+    .fetch_optional(&state.pool)
+    .await
+    .unwrap_or(None);
+
+    if let Some((_, name, code)) = row {
+        let digits = whatsapp::digits_only(&input.whatsapp);
+        let msg = format!(
+            "Olá, {name}! Seu código de recuperação de senha na Sunset Tabas é: {code}\n\nVale por 10 minutos."
+        );
+        whatsapp::notify(&state, &state.evolution_instance, &digits, &msg);
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}

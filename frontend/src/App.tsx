@@ -11,6 +11,7 @@ import Banner from './pages/Banner'
 import BannerCheckout from './pages/BannerCheckout'
 import Pagamento from './pages/Pagamento'
 import Consultar from './pages/Consultar'
+import RecuperarSenha from './pages/RecuperarSenha'
 import AdminLogin from './pages/admin/AdminLogin'
 import FuncionarioLogin from './pages/admin/FuncionarioLogin'
 import AdminPedidos from './pages/admin/AdminPedidos'
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="/banner/checkout" element={<BannerCheckout />} />
         <Route path="/pagamento/:orderId" element={<Pagamento />} />
         <Route path="/consultar" element={<Consultar />} />
+        <Route path="/recuperar-senha" element={<RecuperarSenha />} />
 
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/funcionarios/login" element={<FuncionarioLogin />} />

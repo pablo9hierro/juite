@@ -1,6 +1,6 @@
 import { ApiError } from './apiError'
 import { supabase } from './supabaseClient'
-import type { BadgesLayout, BgFit, BgMode, Category, Coupon, DeliveryPosition, LandingBadge, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
+import type { BadgesLayout, BgFit, BgMode, Category, Coupon, Customer, CustomerAuthResult, DeliveryPosition, LandingBadge, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new ApiError(400, result.error.message)
@@ -183,6 +183,45 @@ export const supabasePublicApi = {
       const { data, error } = await supabase.rpc('list_promotional_products')
       if (error) throw new ApiError(400, error.message)
       return (data ?? []) as PromotionalProduct[]
+    },
+  },
+  // Login de cliente (whatsapp + senha de 4 dígitos) — tudo RPC direto no
+  // Supabase, menos o envio do código de recuperação por WhatsApp (esse
+  // precisa da Evolution API, só alcançável pelo backend Rust — ver
+  // api.ts's customerAuth.requestPasswordReset).
+  customerAuth: {
+    register: async (payload: { whatsapp: string; password: string; name: string; email: string; birthdate: string }) => {
+      const { data, error } = await supabase.rpc('customer_register', {
+        p_whatsapp: payload.whatsapp,
+        p_password: payload.password,
+        p_name: payload.name,
+        p_email: payload.email,
+        p_birthdate: payload.birthdate,
+      })
+      if (error) throw new ApiError(400, error.message)
+      return data as CustomerAuthResult
+    },
+    login: async (whatsapp: string, password: string) => {
+      const { data, error } = await supabase.rpc('customer_login', { p_whatsapp: whatsapp, p_password: password })
+      if (error) throw new ApiError(400, error.message)
+      return data as CustomerAuthResult
+    },
+    me: async (token: string) => {
+      const { data, error } = await supabase.rpc('customer_me', { p_token: token })
+      if (error) throw new ApiError(400, error.message)
+      return data as Customer
+    },
+    verifyResetCode: async (whatsapp: string, code: string) => {
+      const { error } = await supabase.rpc('customer_verify_reset_code', { p_whatsapp: whatsapp, p_code: code })
+      if (error) throw new ApiError(400, error.message)
+    },
+    resetPassword: async (whatsapp: string, code: string, newPassword: string) => {
+      const { error } = await supabase.rpc('customer_reset_password', {
+        p_whatsapp: whatsapp,
+        p_code: code,
+        p_new_password: newPassword,
+      })
+      if (error) throw new ApiError(400, error.message)
     },
   },
 }

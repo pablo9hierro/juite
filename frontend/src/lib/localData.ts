@@ -24,6 +24,26 @@ export interface LocalMotoboy extends Motoboy {
   password: string
 }
 
+// Conta de cliente em modo demonstração — senha em texto puro, mesmo
+// padrão já usado em LocalMotoboy/LocalVendedor (sem backend de verdade
+// pra hashear, e não faz diferença nenhuma nesse modo).
+export interface LocalCustomer {
+  id: string
+  name: string
+  whatsapp: string
+  email: string | null
+  birthdate: string | null
+  password: string | null
+  createdAt: string
+}
+export interface LocalPasswordReset {
+  id: string
+  customerId: string
+  code: string
+  expiresAt: string
+  used: boolean
+}
+
 export interface LocalVendedor extends Vendedor {
   password: string
 }
@@ -98,6 +118,8 @@ export interface LocalDb {
   segments: CrmSegment[]
   campanhaCoupons: LocalCampanhaCoupon[]
   campanhaExtraCoupons: LocalCampanhaExtraCoupon[]
+  customers: LocalCustomer[]
+  customerPasswordResets: LocalPasswordReset[]
   pricePerKm: number
   maxKm: number | null
   heroImageUrl: string | null
@@ -192,6 +214,8 @@ function seedDb(): LocalDb {
     segments: [],
     campanhaCoupons: [],
     campanhaExtraCoupons: [],
+    customers: [],
+    customerPasswordResets: [],
     pricePerKm: 1.5,
     maxKm: null,
     heroImageUrl: null,

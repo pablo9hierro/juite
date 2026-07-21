@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import BrandHeader from '../components/landing/BrandHeader'
+import CustomerAuthModal from '../components/CustomerAuthModal'
+import { useCustomerAuth } from '../store/customerAuth'
 import LiveTrackingMapMock from '../components/landing/LiveTrackingMapMock'
 import CouponTicketCard from '../components/landing/CouponTicketCard'
 import LandingWhatsAppCard from '../components/landing/LandingWhatsAppCard'
@@ -99,11 +101,16 @@ function BannerCarousel() {
 }
 
 export default function Landing() {
+  const navigate = useNavigate()
+  const customerAuth = useCustomerAuth()
   const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
   const [badges, setBadges] = useState<LandingBadge[]>(DEFAULT_BADGES)
   const [badgesLayout, setBadgesLayout] = useState<BadgesLayout>('row')
   const [badgesGap, setBadgesGap] = useState(8)
   const [badgesOffsetY, setBadgesOffsetY] = useState(0)
+  // "Acompanhar meu pedido" exige login — sem sessão, abre o toggle de
+  // entrar/criar conta em vez de ir direto pra /consultar.
+  const [showAuthModal, setShowAuthModal] = useState(false)
 
   useEffect(() => {
     api.storeStatus.get().then(setStoreStatus).catch(() => setStoreStatus(null))
@@ -164,9 +171,13 @@ export default function Landing() {
               />
             </svg>
           </Link>
-          <Link to="/consultar" className="btn-secondary sunset-glow-btn text-base px-8 py-4 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => (customerAuth.token ? navigate('/consultar') : setShowAuthModal(true))}
+            className="btn-secondary sunset-glow-btn text-base px-8 py-4 w-full sm:w-auto"
+          >
             Acompanhar meu pedido
-          </Link>
+          </button>
         </motion.div>
 
         <motion.div
@@ -247,6 +258,15 @@ export default function Landing() {
         ))}
       </section>
       </main>
+      {showAuthModal && (
+        <CustomerAuthModal
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={() => {
+            setShowAuthModal(false)
+            navigate('/consultar')
+          }}
+        />
+      )}
     </>
   )
 }

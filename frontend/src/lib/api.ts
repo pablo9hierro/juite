@@ -182,6 +182,22 @@ const remoteApi = {
       if (error) throw new ApiError(400, error.message)
     },
   },
+  // Conta de cliente (whatsapp + senha de 4 dígitos). Cadastro/login/
+  // verificação de código/troca de senha são RPC direto no Supabase; só o
+  // ENVIO do código de recuperação por WhatsApp passa pelo Rust/Railway
+  // (Evolution API, mesma exceção de sempre — ver frontend/api/notify-payment.ts).
+  customerAuth: {
+    register: supabasePublicApi.customerAuth.register,
+    login: supabasePublicApi.customerAuth.login,
+    me: supabasePublicApi.customerAuth.me,
+    verifyResetCode: supabasePublicApi.customerAuth.verifyResetCode,
+    resetPassword: supabasePublicApi.customerAuth.resetPassword,
+    requestPasswordReset: (whatsapp: string) =>
+      request<void>('/api/customer/request-password-reset', {
+        method: 'POST',
+        body: JSON.stringify({ whatsapp }),
+      }),
+  },
   // CRUD do admin e fila do motoboy falam direto com o Supabase via RPC
   // (ver supabase/sunset_admin_crud.sql), passando o token de
   // sunset.sessions como primeiro parâmetro em vez de header Authorization.

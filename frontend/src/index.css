@@ -1154,27 +1154,15 @@ a {
 .sunset-tab:hover {
   background-color: rgba(255, 255, 255, 0.12);
 }
+/* Cor sólida e clara de propósito — a versão anterior tentava "fundir"
+   com a cor do painel abaixo (fundo escuro translúcido), o que deixava a
+   aba ativa quase idêntica às inativas (reportado: "sem contraste,
+   continua tudo preto"). Contraste vence a fusão aqui. */
 .sunset-tab-active {
-  background-color: var(--color-son-surface) !important;
-}
-.sunset-tab-active::before,
-.sunset-tab-active::after {
-  content: '';
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  bottom: -1px;
-  background-color: var(--color-son-black);
-}
-.sunset-tab-active::before {
-  left: -10px;
-  border-bottom-right-radius: 10px;
-  box-shadow: 3px 3px 0 3px var(--color-son-surface);
-}
-.sunset-tab-active::after {
-  right: -10px;
-  border-bottom-left-radius: 10px;
-  box-shadow: -3px 3px 0 3px var(--color-son-surface);
+  background: linear-gradient(135deg, var(--color-son-orange), var(--color-son-gold)) !important;
+  color: var(--color-son-black) !important;
+  border-color: transparent !important;
+  font-weight: 700;
 }
 
 /* Uiverse.io by ShrinilDhorda — botão neon: glow em box-shadow,

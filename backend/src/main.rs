@@ -210,6 +210,12 @@ async fn main() -> anyhow::Result<()> {
             post(routes::public::notify_payment_received),
         )
         .route("/api/pdv/notify-sale", post(routes::public::notify_pdv_sale))
+        // Cliente deslogado que esqueceu a senha — dispara o código de 3
+        // dígitos por WhatsApp (Evolution API só é alcançável daqui).
+        .route(
+            "/api/customer/request-password-reset",
+            post(routes::public::request_customer_password_reset),
+        )
         // Rota real entre dois pontos (Google Routes com fallback OSRM) —
         // usado tanto pela navegação do motoboy quanto pelo acompanhamento
         // do cliente em /consultar, pra nenhum dos dois expor chave nenhuma
