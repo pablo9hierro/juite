@@ -4,24 +4,10 @@ import { Loader2, PartyPopper } from 'lucide-react'
 import SiteHeader from '../../components/layout/SiteHeader'
 import PageTransition from '../../components/layout/PageTransition'
 import CyberCard from '../../components/CyberCard'
+import CouponTicket from '../../components/CouponTicket'
 import { api, ApiError } from '../../lib/api'
 import type { ClaimedCoupon } from '../../lib/types'
 import { useCustomerAuth } from '../../store/customerAuth'
-
-function currency(v: number) {
-  return `R$ ${v.toFixed(2).replace('.', ',')}`
-}
-
-function discountLabel(c: ClaimedCoupon) {
-  if (c.discount_type && c.discount_value != null) {
-    return c.discount_type === 'percent' ? `-${c.discount_value}%` : `-${currency(c.discount_value)}`
-  }
-  if (c.shipping_discount_type && c.shipping_discount_value != null) {
-    const v = c.shipping_discount_type === 'percent' ? `${c.shipping_discount_value}%` : currency(c.shipping_discount_value)
-    return `Frete -${v}`
-  }
-  return 'Cupom'
-}
 
 // Efeito "Raspadinha": a raspadinha em si é o CyberCard (Uiverse.io by
 // 00Kubi, clone completo) sobreposto ao cupom azul revelado por baixo. Um
@@ -191,16 +177,7 @@ export default function ResgatarCupom() {
         ) : (
           <>
             <div className="sunset-scratch-wrap">
-              <div className="sunset-scratch-coupon">
-                {claimed ? (
-                  <>
-                    <span className="sunset-scratch-coupon-discount">{discountLabel(claimed)}</span>
-                    <span className="sunset-scratch-coupon-code">{claimed.code}</span>
-                  </>
-                ) : (
-                  <span className="sunset-scratch-coupon-discount">🎁</span>
-                )}
-              </div>
+              {claimed ? <CouponTicket coupon={claimed} /> : <div className="sunset-scratch-placeholder">🎁</div>}
               <div ref={maskWrapRef} className="absolute inset-0">
                 <CyberCard style={{ width: '100%', height: '100%' }} />
               </div>

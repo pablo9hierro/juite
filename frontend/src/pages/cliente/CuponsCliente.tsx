@@ -5,17 +5,13 @@ import { Gift, Loader2, Tag } from 'lucide-react'
 import SiteHeader from '../../components/layout/SiteHeader'
 import PageTransition from '../../components/layout/PageTransition'
 import NoCouponToggle from '../../components/NoCouponToggle'
+import CouponTicket from '../../components/CouponTicket'
 import { api } from '../../lib/api'
 import type { CustomerCoupons } from '../../lib/types'
 import { useCustomerAuth } from '../../store/customerAuth'
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
-}
-
-function discountLabel(discountType: string | null, value: number | null) {
-  if (!discountType || value == null) return null
-  return discountType === 'percent' ? `-${value}%` : `-${currency(value)}`
 }
 
 type Tab = 'ativos' | 'inativos' | 'historico'
@@ -122,24 +118,10 @@ export default function CuponsCliente() {
                 <p>{tab === 'ativos' ? 'Nenhum cupom ativo no momento.' : 'Nenhum cupom inativo.'}</p>
               </div>
             ) : (
-              <ul className="space-y-3">
+              <ul className="space-y-5">
                 {(tab === 'ativos' ? data.active : data.inactive).map((c) => (
-                  <li key={c.grant_id} className="rounded-xl border border-purple-400/30 bg-purple-500/5 overflow-hidden flex items-stretch">
-                    <div className="min-w-0 flex-1 p-3">
-                      <p className="font-mono text-sm font-bold text-white truncate">{c.code}</p>
-                      <p className="text-xs text-son-silver-dim mt-1">
-                        Usado {c.used_count} de {c.granted_uses}
-                        {c.expires_at && ` · válido até ${new Date(c.expires_at).toLocaleDateString('pt-BR')}`}
-                      </p>
-                    </div>
-                    <div className="border-l-2 border-dashed border-purple-400/30 my-2" />
-                    <div className="flex-shrink-0 p-3 flex items-center justify-center">
-                      <span className="text-sm font-black text-purple-300">
-                        {discountLabel(c.discount_type, c.discount_value) ??
-                          discountLabel(c.shipping_discount_type, c.shipping_discount_value) ??
-                          'Cupom'}
-                      </span>
-                    </div>
+                  <li key={c.grant_id} className={tab === 'inativos' ? 'opacity-50 grayscale' : ''}>
+                    <CouponTicket coupon={c} />
                   </li>
                 ))}
               </ul>
