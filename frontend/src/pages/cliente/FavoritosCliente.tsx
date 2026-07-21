@@ -5,6 +5,8 @@ import { Heart, Loader2, Package } from 'lucide-react'
 import SiteHeader from '../../components/layout/SiteHeader'
 import PageTransition from '../../components/layout/PageTransition'
 import ProductDetailModal, { PromoPriceBlock, currency } from '../../components/ProductDetailModal'
+import FavoriteHeartButton from '../../components/FavoriteHeartButton'
+import ConfirmRemoveDialog from '../../components/ConfirmRemoveDialog'
 import { api } from '../../lib/api'
 import type { Product } from '../../lib/types'
 import type { PromotionalProduct } from '../../lib/supabasePublicApi'
@@ -18,6 +20,11 @@ export default function FavoritosCliente() {
   const [promos, setPromos] = useState<PromotionalProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [detailProduct, setDetailProduct] = useState<Product | null>(null)
+  // Aqui a lista É "os favoritos" — desmarcar remove o card de vez, por
+  // isso pede confirmação antes (Uiverse.io by Yaya12085), diferente do
+  // catálogo onde desfavoritar só troca o coração e o produto continua
+  // na tela.
+  const [pendingRemove, setPendingRemove] = useState<Product | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -37,18 +44,15 @@ export default function FavoritosCliente() {
 
   const qtyInCart = (id: string) => items.find((i) => i.productId === id)?.quantity ?? 0
 
-  // Aqui a lista É "os favoritos" — desfavoritar remove o card na hora,
-  // não só troca o coração de estado (diferente do catálogo, onde o
-  // produto continua na tela depois de desfavoritar).
-  const toggleFavorite = (product: Product) => {
-    if (!token) return
+  const confirmRemove = () => {
+    if (!token || !pendingRemove) return
+    const product = pendingRemove
+    setPendingRemove(null)
     api.customerAuth
       .toggleFavorite(token, product.id)
-      .then((isNowFavorite) => {
-        if (!isNowFavorite) {
-          setProducts((prev) => prev.filter((p) => p.id !== product.id))
-          setDetailProduct((cur) => (cur?.id === product.id ? null : cur))
-        }
+      .then(() => {
+        setProducts((prev) => prev.filter((p) => p.id !== product.id))
+        setDetailProduct((cur) => (cur?.id === product.id ? null : cur))
       })
       .catch(() => {})
   }
@@ -81,8 +85,11 @@ export default function FavoritosCliente() {
                     key={product.id}
                     type="button"
                     onClick={() => setDetailProduct(product)}
-                    className="bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex flex-col hover:border-son-pink/30 transition-colors text-left"
+                    className="relative bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex flex-col hover:border-son-pink/30 transition-colors text-left"
                   >
+                    <div className="absolute top-2 right-2 z-10">
+                      <FavoriteHeartButton checked onChange={() => setPendingRemove(product)} />
+                    </div>
                     <div className="aspect-square bg-son-surface-light flex items-center justify-center overflow-hidden">
                       {product.image_url ? (
                         <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
@@ -109,10 +116,21 @@ export default function FavoritosCliente() {
             inCart={qtyInCart(detailProduct.id)}
             outOfStock={detailProduct.quantity <= 0}
             isFavorite
-            onToggleFavorite={() => toggleFavorite(detailProduct)}
+            onToggleFavorite={() => setPendingRemove(detailProduct)}
             onAdd={() => addItem(detailProduct)}
             onRemove={() => changeQty(detailProduct.id, -1)}
             onClose={() => setDetailProduct(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {pendingRemove && (
+          <ConfirmRemoveDialog
+            title="Remover dos favoritos"
+            message={`Tem certeza que quer remover "${pendingRemove.name}" dos seus favoritos?`}
+            confirmLabel="Remover"
+            onConfirm={confirmRemove}
+            onCancel={() => setPendingRemove(null)}
           />
         )}
       </AnimatePresence>

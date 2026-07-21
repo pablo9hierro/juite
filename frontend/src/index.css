@@ -1692,6 +1692,22 @@ a {
 .sunset-menu-item-accent:hover svg {
   stroke: var(--color-son-gold);
 }
+/* "Sair" — mesma lógica do "Delete" vermelho da referência Na3ar-17
+   original (a única cor de destaque diferente do dourado usado em
+   Histórico). */
+.sunset-menu-item-danger {
+  color: #f87171;
+}
+.sunset-menu-item-danger svg {
+  stroke: #f87171;
+}
+.sunset-menu-item-danger:hover {
+  background-color: #7f1d1d;
+  color: #ffffff;
+}
+.sunset-menu-item-danger:hover svg {
+  stroke: #ffffff;
+}
 
 /* Uiverse.io by devkatyall — botão de menu do visitante deslogado (verde
    sólido na referência, aqui dourado sunset) com popup "Log In"/"Sign
@@ -1716,4 +1732,123 @@ a {
 }
 .sunset-guest-burger:active {
   transform: scale(0.95);
+}
+
+/* Uiverse.io by barisdogansutcu — checkbox+coração que pulsa ao marcar,
+   recolorido pro rosa sunset (era vermelho puro). Botão compacto (sem os
+   rótulos de texto da referência, que abriam espaço lateral) — cabe no
+   canto de qualquer card. */
+.sunset-fav-heart {
+  display: inline-flex;
+  position: relative;
+}
+.sunset-fav-checkbox {
+  display: none;
+}
+.sunset-fav-heart label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--color-son-silver);
+  cursor: pointer;
+  user-select: none;
+}
+.sunset-fav-heart label svg {
+  width: 16px;
+  height: 16px;
+}
+.sunset-fav-checkbox:checked + label {
+  color: var(--color-son-pink);
+}
+.sunset-fav-checkbox:checked + label svg {
+  fill: var(--color-son-pink);
+  stroke: var(--color-son-pink);
+  animation: sunset-fav-pulse 0.6s;
+}
+@keyframes sunset-fav-pulse {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.35);
+  }
+  50% {
+    transform: scale(1);
+  }
+  75% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Uiverse.io by Yaya12085 — cartão de confirmação (era claro, "desativar
+   conta"; aqui escuro/sunset, genérico pra qualquer ação destrutiva). */
+.sunset-confirm-card {
+  position: relative;
+  background-color: var(--color-son-surface);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.85rem;
+  max-width: 290px;
+  width: 100%;
+  padding: 1.25rem 1rem 1rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+.sunset-confirm-icon {
+  display: flex;
+  margin: 0 auto;
+  background-color: rgba(239, 68, 68, 0.15);
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 9999px;
+  color: #f87171;
+}
+.sunset-confirm-title {
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+.sunset-confirm-message {
+  margin-top: 0.5rem;
+  color: var(--color-son-silver-dim);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.sunset-confirm-danger-btn {
+  display: flex;
+  padding: 0.5rem 1rem;
+  background-color: #dc2626;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  justify-content: center;
+  width: 100%;
+  border-radius: 0.5rem;
+}
+.sunset-confirm-danger-btn:hover {
+  background-color: #b91c1c;
+}
+.sunset-confirm-cancel-btn {
+  display: flex;
+  padding: 0.5rem 1rem;
+  background-color: transparent;
+  color: var(--color-son-silver);
+  font-size: 0.95rem;
+  font-weight: 600;
+  justify-content: center;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.sunset-confirm-cancel-btn:hover {
+  background-color: rgba(255, 255, 255, 0.06);
 }

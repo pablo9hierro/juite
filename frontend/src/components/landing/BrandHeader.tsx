@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart, History, LogIn, Menu, Tag, UserPlus } from 'lucide-react'
+import { Heart, History, LogIn, LogOut, Menu, Tag, UserPlus } from 'lucide-react'
 import WhatsAppFab from '../WhatsAppFab'
 import CustomerAuthModal from '../CustomerAuthModal'
 import { useCustomerAuth } from '../../store/customerAuth'
@@ -73,6 +73,19 @@ export default function BrandHeader() {
                       >
                         <History />
                         <p className="sunset-menu-label">Histórico</p>
+                      </li>
+                    </ul>
+                    <div className="sunset-menu-separator" />
+                    <ul className="sunset-menu-list">
+                      <li
+                        className="sunset-menu-item sunset-menu-item-danger"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          customerAuth.logout()
+                        }}
+                      >
+                        <LogOut />
+                        <p className="sunset-menu-label">Sair</p>
                       </li>
                     </ul>
                   </div>

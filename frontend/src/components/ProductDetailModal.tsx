@@ -1,5 +1,6 @@
-import { Heart, Minus, Package, Plus, X } from 'lucide-react'
+import { Minus, Package, Plus, X } from 'lucide-react'
 import { motion } from 'framer-motion'
+import FavoriteHeartButton from './FavoriteHeartButton'
 import type { Product } from '../lib/types'
 import type { PromotionalProduct } from '../lib/supabasePublicApi'
 
@@ -75,15 +76,9 @@ export default function ProductDetailModal({
           <X className="w-4 h-4" />
         </button>
         {onToggleFavorite && (
-          <button
-            type="button"
-            onClick={onToggleFavorite}
-            className="sunset-pd-close"
-            style={{ left: 'auto', right: promo ? '3.25rem' : '0.75rem' }}
-            aria-label={isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-          >
-            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current text-son-pink' : ''}`} />
-          </button>
+          <div className="absolute top-2" style={{ right: promo ? '3rem' : '0.5rem' }}>
+            <FavoriteHeartButton checked={isFavorite} onChange={onToggleFavorite} />
+          </div>
         )}
         {promo && <div className="sunset-pd-badge">{discountLabel(promo)}</div>}
         <div className="sunset-pd-content">
