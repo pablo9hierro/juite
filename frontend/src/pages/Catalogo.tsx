@@ -374,28 +374,7 @@ export default function Catalogo() {
     <main className="min-h-screen text-white">
       <SiteHeader title="Catálogo" showCart={false} />
       <CartFab />
-      <PageTransition className="max-w-6xl mx-auto px-5 sm:px-10 pb-16">
-        <div className="flex items-center justify-between mb-1">
-          <h1 className="text-2xl sm:text-3xl font-black">Catálogo</h1>
-          <div className="flex items-center gap-1 bg-son-surface border border-white/10 rounded-xl p-1">
-            <button
-              onClick={() => setView('grid')}
-              className={`p-1.5 rounded-lg ${view === 'grid' ? 'sunset-bg text-white' : 'text-son-silver-dim'}`}
-              aria-label="Ver em grade"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setView('list')}
-              className={`p-1.5 rounded-lg ${view === 'list' ? 'sunset-bg text-white' : 'text-son-silver-dim'}`}
-              aria-label="Ver em lista"
-            >
-              <List className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-        <p className="text-son-silver-dim text-sm mb-4">Escolha os produtos e finalize seu pedido.</p>
-
+      <PageTransition className="max-w-6xl mx-auto px-5 sm:px-10 pt-6 pb-16">
         {/* From Uiverse.io by devkatyall — cores trocadas pra paleta sunset.
             O fundo opaco do input some (!bg-transparent) pra deixar o
             gradiente/feixe preto do .sunset-search-trigger aparecer atrás
@@ -505,7 +484,23 @@ export default function Catalogo() {
             entre os cards, ficando sem contraste nenhum. */}
         <div className="glass rounded-3xl p-4 sm:p-6">
           {!loading && filtered.length > 0 && (
-            <div className="flex justify-end mb-4">
+            <div className="flex items-center justify-end gap-2 mb-4">
+              <div className="flex items-center gap-1 bg-son-surface border border-white/10 rounded-xl p-1">
+                <button
+                  onClick={() => setView('grid')}
+                  className={`p-1.5 rounded-lg ${view === 'grid' ? 'sunset-bg text-white' : 'text-son-silver-dim'}`}
+                  aria-label="Ver em grade"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setView('list')}
+                  className={`p-1.5 rounded-lg ${view === 'list' ? 'sunset-bg text-white' : 'text-son-silver-dim'}`}
+                  aria-label="Ver em lista"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as typeof sortBy)}

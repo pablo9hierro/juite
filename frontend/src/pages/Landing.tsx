@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
-import WhatsAppFab from '../components/WhatsAppFab'
-import CartFab from '../components/CartFab'
 import BrandHeader from '../components/landing/BrandHeader'
 import LiveTrackingMapMock from '../components/landing/LiveTrackingMapMock'
 import CouponTicketCard from '../components/landing/CouponTicketCard'
@@ -138,14 +136,11 @@ export default function Landing() {
 
       <BrandHeader />
 
-      {/* Banner scrolls with the page (not fixed) — only the WhatsApp button stays put.
+      {/* Banner scrolls with the page (not fixed).
           Sem promoção ativa cadastrada, cai no banner estático de sempre; com
           promoção(ões), vira um carrossel que troca a cada 2s e leva direto pro
           checkout com o desconto já aplicado. */}
       <BannerCarousel />
-
-      <WhatsAppFab />
-      <CartFab />
 
       <section className="relative z-10 max-w-4xl mx-auto px-6 sm:px-10 pt-2 pb-20 text-center">
         <motion.div

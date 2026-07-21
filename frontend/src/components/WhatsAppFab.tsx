@@ -5,19 +5,23 @@ const WHATSAPP_URL =
   'https://api.whatsapp.com/send/?phone=5583987059373&text&type=phone_number&app_absent=0'
 const INSTAGRAM_URL = 'https://www.instagram.com/tabassunset'
 
-// Floating WhatsApp button — fixed to the viewport (follows scroll).
-// Uiverse.io by Mohammad-Rahme-576 — "tooltip-container": na referência
-// o tooltip com os ícones de rede abria no :hover; aqui abre AO CLICAR
-// (pedido explícito, celular não tem hover) e mostra só 2 redes —
-// WhatsApp (mesmo link de sempre) e Instagram (@tabassunset) — no
-// estilo ícone-preenche+tooltip de Uiverse.io by wilsondesouza
+// Floating WhatsApp button — fixed to the viewport (follows scroll) by
+// default. Uiverse.io by Mohammad-Rahme-576 — "tooltip-container": na
+// referência o tooltip com os ícones de rede abria no :hover; aqui abre
+// AO CLICAR (pedido explícito, celular não tem hover) e mostra só 2
+// redes — WhatsApp (mesmo link de sempre) e Instagram (@tabassunset) —
+// no estilo ícone-preenche+tooltip de Uiverse.io by wilsondesouza
 // (example-2), recolorido por rede. A fumaça que subia daqui foi
 // movida pro botão do carrinho (CartFab).
-export default function WhatsAppFab() {
+// `inline`: usado dentro do navbar da landing (BrandHeader) — sem
+// posicionamento fixed próprio, menor, e o tooltip abre pra BAIXO em
+// vez de pra cima (o botão não está mais grudado no rodapé da tela).
+export default function WhatsAppFab({ inline = false }: { inline?: boolean }) {
   const [open, setOpen] = useState(false)
+  const sizeClass = inline ? 'w-11 h-11' : 'w-16 h-16'
 
   return (
-    <div className="fixed bottom-6 left-6 z-40">
+    <div className={inline ? 'relative flex-shrink-0' : 'fixed bottom-6 left-6 z-40'}>
       {/* z-index BAIXO de propósito — esse backdrop só existe pra fechar
           o tooltip num clique fora dele. Com z-30 (mais alto que o
           tooltip/botão) ele ficava por CIMA dos ícones de rede e
@@ -33,7 +37,7 @@ export default function WhatsAppFab() {
         />
       )}
 
-      <ul className={`sunset-share-tooltip${open ? ' is-open' : ''}`}>
+      <ul className={`sunset-share-tooltip${inline ? ' sunset-share-tooltip-down' : ''}${open ? ' is-open' : ''}`}>
         <li className="sunset-share-item" data-network="whatsapp">
           <a
             href={WHATSAPP_URL}
@@ -67,11 +71,11 @@ export default function WhatsAppFab() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="sunset-bubbles group relative z-20 w-16 h-16"
+        className={`sunset-bubbles group relative z-20 ${sizeClass}`}
         aria-label="Falar no WhatsApp ou ver redes sociais"
         aria-expanded={open}
       >
-        <div className="relative z-10 w-16 h-16 rounded-full overflow-hidden bg-son-black glow group-hover:scale-105 transition-transform">
+        <div className={`relative z-10 ${sizeClass} rounded-full overflow-hidden bg-son-black glow group-hover:scale-105 transition-transform`}>
           <img src={logoSrc} alt="" className="w-full h-full object-cover" />
         </div>
       </button>

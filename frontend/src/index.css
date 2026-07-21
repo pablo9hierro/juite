@@ -861,6 +861,22 @@ a {
   pointer-events: auto;
   transform: translateX(-50%) translateY(0) scale(1);
 }
+/* Variante usada no navbar (BrandHeader) — botão fica no topo da tela,
+   então o tooltip abre pra BAIXO em vez de pra cima. */
+.sunset-share-tooltip-down {
+  bottom: auto;
+  top: calc(100% + 14px);
+  transform: translateX(-50%) translateY(-8px) scale(0.92);
+}
+.sunset-share-tooltip-down.is-open {
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+.sunset-share-tooltip-down::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--color-son-black);
+}
 .sunset-share-item {
   position: relative;
 }
