@@ -5,7 +5,7 @@ import SiteHeader from '../../components/layout/SiteHeader'
 import PageTransition from '../../components/layout/PageTransition'
 import { StatusBadge } from '../../components/ui/Badge'
 import { api } from '../../lib/api'
-import type { Order } from '../../lib/types'
+import type { Order, Product } from '../../lib/types'
 import { useCustomerAuth } from '../../store/customerAuth'
 import { useCart } from '../../store/cart'
 
@@ -19,6 +19,7 @@ export default function HistoricoCliente() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [buyingAgainId, setBuyingAgainId] = useState<string | null>(null)
+  const [buyAgainError, setBuyAgainError] = useState<{ orderId: string; message: string } | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -36,15 +37,40 @@ export default function HistoricoCliente() {
   // conta. Produto descontinuado/inativo é simplesmente pulado.
   const handleBuyAgain = async (order: Order) => {
     setBuyingAgainId(order.id)
+    setBuyAgainError(null)
     try {
       const products = await api.products.list()
       const productById = new Map(products.map((p) => [p.id, p]))
-      const cart = useCart.getState()
-      cart.clear()
+      const available: { product: Product; quantity: number }[] = []
+      const unavailable: string[] = []
       for (const item of order.items) {
         const product = productById.get(item.product_id)
-        if (!product || product.active === false || product.quantity <= 0) continue
-        for (let i = 0; i < item.quantity; i++) cart.addItem(product)
+        if (!product || product.active === false || product.quantity <= 0) {
+          unavailable.push(item.product_name)
+        } else {
+          available.push({ product, quantity: item.quantity })
+        }
+      }
+      // Só mexe no carrinho se tiver pelo menos 1 item de verdade pra
+      // adicionar -- se der tudo indisponível (produto excluído/
+      // descontinuado desde a compra), não faz sentido zerar o carrinho
+      // do cliente nem mandar ele pra uma tela vazia sem explicar por quê.
+      if (available.length === 0) {
+        setBuyAgainError({ orderId: order.id, message: 'Os produtos desse pedido não estão mais disponíveis.' })
+        return
+      }
+      const cart = useCart.getState()
+      cart.clear()
+      for (const { product, quantity } of available) {
+        for (let i = 0; i < quantity; i++) cart.addItem(product)
+      }
+      if (unavailable.length > 0) {
+        // Não navega direto pro carrinho aqui -- a mensagem some do
+        // fluxo/some da tela se navegar na hora (a tela troca antes de
+        // dar tempo de ler). Deixa o aviso na tela e o cliente segue pro
+        // carrinho quando quiser (o resto já está adicionado).
+        setBuyAgainError({ orderId: order.id, message: `Adicionado ao carrinho. Indisponível e não incluído: ${unavailable.join(', ')}.` })
+        return
       }
       navigate('/carrinho')
     } finally {
@@ -98,6 +124,7 @@ export default function HistoricoCliente() {
                     {buyingAgainId === order.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
                     Comprar novamente
                   </button>
+                  {buyAgainError?.orderId === order.id && <p className="error-msg mt-2">{buyAgainError.message}</p>}
                 </li>
               ))}
             </ul>
