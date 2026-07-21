@@ -1729,9 +1729,17 @@ a {
    mask-image/toDataURL por frame, raspar é uma operação de canvas nativa
    (destination-out) e some exatamente onde o dedo passa, em tempo real. */
 .sunset-scratch-wrap {
+  /* Altura FIXA de propósito (não "auto" a partir do conteúdo) -- o
+     <canvas> por cima usa inset:0 pra cobrir exatamente essa caixa, então
+     qualquer instabilidade de layout do CouponTicket por baixo (fonte
+     carregando, animação 3D, o que for) nunca mais pode inflar o tamanho
+     do canvas junto (reportado: card do papel dourado virando um
+     retângulo gigante fora de proporção). */
   position: relative;
   width: 320px;
+  height: 420px;
   max-width: 100%;
+  margin: 0 auto;
 }
 .sunset-scratch-canvas {
   position: absolute;
@@ -2149,41 +2157,41 @@ a {
   --t-text-main: var(--color-son-silver);
   --t-text-muted: var(--color-son-silver-dim);
   font-size: 10px;
-  perspective: 1000px;
   display: inline-block;
   max-width: 100%;
 }
+/* O tilt 3D (perspective + transform-style:preserve-3d + rotateX/rotateY
+   em loop) da referência saiu -- essa tela é só pra celular (sem mouse,
+   sem :hover pra acionar o tilt de verdade) e, pior, perspective+preserve-3d
+   com transform animando sem parar é um caso conhecido de instabilidade
+   de layout em alguns motores de renderização mobile: o tamanho
+   calculado do elemento incha/oscila (foi exatamente o que apareceu --
+   card virando um retângulo gigante fora de proporção). Fica só um glow
+   pulsando (2D puro, sem 3D nenhum envolvido) -- sem risco nenhum de
+   afetar layout, só opacity/box-shadow. */
 .sunset-ticket {
   position: relative;
   width: 22em;
   max-width: 100%;
   color: var(--t-text-main);
-  transform-style: preserve-3d;
-  transition:
-    transform 0.6s cubic-bezier(0.23, 1, 0.32, 1),
-    box-shadow 0.6s ease;
   box-shadow:
     0 20px 40px rgba(0, 0, 0, 0.8),
     0 0 0 1px rgba(255, 255, 255, 0.05);
   background: transparent;
-  filter: drop-shadow(0px 0px 10px rgba(0, 0, 0, 0.5));
-  animation: sunset-ticket-idle 7s ease-in-out infinite;
+  animation: sunset-ticket-glow 3.5s ease-in-out infinite;
 }
-.sunset-ticket-wrapper:hover .sunset-ticket {
-  animation: none;
-  transform: rotateX(5deg) rotateY(-10deg) scale(1.02);
-  box-shadow:
-    20px 20px 40px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(255, 255, 255, 0.1),
-    -5px -5px 20px var(--t-accent-glow);
-}
-@keyframes sunset-ticket-idle {
+@keyframes sunset-ticket-glow {
   0%,
   100% {
-    transform: rotateX(2deg) rotateY(-4deg);
+    box-shadow:
+      0 20px 40px rgba(0, 0, 0, 0.8),
+      0 0 0 1px rgba(255, 255, 255, 0.05);
   }
   50% {
-    transform: rotateX(-2deg) rotateY(4deg);
+    box-shadow:
+      0 20px 40px rgba(0, 0, 0, 0.8),
+      0 0 0 1px rgba(255, 255, 255, 0.05),
+      0 0 24px var(--t-accent-glow);
   }
 }
 .sunset-ticket::after {
@@ -2411,12 +2419,6 @@ a {
   text-shadow: 0 0 15px var(--t-accent-glow);
 }
 .sunset-ticket-wrapper:active .sunset-ticket {
-  transform: rotateX(15deg) rotateY(-5deg) scale(0.98);
-}
-.sunset-ticket-wrapper:active .sunset-t-stub {
-  transform: translateY(5px) rotateZ(2deg);
-  opacity: 0.8;
-  transition:
-    transform 0.2s ease,
-    opacity 0.2s ease;
+  transform: scale(0.98);
+  transition: transform 0.15s ease;
 }
