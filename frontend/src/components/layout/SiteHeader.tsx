@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { Heart } from 'lucide-react'
 import SunsetCartIcon from '../SunsetCartIcon'
+import WhatsAppFab from '../WhatsAppFab'
 import { useCart } from '../../store/cart'
 
 // O logo clicável (header > div > a > img) foi retirado de todas as
@@ -9,11 +10,13 @@ export default function SiteHeader({
   showBack = true,
   showCart = true,
   showProfile = true,
+  showWhatsApp = false,
   title,
 }: {
   showBack?: boolean
   showCart?: boolean
   showProfile?: boolean
+  showWhatsApp?: boolean
   title?: string
 }) {
   const navigate = useNavigate()
@@ -49,7 +52,13 @@ export default function SiteHeader({
             </button>
           )}
         </div>
-        <div className="sunset-nav-slot sunset-nav-slot-center">{title && <div className="sunset-nav-tab">{title}</div>}</div>
+        <div className="sunset-nav-slot sunset-nav-slot-center">
+          {title && (
+            <div className="sunset-brand-btn">
+              <span>{title}</span>
+            </div>
+          )}
+        </div>
         <div className="sunset-nav-slot sunset-nav-slot-end">
           {/* Sem ação por enquanto — destino dos favoritos ainda não foi
               definido. */}
@@ -58,6 +67,7 @@ export default function SiteHeader({
               <Heart className="w-4 h-4" />
             </button>
           )}
+          {showWhatsApp && <WhatsAppFab inline />}
           {/* Igual ao botão flutuante — só o #cart-icon puro, sem pílula/
               texto "Sacola" ao redor. overflow-hidden + flex centering é
               necessário: o #cart-icon tem 140x120 nativos, e sem conter isso

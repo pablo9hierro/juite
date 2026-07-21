@@ -164,7 +164,7 @@ export default function Landing() {
               />
             </svg>
           </Link>
-          <Link to="/consultar" className="btn-secondary sunset-glow-btn sunset-glow-btn-no-reflect text-base px-8 py-4 w-full sm:w-auto">
+          <Link to="/consultar" className="btn-secondary sunset-glow-btn text-base px-8 py-4 w-full sm:w-auto">
             Acompanhar meu pedido
           </Link>
         </motion.div>

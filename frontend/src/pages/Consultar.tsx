@@ -5,7 +5,6 @@ import 'leaflet/dist/leaflet.css'
 import { Loader2, LocateFixed, MessageCircle, Package, Search } from 'lucide-react'
 import SiteHeader from '../components/layout/SiteHeader'
 import PageTransition from '../components/layout/PageTransition'
-import WhatsAppFab from '../components/WhatsAppFab'
 import CartFab from '../components/CartFab'
 import { StatusBadge } from '../components/ui/Badge'
 import { api } from '../lib/api'
@@ -291,8 +290,7 @@ export default function Consultar() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader showCart={false} showProfile={false} title="Consultar pedido" />
-      <WhatsAppFab />
+      <SiteHeader showCart={false} showProfile={false} showWhatsApp title="Consultar pedido" />
       <CartFab />
       <PageTransition className="max-w-xl mx-auto px-5 sm:px-10 pt-6 pb-20">
         <div className="flex gap-2 mb-8">
