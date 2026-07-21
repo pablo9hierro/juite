@@ -1729,17 +1729,26 @@ a {
    mask-image/toDataURL por frame, raspar é uma operação de canvas nativa
    (destination-out) e some exatamente onde o dedo passa, em tempo real. */
 .sunset-scratch-wrap {
-  /* Altura FIXA de propósito (não "auto" a partir do conteúdo) -- o
-     <canvas> por cima usa inset:0 pra cobrir exatamente essa caixa, então
-     qualquer instabilidade de layout do CouponTicket por baixo (fonte
-     carregando, animação 3D, o que for) nunca mais pode inflar o tamanho
-     do canvas junto (reportado: card do papel dourado virando um
-     retângulo gigante fora de proporção). */
+  /* Largura/altura FIXAS de propósito (não "auto" a partir do conteúdo) --
+     o <canvas> por cima usa dimensões fixas iguais a essas (ver
+     SCRATCH_WIDTH/SCRATCH_HEIGHT em ResgatarCupom.tsx), então nenhuma
+     medição em tempo real jamais dá errado. overflow:hidden garante que
+     o ticket por baixo nunca "vaza" pra fora dessa caixa, mesmo se o
+     conteúdo dele for um pouco mais alto (a página é pra caber inteira
+     numa tela de celular, sem rolagem nenhuma). */
   position: relative;
-  width: 320px;
-  height: 420px;
+  width: 300px;
+  height: 380px;
   max-width: 100%;
   margin: 0 auto;
+  overflow: hidden;
+  border-radius: 18px;
+}
+/* Ticket fica menor só aqui dentro da raspadinha (caber sem cortar nada
+   dentro dos 380px de altura fixa) -- em /cliente/cupons ele continua no
+   tamanho normal (10px), essa regra não alcança lá. */
+.sunset-scratch-wrap .sunset-ticket-wrapper {
+  font-size: 8.5px;
 }
 .sunset-scratch-canvas {
   position: absolute;

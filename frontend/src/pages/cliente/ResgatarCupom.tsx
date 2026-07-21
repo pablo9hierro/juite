@@ -8,6 +8,11 @@ import { api, ApiError } from '../../lib/api'
 import type { ClaimedCoupon } from '../../lib/types'
 import { useCustomerAuth } from '../../store/customerAuth'
 
+// Precisam bater exatamente com .sunset-scratch-wrap no CSS (width/height
+// fixos, de propósito -- ver comentário lá).
+const SCRATCH_WIDTH = 300
+const SCRATCH_HEIGHT = 380
+
 // Desenha o "papel dourado" direto no canvas (gradiente do golden-button
 // by elijahgummer + cantos em L + texto), em vez de ficar sincronizando
 // via mask-image/toDataURL um card React separado por cima. Essa página é
@@ -122,31 +127,25 @@ export default function ResgatarCupom() {
       .finally(() => setChecking(false))
   }, [token])
 
-  // Resolução do canvas sempre em sincronia com o tamanho real renderizado
-  // (ResizeObserver, não uma medição única no mount) — o ticket embaixo
-  // pode reajustar a própria altura um instante depois (fonte/layout).
+  // O <canvas> usa dimensões FIXAS (mesmas de .sunset-scratch-wrap no
+  // CSS) em vez de medir via getBoundingClientRect()/ResizeObserver -- a
+  // medição dinâmica era exatamente a fonte da instabilidade (card
+  // aparecendo gigante/quebrado, reportado repetidas vezes): qualquer
+  // timing de layout ainda não assentado no momento da medição inflava o
+  // canvas junto. Com tamanho fixo conhecido de antemão, não existe
+  // medição nenhuma pra dar errado -- o desenho fica correto sempre,
+  // desde o primeiro frame.
   useEffect(() => {
     if (checking || !claimable || !claimed) return
     const canvas = canvasRef.current
     if (!canvas) return
-
-    function resize() {
-      if (!canvas) return
-      const rect = canvas.getBoundingClientRect()
-      if (rect.width === 0 || rect.height === 0) return
-      const dpr = window.devicePixelRatio || 1
-      canvas.width = rect.width * dpr
-      canvas.height = rect.height * dpr
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      drawGoldFoil(ctx, rect.width, rect.height)
-    }
-
-    resize()
-    const ro = new ResizeObserver(resize)
-    ro.observe(canvas)
-    return () => ro.disconnect()
+    const dpr = window.devicePixelRatio || 1
+    canvas.width = SCRATCH_WIDTH * dpr
+    canvas.height = SCRATCH_HEIGHT * dpr
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    drawGoldFoil(ctx, SCRATCH_WIDTH, SCRATCH_HEIGHT)
   }, [checking, claimable, claimed])
 
   function getPos(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -240,7 +239,7 @@ export default function ResgatarCupom() {
   return (
     <main className="min-h-screen text-white">
       <SiteHeader showCart={false} showProfile={false} title="Resgatar cupom" />
-      <PageTransition className="max-w-lg mx-auto px-5 sm:px-10 pt-6 pb-16 flex flex-col items-center">
+      <PageTransition className="max-w-lg mx-auto px-5 sm:px-10 pt-3 pb-4 flex flex-col items-center">
         {checking ? (
           <div className="flex justify-center py-20">
             <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
