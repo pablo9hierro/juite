@@ -120,6 +120,7 @@ export interface LocalDb {
   campanhaExtraCoupons: LocalCampanhaExtraCoupon[]
   customers: LocalCustomer[]
   customerPasswordResets: LocalPasswordReset[]
+  customerFavorites: { customerId: string; productId: string; createdAt: string }[]
   pricePerKm: number
   maxKm: number | null
   heroImageUrl: string | null
@@ -216,6 +217,7 @@ function seedDb(): LocalDb {
     campanhaExtraCoupons: [],
     customers: [],
     customerPasswordResets: [],
+    customerFavorites: [],
     pricePerKm: 1.5,
     maxKm: null,
     heroImageUrl: null,

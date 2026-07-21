@@ -197,6 +197,10 @@ const remoteApi = {
         method: 'POST',
         body: JSON.stringify({ whatsapp }),
       }),
+    toggleFavorite: supabasePublicApi.customerAuth.toggleFavorite,
+    listFavorites: supabasePublicApi.customerAuth.listFavorites,
+    listCoupons: supabasePublicApi.customerAuth.listCoupons,
+    listOrders: supabasePublicApi.customerAuth.listOrders,
   },
   // CRUD do admin e fila do motoboy falam direto com o Supabase via RPC
   // (ver supabase/sunset_admin_crud.sql), passando o token de

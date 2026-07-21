@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { LayoutGrid, List, Loader2, Minus, Package, Plus, Search, X } from 'lucide-react'
+import { Heart, LayoutGrid, List, Loader2, Minus, Package, Plus, Search, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import SiteHeader from '../components/layout/SiteHeader'
 import PageTransition from '../components/layout/PageTransition'
@@ -9,6 +9,7 @@ import { api } from '../lib/api'
 import type { Category, Product } from '../lib/types'
 import type { PromotionalProduct } from '../lib/supabasePublicApi'
 import { useCart } from '../store/cart'
+import { useCustomerAuth } from '../store/customerAuth'
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
@@ -70,6 +71,8 @@ function ProductDetailModal({
   promo,
   inCart,
   outOfStock,
+  isFavorite,
+  onToggleFavorite,
   onAdd,
   onRemove,
   onClose,
@@ -78,6 +81,8 @@ function ProductDetailModal({
   promo: PromotionalProduct | undefined
   inCart: number
   outOfStock: boolean
+  isFavorite: boolean
+  onToggleFavorite: (() => void) | null
   onAdd: () => void
   onRemove: () => void
   onClose: () => void
@@ -103,6 +108,17 @@ function ProductDetailModal({
         <button type="button" onClick={onClose} className="sunset-pd-close" aria-label="Fechar">
           <X className="w-4 h-4" />
         </button>
+        {onToggleFavorite && (
+          <button
+            type="button"
+            onClick={onToggleFavorite}
+            className="sunset-pd-close"
+            style={{ left: 'auto', right: promo ? '3.25rem' : '0.75rem' }}
+            aria-label={isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+          >
+            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current text-son-pink' : ''}`} />
+          </button>
+        )}
         {promo && <div className="sunset-pd-badge">{discountLabel(promo)}</div>}
         <div className="sunset-pd-content">
           <div className="sunset-pd-image">
@@ -155,10 +171,35 @@ export default function Catalogo() {
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [detailProduct, setDetailProduct] = useState<Product | null>(null)
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
 
   const { items, addItem, changeQty } = useCart()
+  const customerAuth = useCustomerAuth()
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchBoxRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!customerAuth.token) return
+    api.customerAuth
+      .listFavorites(customerAuth.token)
+      .then((favs) => setFavoriteIds(new Set(favs.map((p) => p.id))))
+      .catch(() => {})
+  }, [customerAuth.token])
+
+  const toggleFavorite = (productId: string) => {
+    if (!customerAuth.token) return
+    api.customerAuth
+      .toggleFavorite(customerAuth.token, productId)
+      .then((isNowFavorite) => {
+        setFavoriteIds((prev) => {
+          const next = new Set(prev)
+          if (isNowFavorite) next.add(productId)
+          else next.delete(productId)
+          return next
+        })
+      })
+      .catch(() => {})
+  }
 
   useEffect(() => {
     Promise.all([api.products.list(), api.categories.list(), api.coupons.listPromotionalProducts(), api.products.salesCounts()])
@@ -558,6 +599,8 @@ export default function Catalogo() {
             promo={promoByProduct.get(detailProduct.id)}
             inCart={qtyInCart(detailProduct.id)}
             outOfStock={detailProduct.quantity <= 0}
+            isFavorite={favoriteIds.has(detailProduct.id)}
+            onToggleFavorite={customerAuth.token ? () => toggleFavorite(detailProduct.id) : null}
             onAdd={() => addItem(detailProduct)}
             onRemove={() => changeQty(detailProduct.id, -1)}
             onClose={() => setDetailProduct(null)}

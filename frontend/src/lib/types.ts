@@ -189,6 +189,34 @@ export interface CustomerAuthResult {
   customer: Customer
 }
 
+export interface CustomerCouponEntry {
+  grant_id: string
+  coupon_id: string
+  code: string
+  kind: CouponKind
+  discount_type: DiscountType | null
+  discount_value: number | null
+  shipping_discount_type: DiscountType | null
+  shipping_discount_value: number | null
+  granted_uses: number
+  used_count: number
+  expires_at: string | null
+  created_at: string
+}
+export interface CustomerCouponHistoryEntry {
+  order_id: string
+  coupon_code: string
+  created_at: string
+  total: number
+  discount_amount: number | null
+  shipping_discount: number | null
+}
+export interface CustomerCoupons {
+  active: CustomerCouponEntry[]
+  inactive: CustomerCouponEntry[]
+  history: CustomerCouponHistoryEntry[]
+}
+
 export type PromotionType = 'selfie_service' | 'kit'
 
 // "Promoção" — o antigo "campanha": banner/carrossel da landing, kit ou

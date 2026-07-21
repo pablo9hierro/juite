@@ -115,11 +115,15 @@ export default function CustomerAuthModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+    // items-start + overflow-y-auto (não items-center) — o cartão de
+    // cadastro é mais alto que a viewport em celular; centralizado sem
+    // scroll cortava topo E rodapé pra fora da tela, sem como interagir
+    // (reportado). my-8 no cartão dá respiro em vez de colar nas bordas.
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
       {/* Mesmo cartão do login do admin (Uiverse.io by KhelVers — flutua,
           borda dourada, glow quente por dentro/fora) — só o formulário
           muda, o "estojo" é o mesmo em toda tela de login do site. */}
-      <div className="sunset-login-card w-full max-w-sm rounded-2xl p-8" onClick={(e) => e.stopPropagation()}>
+      <div className="sunset-login-card w-full max-w-sm rounded-2xl p-8 my-8" onClick={(e) => e.stopPropagation()}>
         <button type="button" onClick={onClose} className="absolute top-4 right-4 text-son-silver-dim hover:text-white" aria-label="Fechar">
           <X className="w-5 h-5" />
         </button>

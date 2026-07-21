@@ -1,6 +1,6 @@
 import { ApiError } from './apiError'
 import { supabase } from './supabaseClient'
-import type { BadgesLayout, BgFit, BgMode, Category, Coupon, Customer, CustomerAuthResult, DeliveryPosition, LandingBadge, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
+import type { BadgesLayout, BgFit, BgMode, Category, Coupon, Customer, CustomerAuthResult, CustomerCoupons, DeliveryPosition, LandingBadge, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new ApiError(400, result.error.message)
@@ -222,6 +222,27 @@ export const supabasePublicApi = {
         p_new_password: newPassword,
       })
       if (error) throw new ApiError(400, error.message)
+    },
+    // /cliente/favoritos, /cliente/cupons, /cliente/historico.
+    toggleFavorite: async (token: string, productId: string) => {
+      const { data, error } = await supabase.rpc('customer_toggle_favorite', { p_token: token, p_product_id: productId })
+      if (error) throw new ApiError(400, error.message)
+      return data as boolean
+    },
+    listFavorites: async (token: string) => {
+      const { data, error } = await supabase.rpc('customer_list_favorites', { p_token: token })
+      if (error) throw new ApiError(400, error.message)
+      return (data ?? []) as Product[]
+    },
+    listCoupons: async (token: string) => {
+      const { data, error } = await supabase.rpc('customer_list_coupons', { p_token: token })
+      if (error) throw new ApiError(400, error.message)
+      return data as CustomerCoupons
+    },
+    listOrders: async (token: string) => {
+      const { data, error } = await supabase.rpc('customer_list_orders', { p_token: token })
+      if (error) throw new ApiError(400, error.message)
+      return (data ?? []) as Order[]
     },
   },
 }

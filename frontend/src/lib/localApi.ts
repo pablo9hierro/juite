@@ -656,6 +656,87 @@ async function customerResetPassword(whatsapp: string, code: string, newPassword
   saveDb(db)
 }
 
+// /cliente/favoritos, /cliente/cupons, /cliente/historico.
+
+async function customerToggleFavorite(token: string, productId: string): Promise<boolean> {
+  const db = loadDb()
+  const customerId = customerIdFromToken(token)
+  db.customerFavorites = db.customerFavorites ?? []
+  const idx = db.customerFavorites.findIndex((f) => f.customerId === customerId && f.productId === productId)
+  if (idx >= 0) {
+    db.customerFavorites.splice(idx, 1)
+    saveDb(db)
+    return false
+  }
+  db.customerFavorites.push({ customerId, productId, createdAt: nowIso() })
+  saveDb(db)
+  return true
+}
+
+async function customerListFavorites(token: string): Promise<Product[]> {
+  const db = loadDb()
+  const customerId = customerIdFromToken(token)
+  const ids = new Set((db.customerFavorites ?? []).filter((f) => f.customerId === customerId).map((f) => f.productId))
+  return db.products.filter((p) => ids.has(p.id))
+}
+
+function couponIsUsable(grant: import('./localData').LocalCouponGrant, coupon: Coupon | undefined) {
+  if (!coupon) return false
+  if (grant.used_count >= grant.granted_uses) return false
+  if (!coupon.active) return false
+  if (coupon.expires_at && new Date(coupon.expires_at).getTime() <= Date.now()) return false
+  return true
+}
+
+async function customerListCoupons(token: string): Promise<import('./types').CustomerCoupons> {
+  const db = loadDb()
+  const customerId = customerIdFromToken(token)
+  const c = db.customers.find((x) => x.id === customerId)
+  const whatsapp = c?.whatsapp ?? ''
+  const couponById = new Map(db.coupons.map((x) => [x.id, x]))
+  const grants = (db.couponGrants ?? []).filter((g) => g.customer_whatsapp === whatsapp)
+
+  const toEntry = (g: (typeof grants)[number]) => {
+    const coupon = couponById.get(g.coupon_id)
+    return {
+      grant_id: g.id,
+      coupon_id: g.coupon_id,
+      code: coupon?.code ?? '',
+      kind: coupon?.kind ?? 'desconto',
+      discount_type: coupon?.discount_type ?? null,
+      discount_value: coupon?.discount_value ?? null,
+      shipping_discount_type: coupon?.shipping_discount_type ?? null,
+      shipping_discount_value: coupon?.shipping_discount_value ?? null,
+      granted_uses: g.granted_uses,
+      used_count: g.used_count,
+      expires_at: coupon?.expires_at ?? null,
+      created_at: g.created_at,
+    }
+  }
+
+  const active = grants.filter((g) => couponIsUsable(g, couponById.get(g.coupon_id))).map(toEntry)
+  const inactive = grants.filter((g) => !couponIsUsable(g, couponById.get(g.coupon_id))).map(toEntry)
+  const history = db.orders
+    .filter((o) => o.customer_whatsapp === whatsapp && o.coupon_code)
+    .map((o) => ({
+      order_id: o.id,
+      coupon_code: o.coupon_code as string,
+      created_at: o.created_at,
+      total: o.total,
+      discount_amount: o.discount_amount ?? null,
+      shipping_discount: o.shipping_discount ?? null,
+    }))
+
+  return { active, inactive, history }
+}
+
+async function customerListOrders(token: string): Promise<Order[]> {
+  const db = loadDb()
+  const c = db.customers.find((x) => x.id === customerIdFromToken(token))
+  if (!c) return []
+  return trackOrders(c.whatsapp)
+}
+
 // ---------- admin ----------
 
 async function adminListCategories(): Promise<Category[]> {
@@ -2480,6 +2561,10 @@ export const localApi = {
     verifyResetCode: customerVerifyResetCode,
     resetPassword: customerResetPassword,
     requestPasswordReset: customerRequestPasswordReset,
+    toggleFavorite: customerToggleFavorite,
+    listFavorites: customerListFavorites,
+    listCoupons: customerListCoupons,
+    listOrders: customerListOrders,
   },
   pdv: {
     createSale: pdvCreateSale,

@@ -12,6 +12,9 @@ import BannerCheckout from './pages/BannerCheckout'
 import Pagamento from './pages/Pagamento'
 import Consultar from './pages/Consultar'
 import RecuperarSenha from './pages/RecuperarSenha'
+import FavoritosCliente from './pages/cliente/FavoritosCliente'
+import CuponsCliente from './pages/cliente/CuponsCliente'
+import HistoricoCliente from './pages/cliente/HistoricoCliente'
 import AdminLogin from './pages/admin/AdminLogin'
 import FuncionarioLogin from './pages/admin/FuncionarioLogin'
 import AdminPedidos from './pages/admin/AdminPedidos'
@@ -64,6 +67,9 @@ export default function App() {
         <Route path="/pagamento/:orderId" element={<Pagamento />} />
         <Route path="/consultar" element={<Consultar />} />
         <Route path="/recuperar-senha" element={<RecuperarSenha />} />
+        <Route path="/cliente/favoritos" element={<FavoritosCliente />} />
+        <Route path="/cliente/cupons" element={<CuponsCliente />} />
+        <Route path="/cliente/historico" element={<HistoricoCliente />} />
 
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/funcionarios/login" element={<FuncionarioLogin />} />
