@@ -29,7 +29,10 @@ export default function SiteHeader({
       <div className="sunset-nav-bar">
         <div className="sunset-nav-slot sunset-nav-slot-start">
           {showBack && (
-            <button type="button" onClick={() => navigate(-1)} className="flex items-center gap-2">
+            // Texto "Voltar" removido — com start/end de larguras diferentes
+            // (ícone só vs ícone+texto), a coluna central (nome da página)
+            // não ficava no centro de verdade da barra (reportado).
+            <button type="button" onClick={() => navigate(-1)} className="flex items-center" aria-label="Voltar">
               {/* Uiverse.io by karthik092726122003 — botão de setas
                   deslizantes, era :hover, virou loop automático. */}
               <span className="sunset-back-wrap">
@@ -48,7 +51,6 @@ export default function SiteHeader({
                   </span>
                 </span>
               </span>
-              <span className="sunset-nav-label">Voltar</span>
             </button>
           )}
         </div>

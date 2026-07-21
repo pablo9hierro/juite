@@ -1,52 +1,39 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Heart, LayoutGrid, List, Loader2, Minus, Package, Plus, Search, X } from 'lucide-react'
+import { LayoutGrid, List, Loader2, Minus, Package, Plus, Search, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import SiteHeader from '../components/layout/SiteHeader'
 import PageTransition from '../components/layout/PageTransition'
 import CartFab from '../components/CartFab'
+import ProductDetailModal, { PromoPriceBlock, currency } from '../components/ProductDetailModal'
 import { api } from '../lib/api'
 import type { Category, Product } from '../lib/types'
 import type { PromotionalProduct } from '../lib/supabasePublicApi'
 import { useCart } from '../store/cart'
 import { useCustomerAuth } from '../store/customerAuth'
 
-function currency(v: number) {
-  return `R$ ${v.toFixed(2).replace('.', ',')}`
-}
-
-function discountLabel(promo: PromotionalProduct) {
-  return promo.discount_type === 'percent' ? `-${promo.discount_value}%` : `-${currency(promo.discount_value)}`
-}
-
-function finalPrice(price: number, promo: PromotionalProduct) {
-  const raw = promo.discount_type === 'percent' ? price - (price * promo.discount_value) / 100 : price - promo.discount_value
-  return Math.max(raw, 0)
-}
-
-// Preço original riscado (X vermelho) + valor do desconto + preço final —
-// usado tanto no card do catálogo quanto (versão orange) no checkout.
-function PromoPriceBlock({ price, promo }: { price: number; promo: PromotionalProduct }) {
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap mt-auto">
-      <span className="text-xs text-red-500 line-through decoration-2">{currency(price)}</span>
-      <span className="text-xs font-semibold text-orange-400">{discountLabel(promo)}</span>
-      <span className="sunset-text font-bold">{currency(finalPrice(price, promo))}</span>
-    </div>
-  )
-}
-
 // Grade estática pros itens em promoção — cada categoria da aba
 // "🔥 Promoção" listava antes numa esteira que rolava sozinha; removida a
 // pedido (ficava se movendo sem parar), agora é grade fixa igual o resto
 // do catálogo, só com o cartão em estilo promo (Uiverse by ashwin_5681).
-function PromoCards({ products, promoByProduct }: { products: Product[]; promoByProduct: Map<string, PromotionalProduct> }) {
+// Clique abre o mesmo toggle de detalhes do produto (favoritar incluso)
+// em vez de navegar pra /produto/:id — mesmo comportamento do catálogo
+// normal, só que também pros itens em promoção.
+function PromoCards({
+  products,
+  promoByProduct,
+  onSelect,
+}: {
+  products: Product[]
+  promoByProduct: Map<string, PromotionalProduct>
+  onSelect: (product: Product) => void
+}) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
       {products.map((product) => {
         const promo = promoByProduct.get(product.id)
         return (
-          <Link key={product.id} to={`/produto/${product.id}`} className="sunset-promo-card">
+          <button key={product.id} type="button" onClick={() => onSelect(product)} className="sunset-promo-card text-left">
             <div className="aspect-square rounded-xl bg-son-surface-light flex items-center justify-center overflow-hidden">
               {product.image_url ? (
                 <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
@@ -56,106 +43,10 @@ function PromoCards({ products, promoByProduct }: { products: Product[]; promoBy
             </div>
             <p className="text-xs font-semibold text-white leading-snug line-clamp-2">{product.name}</p>
             {promo && <PromoPriceBlock price={product.price} promo={promo} />}
-          </Link>
+          </button>
         )
       })}
     </div>
-  )
-}
-
-// Uiverse.io by SachinKumar666 — card com brilho/glow/badge, reaproveitado
-// como toggle de detalhes do produto (abre ao clicar na imagem ou no
-// bloco de texto do card do catálogo, fecha no X ou clicando fora).
-function ProductDetailModal({
-  product,
-  promo,
-  inCart,
-  outOfStock,
-  isFavorite,
-  onToggleFavorite,
-  onAdd,
-  onRemove,
-  onClose,
-}: {
-  product: Product
-  promo: PromotionalProduct | undefined
-  inCart: number
-  outOfStock: boolean
-  isFavorite: boolean
-  onToggleFavorite: (() => void) | null
-  onAdd: () => void
-  onRemove: () => void
-  onClose: () => void
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.92 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.92 }}
-        transition={{ duration: 0.22, ease: 'easeOut' }}
-        className="sunset-pd-card"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="sunset-pd-shine" />
-        <div className="sunset-pd-glow" />
-        <button type="button" onClick={onClose} className="sunset-pd-close" aria-label="Fechar">
-          <X className="w-4 h-4" />
-        </button>
-        {onToggleFavorite && (
-          <button
-            type="button"
-            onClick={onToggleFavorite}
-            className="sunset-pd-close"
-            style={{ left: 'auto', right: promo ? '3.25rem' : '0.75rem' }}
-            aria-label={isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-          >
-            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current text-son-pink' : ''}`} />
-          </button>
-        )}
-        {promo && <div className="sunset-pd-badge">{discountLabel(promo)}</div>}
-        <div className="sunset-pd-content">
-          <div className="sunset-pd-image">
-            {product.image_url ? (
-              <img src={product.image_url} alt={product.name} />
-            ) : (
-              <Package className="w-10 h-10 text-white/50" />
-            )}
-          </div>
-          <div>
-            <p className="sunset-pd-title">{product.name}</p>
-            {product.category_name && <p className="sunset-pd-category">{product.category_name}</p>}
-          </div>
-          {product.description && <p className="sunset-pd-description">{product.description}</p>}
-          <div className="sunset-pd-footer">
-            {promo ? <PromoPriceBlock price={product.price} promo={promo} /> : <span className="sunset-pd-price">{currency(product.price)}</span>}
-            {outOfStock ? (
-              <span className="text-xs font-semibold text-son-silver-dim">Esgotado</span>
-            ) : inCart > 0 ? (
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={onRemove} className="sunset-pd-button">
-                  <Minus className="w-3.5 h-3.5" />
-                </button>
-                <span className="text-sm font-semibold text-white w-4 text-center">{inCart}</span>
-                <button type="button" onClick={onAdd} disabled={inCart >= product.quantity} className="sunset-pd-button">
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <button type="button" onClick={onAdd} className="sunset-pd-button" aria-label="Adicionar ao carrinho">
-                <Plus className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
   )
 }
 
@@ -573,7 +464,7 @@ export default function Catalogo() {
               {promoGroups.map(([label, groupProducts]) => (
                 <div key={label}>
                   <h2 className="text-sm font-bold text-son-silver uppercase tracking-wide mb-3">{label}</h2>
-                  <PromoCards products={groupProducts} promoByProduct={promoByProduct} />
+                  <PromoCards products={groupProducts} promoByProduct={promoByProduct} onSelect={setDetailProduct} />
                 </div>
               ))}
             </div>
