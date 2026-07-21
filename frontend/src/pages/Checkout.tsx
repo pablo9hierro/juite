@@ -596,7 +596,6 @@ export default function Checkout() {
                       <button
                         type="button"
                         onClick={() => setCouponSelectOpen((o) => !o)}
-                        disabled={customerCoupons.length === 0}
                         className={`sunset-coupon-select-btn px-4 flex-shrink-0 flex items-center gap-1.5 ${couponSelectOpen ? 'sunset-coupon-select-btn-open' : ''}`}
                       >
                         <Gift className="w-3.5 h-3.5" />
@@ -605,32 +604,36 @@ export default function Checkout() {
                       </button>
                     )}
                   </div>
-                  {couponSelectOpen && customerCoupons.length > 0 && (
+                  {couponSelectOpen && (
                     <>
                       <div className="fixed inset-0 z-20" onClick={() => setCouponSelectOpen(false)} aria-hidden="true" />
                       <div className="absolute right-0 top-full mt-1 z-30 w-full sm:w-64 bg-son-surface border border-son-gold/40 rounded-xl shadow-xl overflow-hidden">
-                        {customerCoupons.map((c) => (
-                          <button
-                            key={c.code}
-                            type="button"
-                            onClick={() => {
-                              setCouponInput(c.code)
-                              applyCoupon(c.code)
-                            }}
-                            className="w-full text-left px-3 py-2.5 text-sm text-white hover:bg-white/5 flex items-center justify-between gap-2 border-b border-white/5 last:border-b-0"
-                          >
-                            <span className="font-mono font-semibold">{c.code}</span>
-                            <span className="text-xs text-son-silver-dim">
-                              {c.discount_type === 'percent'
-                                ? `-${c.discount_value}%`
-                                : c.discount_type != null && c.discount_value != null
-                                ? `-${currency(c.discount_value)}`
-                                : c.shipping_discount_type === 'percent'
-                                ? `-${c.shipping_discount_value}% frete`
-                                : 'Frete'}
-                            </span>
-                          </button>
-                        ))}
+                        {customerCoupons.length === 0 ? (
+                          <p className="px-3 py-3 text-sm text-son-silver-dim text-center">Você não tem cupons exclusivos no momento.</p>
+                        ) : (
+                          customerCoupons.map((c) => (
+                            <button
+                              key={c.code}
+                              type="button"
+                              onClick={() => {
+                                setCouponInput(c.code)
+                                applyCoupon(c.code)
+                              }}
+                              className="w-full text-left px-3 py-2.5 text-sm text-white hover:bg-white/5 flex items-center justify-between gap-2 border-b border-white/5 last:border-b-0"
+                            >
+                              <span className="font-mono font-semibold">{c.code}</span>
+                              <span className="text-xs text-son-silver-dim">
+                                {c.discount_type === 'percent'
+                                  ? `-${c.discount_value}%`
+                                  : c.discount_type != null && c.discount_value != null
+                                  ? `-${currency(c.discount_value)}`
+                                  : c.shipping_discount_type === 'percent'
+                                  ? `-${c.shipping_discount_value}% frete`
+                                  : 'Frete'}
+                              </span>
+                            </button>
+                          ))
+                        )}
                       </div>
                     </>
                   )}
@@ -657,7 +660,6 @@ export default function Checkout() {
                     <span className="truncate pr-2 text-orange-400">
                       {l.product.name}
                       {l.item.quantity > 1 ? ` x${l.item.quantity}` : ''}
-                      <span className="font-semibold"> - item promocional</span>
                     </span>
                     <span className="flex-shrink-0 flex items-center gap-1.5">
                       <span className="text-red-500 line-through decoration-2">{currency(lineTotal)}</span>
