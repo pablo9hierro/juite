@@ -6,6 +6,8 @@ import SiteHeader from '../components/layout/SiteHeader'
 import PageTransition from '../components/layout/PageTransition'
 import CartFab from '../components/CartFab'
 import ProductDetailModal, { PromoPriceBlock, currency } from '../components/ProductDetailModal'
+import FavoriteHeartButton from '../components/FavoriteHeartButton'
+import ConfirmRemoveDialog from '../components/ConfirmRemoveDialog'
 import { api } from '../lib/api'
 import type { Category, Product } from '../lib/types'
 import type { PromotionalProduct } from '../lib/supabasePublicApi'
@@ -63,6 +65,11 @@ export default function Catalogo() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [detailProduct, setDetailProduct] = useState<Product | null>(null)
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
+  // Igual em /cliente/favoritos: desmarcar pede confirmação (Uiverse.io by
+  // Yaya12085), marcar não — aqui o produto não some da tela ao desmarcar
+  // (é o catálogo inteiro, não uma lista só de favoritos), mas o pedido foi
+  // deixar a mesma dinâmica de confirmação nos dois lugares.
+  const [pendingRemove, setPendingRemove] = useState<Product | null>(null)
 
   const { items, addItem, changeQty } = useCart()
   const customerAuth = useCustomerAuth()
@@ -90,6 +97,19 @@ export default function Catalogo() {
         })
       })
       .catch(() => {})
+  }
+
+  // Marcar como favorito é direto; desmarcar abre o toggle de confirmação.
+  const requestToggleFavorite = (product: Product) => {
+    if (favoriteIds.has(product.id)) setPendingRemove(product)
+    else toggleFavorite(product.id)
+  }
+
+  const confirmRemoveFavorite = () => {
+    if (!pendingRemove) return
+    const product = pendingRemove
+    setPendingRemove(null)
+    toggleFavorite(product.id)
   }
 
   useEffect(() => {
@@ -196,8 +216,13 @@ export default function Catalogo() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: Math.min(i * 0.03, 0.3) }}
-        className="bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex flex-col hover:border-son-pink/30 transition-colors"
+        className="relative bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex flex-col hover:border-son-pink/30 transition-colors"
       >
+        {customerAuth.token && (
+          <div className="absolute top-2 right-2 z-10">
+            <FavoriteHeartButton checked={favoriteIds.has(product.id)} onChange={() => requestToggleFavorite(product)} />
+          </div>
+        )}
         <button type="button" onClick={() => setDetailProduct(product)} className="flex flex-col flex-1 text-left">
           <div className="aspect-square bg-son-surface-light flex items-center justify-center overflow-hidden">
             {product.image_url ? (
@@ -255,8 +280,13 @@ export default function Catalogo() {
         initial={{ opacity: 0, x: -12 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.3) }}
-        className="bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex items-center gap-4 p-3 hover:border-son-pink/30 transition-colors"
+        className="relative bg-son-surface border border-white/5 rounded-2xl overflow-visible flex items-center gap-4 p-3 hover:border-son-pink/30 transition-colors"
       >
+        {customerAuth.token && (
+          <div className="absolute -top-1.5 -right-1.5 z-10">
+            <FavoriteHeartButton checked={favoriteIds.has(product.id)} onChange={() => requestToggleFavorite(product)} />
+          </div>
+        )}
         <button
           type="button"
           onClick={() => setDetailProduct(product)}
@@ -491,10 +521,21 @@ export default function Catalogo() {
             inCart={qtyInCart(detailProduct.id)}
             outOfStock={detailProduct.quantity <= 0}
             isFavorite={favoriteIds.has(detailProduct.id)}
-            onToggleFavorite={customerAuth.token ? () => toggleFavorite(detailProduct.id) : null}
+            onToggleFavorite={customerAuth.token ? () => requestToggleFavorite(detailProduct) : null}
             onAdd={() => addItem(detailProduct)}
             onRemove={() => changeQty(detailProduct.id, -1)}
             onClose={() => setDetailProduct(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {pendingRemove && (
+          <ConfirmRemoveDialog
+            title="Remover dos favoritos"
+            message={`Tem certeza que quer remover "${pendingRemove.name}" dos seus favoritos?`}
+            confirmLabel="Remover"
+            onConfirm={confirmRemoveFavorite}
+            onCancel={() => setPendingRemove(null)}
           />
         )}
       </AnimatePresence>
