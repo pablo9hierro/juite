@@ -46,7 +46,7 @@ export default function HistoricoCliente() {
         if (!product || product.active === false || product.quantity <= 0) continue
         for (let i = 0; i < item.quantity; i++) cart.addItem(product)
       }
-      navigate('/checkout')
+      navigate('/carrinho')
     } finally {
       setBuyingAgainId(null)
     }
