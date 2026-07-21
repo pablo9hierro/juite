@@ -4,7 +4,7 @@ import { AnimatePresence } from 'framer-motion'
 import { Heart, Loader2, Package } from 'lucide-react'
 import SiteHeader from '../../components/layout/SiteHeader'
 import PageTransition from '../../components/layout/PageTransition'
-import ProductDetailModal, { PromoPriceBlock, currency } from '../../components/ProductDetailModal'
+import ProductDetailModal, { PromoPriceBlock, PromoRibbon, currency } from '../../components/ProductDetailModal'
 import FavoriteHeartButton from '../../components/FavoriteHeartButton'
 import ConfirmRemoveDialog from '../../components/ConfirmRemoveDialog'
 import { api } from '../../lib/api'
@@ -87,6 +87,7 @@ export default function FavoritosCliente() {
                     onClick={() => setDetailProduct(product)}
                     className="relative bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex flex-col hover:border-son-pink/30 transition-colors text-left"
                   >
+                    {promo && <PromoRibbon promo={promo} />}
                     <div className="absolute top-2 right-2 z-10">
                       <FavoriteHeartButton checked onChange={() => setPendingRemove(product)} />
                     </div>

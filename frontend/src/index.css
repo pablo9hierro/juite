@@ -1547,6 +1547,56 @@ a {
   position: relative;
   z-index: 2;
 }
+
+/* Uiverse.io by mrhyddenn — fitinha "Premium" diagonal no canto superior
+   esquerdo do card_box, recolorida (era laranja/vermelho puro) pro
+   gradiente laranja->dourado sunset, texto trocado pro desconto do
+   produto via attr(data-label) (era fixo "Premium"). */
+.sunset-promo-ribbon-wrap {
+  position: absolute;
+  overflow: hidden;
+  width: 90px;
+  height: 90px;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+.sunset-promo-ribbon {
+  position: absolute;
+  inset: 0;
+}
+.sunset-promo-ribbon::before {
+  content: attr(data-label);
+  position: absolute;
+  width: 150%;
+  height: 22px;
+  top: 16px;
+  left: -28px;
+  background-image: linear-gradient(45deg, var(--color-son-orange) 0%, var(--color-son-gold) 51%, var(--color-son-orange) 100%);
+  transform: rotate(-45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-son-black);
+  font-weight: 800;
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 5px 10px rgba(0, 0, 0, 0.35);
+}
+.sunset-promo-ribbon::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  bottom: 0;
+  left: 0;
+  height: 6px;
+  z-index: -1;
+  box-shadow: 84px -84px var(--color-son-purple);
+  background-image: linear-gradient(45deg, var(--color-son-orange) 0%, var(--color-son-gold) 51%, var(--color-son-orange) 100%);
+}
 .sunset-pd-image {
   width: 100%;
   height: 160px;

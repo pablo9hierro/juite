@@ -17,14 +17,27 @@ export function finalPrice(price: number, promo: PromotionalProduct) {
   return Math.max(raw, 0)
 }
 
-// Preço original riscado (X vermelho) + valor do desconto + preço final —
-// usado no card do catálogo, no toggle de detalhes e (versão orange) no checkout.
+// Preço original riscado (X vermelho) + preço final — o valor do desconto
+// (%/R$) saiu daqui e virou a fitinha PromoRibbon no canto do card (era
+// texto solto ao lado do preço, referência pedia mover pra fitinha).
+// Usado no card do catálogo e no toggle de detalhes.
 export function PromoPriceBlock({ price, promo }: { price: number; promo: PromotionalProduct }) {
   return (
     <div className="flex items-center gap-1.5 flex-wrap mt-auto">
       <span className="text-xs text-red-500 line-through decoration-2">{currency(price)}</span>
-      <span className="text-xs font-semibold text-orange-400">{discountLabel(promo)}</span>
       <span className="sunset-text font-bold">{currency(finalPrice(price, promo))}</span>
+    </div>
+  )
+}
+
+// Uiverse.io by mrhyddenn — fitinha diagonal "Premium" no canto superior
+// esquerdo do card, recolorida pro laranja/dourado sunset e com o texto
+// trocado pro valor do desconto (%/R$) em vez de "Premium". content vem de
+// attr(data-label) no ::before pra poder ser dinâmico por produto.
+export function PromoRibbon({ promo }: { promo: PromotionalProduct }) {
+  return (
+    <div className="sunset-promo-ribbon-wrap">
+      <span className="sunset-promo-ribbon" data-label={discountLabel(promo)} />
     </div>
   )
 }

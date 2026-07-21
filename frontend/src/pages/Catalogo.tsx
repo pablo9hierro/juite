@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import SiteHeader from '../components/layout/SiteHeader'
 import PageTransition from '../components/layout/PageTransition'
 import CartFab from '../components/CartFab'
-import ProductDetailModal, { PromoPriceBlock, currency } from '../components/ProductDetailModal'
+import ProductDetailModal, { PromoPriceBlock, PromoRibbon, currency } from '../components/ProductDetailModal'
 import FavoriteHeartButton from '../components/FavoriteHeartButton'
 import ConfirmRemoveDialog from '../components/ConfirmRemoveDialog'
 import { api } from '../lib/api'
@@ -35,7 +35,8 @@ function PromoCards({
       {products.map((product) => {
         const promo = promoByProduct.get(product.id)
         return (
-          <button key={product.id} type="button" onClick={() => onSelect(product)} className="sunset-promo-card text-left">
+          <button key={product.id} type="button" onClick={() => onSelect(product)} className="sunset-promo-card text-left relative overflow-hidden">
+            {promo && <PromoRibbon promo={promo} />}
             <div className="aspect-square rounded-xl bg-son-surface-light flex items-center justify-center overflow-hidden">
               {product.image_url ? (
                 <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
@@ -218,6 +219,7 @@ export default function Catalogo() {
         transition={{ duration: 0.35, delay: Math.min(i * 0.03, 0.3) }}
         className="relative bg-son-surface border border-white/5 rounded-2xl overflow-hidden flex flex-col hover:border-son-pink/30 transition-colors"
       >
+        {promo && <PromoRibbon promo={promo} />}
         {customerAuth.token && (
           <div className="absolute top-2 right-2 z-10">
             <FavoriteHeartButton checked={favoriteIds.has(product.id)} onChange={() => requestToggleFavorite(product)} />
@@ -290,8 +292,13 @@ export default function Catalogo() {
         <button
           type="button"
           onClick={() => setDetailProduct(product)}
-          className="w-16 h-16 flex-shrink-0 rounded-xl bg-son-surface-light flex items-center justify-center overflow-hidden"
+          className="relative w-16 h-16 flex-shrink-0 rounded-xl bg-son-surface-light flex items-center justify-center overflow-hidden"
         >
+          {promo && (
+            <div className="absolute top-0 left-0 origin-top-left scale-50">
+              <PromoRibbon promo={promo} />
+            </div>
+          )}
           {product.image_url ? (
             <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
           ) : (
