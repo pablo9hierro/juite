@@ -331,6 +331,22 @@ a {
   }
 }
 
+/* Uiverse.io by dovatgabriel — na referência o card sob :hover crescia
+   (flex:2) e os outros ficavam pequenos. Adaptado pro carrossel de
+   cupons em /cliente/cupons: sem hover no celular, então é o card mais
+   perto do centro do scroll (calculado em CuponsCliente.tsx a cada
+   evento de scroll) que vira "principal" — cresce e volta à opacidade
+   cheia — enquanto os outros encolhem/apagam um pouco. */
+.sunset-coupon-card {
+  transition: transform 0.35s ease, opacity 0.35s ease;
+  transform: scale(0.86);
+  opacity: 0.5;
+}
+.sunset-coupon-card-active {
+  transform: scale(1);
+  opacity: 1;
+}
+
 .glass {
   background: rgba(15, 43, 29, 0.65);
   backdrop-filter: blur(14px);

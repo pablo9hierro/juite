@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { Loader2, Tag } from 'lucide-react'
@@ -33,6 +33,47 @@ export default function CuponsCliente() {
       .then(setData)
       .finally(() => setLoading(false))
   }, [token])
+
+  // Uiverse.io by dovatgabriel — na referência era o card sob :hover que
+  // crescia (flex:2); celular não tem hover, e o CouponTicket tem
+  // largura própria (não é um flex item sem conteúdo), então em vez de
+  // flex-grow o card mais perto do centro do scroll vira o "principal"
+  // via transform:scale + opacity, recalculado a cada scroll.
+  const [activeCardIndex, setActiveCardIndex] = useState(0)
+  const listRef = useRef<HTMLUListElement>(null)
+  const cardRefs = useRef<(HTMLLIElement | null)[]>([])
+  const scrollRaf = useRef<number | null>(null)
+
+  const updateActiveCard = () => {
+    const list = listRef.current
+    if (!list) return
+    const center = list.scrollLeft + list.clientWidth / 2
+    let closest = 0
+    let closestDist = Infinity
+    cardRefs.current.forEach((el, i) => {
+      if (!el) return
+      const itemCenter = el.offsetLeft + el.offsetWidth / 2
+      const dist = Math.abs(itemCenter - center)
+      if (dist < closestDist) {
+        closestDist = dist
+        closest = i
+      }
+    })
+    setActiveCardIndex(closest)
+  }
+
+  const handleCarouselScroll = () => {
+    if (scrollRaf.current != null) return
+    scrollRaf.current = requestAnimationFrame(() => {
+      scrollRaf.current = null
+      updateActiveCard()
+    })
+  }
+
+  useEffect(() => {
+    updateActiveCard()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, data])
 
   const handleResgatarCupom = () => {
     if (!token || checkingClaim) return
@@ -125,9 +166,19 @@ export default function CuponsCliente() {
                 <p>{tab === 'ativos' ? 'Nenhum cupom ativo no momento.' : 'Nenhum cupom inativo.'}</p>
               </div>
             ) : (
-              <ul className="flex gap-4 overflow-x-auto scrollbar-hide snap-x snap-mandatory -mx-4 sm:-mx-6 px-4 sm:px-6 py-1">
-                {(tab === 'ativos' ? data.active : data.inactive).map((c) => (
-                  <li key={c.grant_id} className={`flex-shrink-0 snap-center ${tab === 'inativos' ? 'opacity-50 grayscale' : ''}`}>
+              <ul
+                ref={listRef}
+                onScroll={handleCarouselScroll}
+                className="flex gap-10 overflow-x-auto scrollbar-hide snap-x snap-mandatory -mx-4 sm:-mx-6 px-12 sm:px-16 py-1"
+              >
+                {(tab === 'ativos' ? data.active : data.inactive).map((c, i) => (
+                  <li
+                    key={c.grant_id}
+                    ref={(el) => {
+                      cardRefs.current[i] = el
+                    }}
+                    className={`flex-shrink-0 snap-center sunset-coupon-card ${i === activeCardIndex ? 'sunset-coupon-card-active' : ''} ${tab === 'inativos' ? 'grayscale' : ''}`}
+                  >
                     <CouponTicket coupon={c} />
                   </li>
                 ))}
