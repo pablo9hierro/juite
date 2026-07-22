@@ -81,7 +81,7 @@ export default function CuponsCliente() {
               type="button"
               onClick={handleResgatarCupom}
               disabled={checkingClaim}
-              className="btn-primary sunset-gold-pulse w-full flex items-center justify-center gap-2 mb-4 disabled:opacity-60"
+              className="sunset-cta-btn w-full flex items-center justify-center gap-2 mb-4 disabled:opacity-60"
             >
               {checkingClaim ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gift className="w-4 h-4" />}
               Resgatar cupom
