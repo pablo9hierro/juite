@@ -511,6 +511,31 @@ export interface BadgesSettings {
 // pro próximo. Os dois aceitam arrastar manualmente (loop).
 export type CarouselStyle = 'atual' | 'cards'
 
+// Layout por página de cliente (imagem de fundo + elementos decorativos
+// de fumaça/fogo), editável em /admin/layout-cliente. x/y são % da tela
+// (viewport), 0-100, com o elemento centralizado nesse ponto — o mesmo
+// sistema de coordenadas usado no preview do admin, pra posicionar lá
+// renderizar EXATAMENTE no mesmo lugar proporcional na página real.
+export type PageKey = 'catalogo' | 'landing' | 'favoritos' | 'cupons' | 'historico'
+export type DecorElementType = 'smoke' | 'fire'
+export interface PageDecorationElement {
+  id: string
+  type: DecorElementType
+  x: number
+  y: number
+  width: number
+  height: number
+  blur: number
+  opacity: number
+  speed: number
+  count: number
+}
+export interface PageDecoration {
+  page_key: PageKey
+  background_image_url: string | null
+  elements: PageDecorationElement[]
+}
+
 export interface StoreHourInterval {
   opens_at: string // 'HH:MM', formato 24h (0-24)
   closes_at: string

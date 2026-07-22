@@ -1,6 +1,6 @@
 import { ApiError } from './apiError'
 import { supabase } from './supabaseClient'
-import type { BadgesLayout, BgFit, BgMode, CarouselStyle, Category, ClaimedCoupon, Coupon, Customer, CustomerAuthResult, CustomerCoupons, DeliveryPosition, LandingBadge, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
+import type { BadgesLayout, BgFit, BgMode, CarouselStyle, Category, ClaimedCoupon, Coupon, Customer, CustomerAuthResult, CustomerCoupons, DeliveryPosition, LandingBadge, Order, PageDecoration, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new ApiError(400, result.error.message)
@@ -76,6 +76,13 @@ export const supabasePublicApi = {
         badges_gap: (data?.badges_gap as number | undefined) ?? 8,
         badges_offset_y: (data?.badges_offset_y as number | undefined) ?? 0,
       }
+    },
+  },
+  pageDecorations: {
+    list: async () => {
+      const { data, error } = await supabase.from('page_decorations').select('page_key, background_image_url, elements')
+      if (error) throw new ApiError(400, error.message)
+      return (data ?? []) as PageDecoration[]
     },
   },
   storeStatus: {

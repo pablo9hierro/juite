@@ -35,6 +35,9 @@ import type {
   BgSettings,
   CarouselStyle,
   LandingBadge,
+  PageDecoration,
+  PageDecorationElement,
+  PageKey,
   Promotion,
   Category,
   Coupon,
@@ -2239,6 +2242,27 @@ async function updateCarouselStyle(style: CarouselStyle): Promise<{ carousel_sty
   return { carousel_style: style }
 }
 
+async function listPageDecorations(): Promise<PageDecoration[]> {
+  const db = loadDb()
+  return db.pageDecorations ?? []
+}
+
+async function savePageDecoration(
+  pageKey: PageKey,
+  backgroundImageUrl: string | null,
+  elements: PageDecorationElement[]
+): Promise<PageDecoration> {
+  const db = loadDb()
+  const list = db.pageDecorations ?? []
+  const updated: PageDecoration = { page_key: pageKey, background_image_url: backgroundImageUrl, elements }
+  const idx = list.findIndex((d) => d.page_key === pageKey)
+  if (idx >= 0) list[idx] = updated
+  else list.push(updated)
+  db.pageDecorations = list
+  saveDb(db)
+  return updated
+}
+
 const DEFAULT_STORE_HOURS: StoreHourDay[] = Array.from({ length: 7 }, (_, day_of_week) => ({
   day_of_week,
   is_open: true,
@@ -2633,6 +2657,7 @@ export const localApi = {
   estimateShipping,
   trackDeliveryPosition: trackDeliveryPositionLocal,
   promotions: { listActive: listActivePromotions, get: getPromotionPublic },
+  pageDecorations: { list: listPageDecorations },
   coupons: { validate: validateCouponPublic, listForCustomer: listCustomerCouponsPublic, listPromotionalProducts },
   orders: {
     create: createOrder,
@@ -2705,6 +2730,7 @@ export const localApi = {
       update: updatePromotion,
       delete: deletePromotion,
     },
+    pageDecorations: { save: savePageDecoration },
     orders: { list: adminListOrders, updateStatus: adminUpdateStatus, notifyReady: async () => {} },
     shippingSettings: { get: getShippingSettings, update: updateShippingSettings },
     siteSettings: { updateHeroImage, updateBackground, updateSmoke: updateSmokeSettings, updateBadges, updateCarouselStyle },

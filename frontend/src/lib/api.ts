@@ -27,6 +27,9 @@ import type {
   MotoboyRun,
   MotoboySettlement,
   Order,
+  PageDecoration,
+  PageDecorationElement,
+  PageKey,
   PaymentMethod,
   PdvSaleItemInput,
   Product,
@@ -145,6 +148,8 @@ const remoteApi = {
   // Carrossel da landing (promoções ativas) + cupom digitado no checkout.
   promotions: supabasePublicApi.promotions,
   coupons: supabasePublicApi.coupons,
+  // Layout por página (fundo + fumaça/fogo), editado em /admin/layout-cliente.
+  pageDecorations: supabasePublicApi.pageDecorations,
   orders: {
     create: supabasePublicApi.orders.create,
     get: supabasePublicApi.orders.get,
@@ -595,6 +600,15 @@ const remoteApi = {
           p_subtitle: payload.subtitle || null,
         }),
       delete: (id: string) => rpc<void>('admin_delete_promotion', { p_token: adminToken(), p_id: id }),
+    },
+    pageDecorations: {
+      save: (pageKey: PageKey, backgroundImageUrl: string | null, elements: PageDecorationElement[]) =>
+        rpc<PageDecoration>('admin_save_page_decoration', {
+          p_token: adminToken(),
+          p_page_key: pageKey,
+          p_background_image_url: backgroundImageUrl,
+          p_elements: elements,
+        }),
     },
     orders: {
       list: (status?: string) => rpc<Order[]>('admin_list_orders', { p_token: adminToken(), p_status: status ?? null }),

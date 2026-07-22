@@ -654,6 +654,136 @@ a {
   background: var(--color-son-gold);
 }
 
+/* Layout por página de cliente (/admin/layout-cliente): imagem de fundo +
+   elementos decorativos de fumaça/fogo posicionados em % da tela
+   (viewport), fixos atrás do conteúdo mas na frente do fundo global do
+   site (SunsetBackdrop, -z-10). */
+.sunset-page-decor-bg-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: -5;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sunset-page-decor-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+.sunset-decor-anchor {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Fumaça — Uiverse.io by esraaabdel-kareem (ver smoke-element.html), sem
+   o copo, só as baforadas. A referência tinha 3 fixas; aqui o admin
+   controla a quantidade (até 15, um <span> por baforada em
+   SmokeDecor.tsx) e width/height/blur/velocidade via --smoke-*. */
+.sunset-decor-smoke-loader {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  animation: sunset-decor-smoke-shake calc(3s / var(--smoke-speed, 1)) infinite ease-in-out;
+}
+.sunset-decor-smoke {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: var(--smoke-puff-w, 10px);
+  height: var(--smoke-puff-h, 25px);
+  background: rgba(72, 67, 67, 0.5);
+  border-radius: 50%;
+  transform: translateX(-50%);
+  animation: sunset-decor-smoke-rise calc(3s / var(--smoke-speed, 1)) infinite ease-in-out;
+  filter: blur(var(--smoke-blur, 8px));
+}
+@keyframes sunset-decor-smoke-rise {
+  0% {
+    transform: translate(-50%, 0) scale(0.4);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.7;
+  }
+  60% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate(-50%, -120px) scale(1);
+    opacity: 0;
+  }
+}
+@keyframes sunset-decor-smoke-shake {
+  0% {
+    transform: translateX(0) translateY(0) rotate(0);
+  }
+  25% {
+    transform: translateX(-4px) translateY(-2px) rotate(-2deg);
+  }
+  50% {
+    transform: translateX(0) translateY(0) rotate(0);
+  }
+  75% {
+    transform: translateX(4px) translateY(-2px) rotate(2deg);
+  }
+  100% {
+    transform: translateX(0) translateY(0) rotate(0);
+  }
+}
+
+/* Fogo — Uiverse.io by SelfMadeSystem (ver fire-element.html). --b e
+   --bmod6 (posição/atraso de cada bolinha, derivados de --n) vêm
+   pré-calculados do FireDecor.tsx em vez de usar a função CSS mod() —
+   mesmo resultado visual, sem depender de suporte recente de navegador. */
+.sunset-decor-fire {
+  position: relative;
+  width: var(--fire-w, 133px);
+  height: var(--fire-h, 200px);
+}
+.sunset-decor-fire-ball {
+  position: absolute;
+  bottom: 0;
+  --w: 24px;
+  --m: 10px;
+  left: calc((100% - var(--w)) * var(--b));
+  width: var(--w);
+  height: var(--w);
+  background: radial-gradient(closest-side, #fff, #f50, #f00, #f300);
+  border-radius: 0% 100%;
+  filter: blur(var(--fire-ball-blur, 2px));
+  translate: calc(-1 * var(--m)) 0;
+  animation-name: sunset-decor-fire-wee, sunset-decor-fire-bf;
+  animation-duration: calc(2s / var(--fire-speed, 1)), calc(1.756s / var(--fire-speed, 1));
+  animation-delay: calc(var(--n) * -2s / var(--fire-speed, 1)), calc(var(--bmod6) * -1.232s / var(--fire-speed, 1));
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+}
+@keyframes sunset-decor-fire-wee {
+  from {
+    scale: 0;
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  15% {
+    scale: 1;
+  }
+  to {
+    left: calc(50% - var(--w) * 0.5 + (25%) * (var(--b) * 2 - 1));
+    bottom: calc(100% - 24px);
+    scale: 0;
+    rotate: 180deg;
+  }
+}
+@keyframes sunset-decor-fire-bf {
+  50% {
+    translate: var(--m) 0;
+  }
+}
+
 /* From Uiverse.io by devkatyall — cores trocadas pra paleta sunset (era
    verde/ciano). Feixe preto na diagonal que "varre" revelando o
    gradiente por baixo. */

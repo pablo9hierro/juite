@@ -1,6 +1,7 @@
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   ClipboardList,
+  Layers,
   LogOut,
   Megaphone,
   Package,
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { href: '/admin/motoboys', label: 'Funcionários', icon: Truck },
   { href: '/admin/crm', label: 'CRM', icon: Users },
   { href: '/admin/promocoes', label: 'Promoções', icon: Megaphone },
+  { href: '/admin/layout-cliente', label: 'Layout', icon: Layers },
   { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet },
   { href: '/admin/conta', label: 'Configurações', icon: Settings },
 ] as const

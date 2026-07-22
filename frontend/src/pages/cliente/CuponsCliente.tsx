@@ -4,6 +4,7 @@ import { AnimatePresence } from 'framer-motion'
 import { Gift, Loader2, Tag } from 'lucide-react'
 import SiteHeader from '../../components/layout/SiteHeader'
 import PageTransition from '../../components/layout/PageTransition'
+import CartFab from '../../components/CartFab'
 import NoCouponToggle from '../../components/NoCouponToggle'
 import CouponTicket from '../../components/CouponTicket'
 import { api } from '../../lib/api'
@@ -51,6 +52,7 @@ export default function CuponsCliente() {
   return (
     <main className="min-h-screen text-white">
       <SiteHeader showCart={false} title="Meus cupons" />
+      <CartFab />
       <PageTransition className="max-w-2xl mx-auto px-5 sm:px-10 pt-6 pb-16">
         <div className="sunset-tabs overflow-x-auto scrollbar-hide">
           <button

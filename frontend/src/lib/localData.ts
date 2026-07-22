@@ -15,6 +15,7 @@ import type {
   MotoboyRun,
   MotoboySettlement,
   Order,
+  PageDecoration,
   Product,
   Promotion,
   StoreHourDay,
@@ -143,6 +144,7 @@ export interface LocalDb {
   badgesGap: number
   badgesOffsetY: number
   carouselStyle: CarouselStyle
+  pageDecorations: PageDecoration[]
   storeHours: StoreHourDay[]
   storeManuallyClosed: boolean
   storeManualClosedReason: string | null
@@ -245,6 +247,7 @@ function seedDb(): LocalDb {
     badgesGap: 8,
     badgesOffsetY: 0,
     carouselStyle: 'atual',
+    pageDecorations: [],
     storeHours: Array.from({ length: 7 }, (_, day_of_week) => ({
       day_of_week,
       is_open: true,

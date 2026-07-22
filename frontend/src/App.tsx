@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import SunsetBackdrop from './components/SunsetBackdrop'
+import CustomerPageDecorations from './components/CustomerPageDecorations'
 import Landing from './pages/Landing'
 import Catalogo from './pages/Catalogo'
 import ProdutoDetalhe from './pages/ProdutoDetalhe'
@@ -24,6 +25,7 @@ import AdminMotoboys from './pages/admin/AdminMotoboys'
 import AdminFinanceiro from './pages/admin/AdminFinanceiro'
 import AdminSenha from './pages/admin/AdminSenha'
 import AdminPromocoes from './pages/admin/AdminPromocoes'
+import AdminLayoutCliente from './pages/admin/AdminLayoutCliente'
 import AdminCrm from './pages/admin/AdminCrm'
 import MotoboyFila from './pages/motoboy/MotoboyFila'
 import MotoboyCorrida from './pages/motoboy/MotoboyCorrida'
@@ -58,6 +60,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <CustomerBackdrop />
+      <CustomerPageDecorations />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/catalogo" element={<Catalogo />} />
@@ -92,6 +95,7 @@ export default function App() {
           <Route path="crm" element={<AdminCrm />} />
           <Route path="promocoes" element={<AdminPromocoes />} />
           <Route path="campanhas" element={<Navigate to="/admin/promocoes" replace />} />
+          <Route path="layout-cliente" element={<AdminLayoutCliente />} />
           <Route path="financeiro" element={<AdminFinanceiro />} />
           <Route path="conta" element={<AdminSenha />} />
         </Route>
