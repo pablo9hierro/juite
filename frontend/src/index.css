@@ -789,9 +789,8 @@ a {
 }
 
 /* From Uiverse.io by abhinav_7137 — só o carrinho SVG ficou (os 5 itens
-   caindo foram removidos e substituídos pela fumaça que subia em cima
-   do botão de WhatsApp — ver .sunset-smoke abaixo). Traço do carrinho
-   recolorido de #334155 pra ficar visível no fundo escuro do site. */
+   caindo foram removidos). Traço do carrinho recolorido de #334155 pra
+   ficar visível no fundo escuro do site. */
 #cart-icon {
   position: relative;
   z-index: 2;
@@ -891,64 +890,6 @@ a {
     background-size: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%;
   }
 }
-/* --drift (setado por baforada no CartFab) faz cada foco de fumaça
-   desviar pro lado de um jeito diferente enquanto sobe, com uma curva
-   no meio do caminho (55%) em vez de uma reta — fica com trajetórias
-   diagonais/inclinadas variadas, tipo fumaça de verdade, em vez de
-   todas subindo empilhadas retas (que com várias baforadas juntas lia
-   como um espiral). */
-/* --rise (px negativo, setado por CartFab a partir de smoke_height do
-   admin) controla a distância que cada baforada sobe; --drift o quanto
-   desvia pro lado, com uma curva no meio do caminho (55%) em vez de uma
-   reta — fica com trajetórias diagonais/inclinadas variadas, tipo
-   fumaça de verdade, em vez de todas subindo empilhadas retas (que com
-   várias baforadas juntas lia como um espiral). */
-@keyframes sunset-smoke-rise {
-  0% {
-    transform: translate(-50%, 0) scale(0.4);
-    opacity: 0;
-  }
-  25% {
-    opacity: 0.85;
-  }
-  55% {
-    opacity: 0.6;
-    transform: translate(calc(-50% + var(--drift, 0px) * 0.45), calc(var(--rise, -70px) * 0.57)) scale(0.8);
-  }
-  100% {
-    transform: translate(calc(-50% + var(--drift, 0px)), var(--rise, -70px)) scale(1);
-    opacity: 0;
-  }
-}
-/* Container que agrupa as baforadas — largura ajustável pelo admin
-   (smoke_width), altura 0 (só serve de âncora no topo do botão). Fica
-   ATRÁS do #cart-icon (z-index:2) de propósito — a fumaça nunca deve
-   tampar o ícone/contador, só decorar em volta dele. */
-.sunset-smoke-wrap {
-  position: absolute;
-  left: 50%;
-  bottom: 100%;
-  height: 0;
-  z-index: 0;
-  pointer-events: none;
-  transform: translateX(-50%);
-}
-.sunset-smoke {
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  width: 8px;
-  height: 20px;
-  background: rgba(236, 228, 207, 0.7);
-  border-radius: 50%;
-  transform: translateX(-50%);
-  filter: blur(5px);
-  animation: sunset-smoke-rise 3s infinite ease-in-out;
-  /* Decorativo — clicar nela nunca deve acionar o link/botão por baixo,
-     só clicar em cima do ícone de verdade conta. */
-  pointer-events: none;
-}
-
 /* Uiverse.io by Mohammad-Rahme-576 — "tooltip-container" (share button
    que revela ícones de rede social). Na referência abria no :hover; aqui
    abre AO CLICAR no botão de WhatsApp (celular não tem hover) e mostra
