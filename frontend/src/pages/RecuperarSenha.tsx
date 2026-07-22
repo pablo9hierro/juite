@@ -90,7 +90,7 @@ export default function RecuperarSenha() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader showCart={false} title="Recuperar senha" />
+      <SiteHeader showCart={false} />
       <PageTransition className="max-w-sm mx-auto px-5 sm:px-10 pt-10 pb-20">
         {/* Mesmo cartão do login do admin/cliente (Uiverse.io by KhelVers). */}
         <div className="sunset-login-card rounded-2xl p-8">

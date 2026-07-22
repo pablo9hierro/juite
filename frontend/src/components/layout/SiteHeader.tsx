@@ -14,13 +14,11 @@ export default function SiteHeader({
   showCart = true,
   showProfile = true,
   showWhatsApp = false,
-  title,
 }: {
   showBack?: boolean
   showCart?: boolean
   showProfile?: boolean
   showWhatsApp?: boolean
-  title?: string
 }) {
   const navigate = useNavigate()
   const count = useCart((s) => s.items.reduce((sum, i) => sum + i.quantity, 0))
@@ -61,11 +59,9 @@ export default function SiteHeader({
           )}
         </div>
         <div className="sunset-nav-slot sunset-nav-slot-center">
-          {title && (
-            <div className="sunset-brand-btn">
-              <span>{title}</span>
-            </div>
-          )}
+          <Link to="/" className="sunset-brand-btn" aria-label="Página inicial">
+            <span>Sunset Tabas</span>
+          </Link>
         </div>
         <div className="sunset-nav-slot sunset-nav-slot-end">
           {/* Logado: vai direto pros favoritos. Deslogado: abre o mesmo

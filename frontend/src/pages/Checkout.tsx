@@ -342,7 +342,7 @@ export default function Checkout() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader showCart={false} title={'Finalizar\nPedido'} />
+      <SiteHeader showCart={false} />
       <PageTransition className="max-w-xl mx-auto px-5 sm:px-10 pt-6 pb-24">
         {promotionError && <p className="error-msg mb-4">{promotionError}</p>}
 

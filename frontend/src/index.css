@@ -188,6 +188,22 @@ a {
   box-shadow: 0 0 16px 2px rgba(242, 193, 78, 0.16), 0 0 40px 8px rgba(201, 138, 44, 0.1);
 }
 
+/* Halo dourado pulsante — era estático (.glow) no ícone de WhatsApp do
+   navbar (/consultar); movido pro botão "Resgatar cupom" em /cliente/
+   cupons, agora de fato pulsando (mesmos tons de ouro) pra chamar mais
+   atenção pro call-to-action. */
+.sunset-gold-pulse {
+  animation: sunset-gold-pulse 2s ease-in-out infinite;
+}
+@keyframes sunset-gold-pulse {
+  0%, 100% {
+    box-shadow: 0 0 16px 2px rgba(242, 193, 78, 0.16), 0 0 40px 8px rgba(201, 138, 44, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 24px 6px rgba(242, 193, 78, 0.45), 0 0 55px 14px rgba(201, 138, 44, 0.28);
+  }
+}
+
 .glass {
   background: rgba(15, 43, 29, 0.65);
   backdrop-filter: blur(14px);
@@ -663,6 +679,19 @@ a {
   inset: 0;
   z-index: -5;
   overflow: hidden;
+  pointer-events: none;
+}
+
+/* Fumaça/fogo compostos ao redor do botão de carrinho (CartFab),
+   editados em /admin/layout-cliente aba "Ícone do carrinho" — x/y aqui
+   são % da própria caixinha 64x64 do botão (não da tela), atrás do
+   ícone (z-index:0, o #cart-icon real fica em z-index:2) e sem
+   pointer-events, então nunca competem com o clique do botão de verdade. */
+.sunset-carticon-decor-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: visible;
   pointer-events: none;
 }
 .sunset-page-decor-bg {
@@ -1482,7 +1511,7 @@ a {
    entrar/recarregar a página) e congela no estado final (forwards) —
    pedido explícito pra parar de ficar em loop reiterado. */
 .sunset-brand-btn {
-  cursor: default;
+  cursor: pointer;
   background: transparent;
   position: relative;
   display: inline-flex;

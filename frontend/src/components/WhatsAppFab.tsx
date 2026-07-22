@@ -75,7 +75,7 @@ export default function WhatsAppFab({ inline = false }: { inline?: boolean }) {
         aria-label="Falar no WhatsApp ou ver redes sociais"
         aria-expanded={open}
       >
-        <div className={`relative z-10 ${sizeClass} rounded-full overflow-hidden bg-son-black glow group-hover:scale-105 transition-transform`}>
+        <div className={`relative z-10 ${sizeClass} rounded-full overflow-hidden bg-son-black group-hover:scale-105 transition-transform`}>
           <img src={logoSrc} alt="" className="w-full h-full object-cover" />
         </div>
       </button>

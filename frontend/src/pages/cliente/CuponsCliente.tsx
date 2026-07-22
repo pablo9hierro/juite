@@ -51,7 +51,7 @@ export default function CuponsCliente() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader showCart={false} title="Meus cupons" />
+      <SiteHeader showCart={false} />
       <CartFab />
       <PageTransition className="max-w-2xl mx-auto px-5 sm:px-10 pt-6 pb-16">
         <div className="sunset-tabs overflow-x-auto scrollbar-hide">
@@ -81,7 +81,7 @@ export default function CuponsCliente() {
               type="button"
               onClick={handleResgatarCupom}
               disabled={checkingClaim}
-              className="btn-primary w-full flex items-center justify-center gap-2 mb-4 disabled:opacity-60"
+              className="btn-primary sunset-gold-pulse w-full flex items-center justify-center gap-2 mb-4 disabled:opacity-60"
             >
               {checkingClaim ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gift className="w-4 h-4" />}
               Resgatar cupom
@@ -120,9 +120,9 @@ export default function CuponsCliente() {
                 <p>{tab === 'ativos' ? 'Nenhum cupom ativo no momento.' : 'Nenhum cupom inativo.'}</p>
               </div>
             ) : (
-              <ul className="space-y-5">
+              <ul className="flex gap-4 overflow-x-auto scrollbar-hide snap-x snap-mandatory -mx-4 sm:-mx-6 px-4 sm:px-6 py-1">
                 {(tab === 'ativos' ? data.active : data.inactive).map((c) => (
-                  <li key={c.grant_id} className={tab === 'inativos' ? 'opacity-50 grayscale' : ''}>
+                  <li key={c.grant_id} className={`flex-shrink-0 snap-center ${tab === 'inativos' ? 'opacity-50 grayscale' : ''}`}>
                     <CouponTicket coupon={c} />
                   </li>
                 ))}

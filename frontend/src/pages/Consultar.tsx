@@ -290,7 +290,7 @@ export default function Consultar() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader showCart={false} showProfile={false} showWhatsApp title="Acompanhar" />
+      <SiteHeader showCart={false} showProfile={false} showWhatsApp />
       <CartFab />
       <PageTransition className="max-w-xl mx-auto px-5 sm:px-10 pt-6 pb-20">
         <div className="flex gap-2 mb-8">

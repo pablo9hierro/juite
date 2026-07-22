@@ -83,7 +83,7 @@ export default function HistoricoCliente() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader showCart={false} title="Histórico" />
+      <SiteHeader showCart={false} />
       <CartFab />
       <PageTransition className="max-w-2xl mx-auto px-5 sm:px-10 pt-6 pb-16">
         <div className="glass rounded-3xl p-4 sm:p-6">

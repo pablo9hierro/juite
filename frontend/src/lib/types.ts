@@ -512,11 +512,16 @@ export interface BadgesSettings {
 export type CarouselStyle = 'atual' | 'cards'
 
 // Layout por página de cliente (imagem de fundo + elementos decorativos
-// de fumaça/fogo), editável em /admin/layout-cliente. x/y são % da tela
-// (viewport), 0-100, com o elemento centralizado nesse ponto — o mesmo
-// sistema de coordenadas usado no preview do admin, pra posicionar lá
-// renderizar EXATAMENTE no mesmo lugar proporcional na página real.
-export type PageKey = 'catalogo' | 'landing' | 'favoritos' | 'cupons' | 'historico'
+// de fumaça/fogo), editável em /admin/layout-cliente. x/y são % da área
+// de referência (0-100) — a tela toda pras 5 páginas, ou a própria
+// caixinha do botão de carrinho pro alvo especial 'cart_icon' — com a
+// BASE do elemento ancorada nesse ponto (fumaça/fogo sobem a partir
+// dele). Mesmo sistema de coordenadas usado no preview do admin, pra
+// posicionar lá renderizar EXATAMENTE no mesmo lugar proporcional na
+// página/botão real. 'cart_icon' não tem imagem de fundo (não faz
+// sentido pra um botão pequeno) e é global — aplica em toda tela que
+// renderiza o CartFab, não numa rota específica.
+export type PageKey = 'catalogo' | 'landing' | 'favoritos' | 'cupons' | 'historico' | 'cart_icon'
 export type DecorElementType = 'smoke' | 'fire'
 export interface PageDecorationElement {
   id: string

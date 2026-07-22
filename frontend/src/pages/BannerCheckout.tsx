@@ -174,7 +174,7 @@ export default function BannerCheckout() {
   if (loadError || !promotion) {
     return (
       <main className="min-h-screen text-white">
-        <SiteHeader title="Checkout da promoção" showCart={false} />
+        <SiteHeader showCart={false} />
         <div className="max-w-xl mx-auto px-5 sm:px-10 py-16 text-center">
           <p className="error-msg inline-block">{loadError}</p>
         </div>
@@ -188,7 +188,7 @@ export default function BannerCheckout() {
           fixo no topo, cartão de promoção destacado — visualmente diferente
           do checkout comum, pra nunca confundir os dois fluxos. */}
       <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[36rem] h-[36rem] rounded-full bg-son-orange/20 blur-[140px] pointer-events-none" />
-      <SiteHeader title="Checkout da promoção" />
+      <SiteHeader />
       <PageTransition className="max-w-xl mx-auto px-5 sm:px-10 pb-24 relative">
         <div className="flex items-center gap-2 mb-1">
           <Sparkles className="w-5 h-5 text-orange-400" />

@@ -341,7 +341,7 @@ export default function Catalogo() {
 
   return (
     <main className="min-h-screen text-white">
-      <SiteHeader title="Catálogo" showCart={false} />
+      <SiteHeader showCart={false} />
       <CartFab />
       <PageTransition className="max-w-6xl mx-auto px-5 sm:px-10 pt-6 pb-16">
         {/* From Uiverse.io by devkatyall — cores trocadas pra paleta sunset.
