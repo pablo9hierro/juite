@@ -252,7 +252,7 @@ export const supabasePublicApi = {
       if (error) throw new ApiError(400, error.message)
       return (data ?? []) as Order[]
     },
-    // /cliente/cupons "Resgatar cupom" + /cliente/resgatarcupom.
+    // Botão "Resgatar cupom" em /cliente/cupons.
     hasClaimableCoupon: async (token: string) => {
       const { data, error } = await supabase.rpc('customer_has_claimable_coupon', { p_token: token })
       if (error) throw new ApiError(400, error.message)

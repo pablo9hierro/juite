@@ -1967,85 +1967,6 @@ a {
   line-height: 1.5;
 }
 
-/* O CouponTicket revelado por baixo da raspadinha fica em fluxo normal
-   (define a altura natural do wrap); o canvas do papel dourado fica
-   absoluto por cima, cobrindo esse mesmo espaço via inset:0. O papel é
-   desenhado DIRETO no canvas (ver drawGoldFoil em ResgatarCupom.tsx) — sem
-   mask-image/toDataURL por frame, raspar é uma operação de canvas nativa
-   (destination-out) e some exatamente onde o dedo passa, em tempo real. */
-.sunset-scratch-wrap {
-  /* Largura/altura FIXAS de propósito (não "auto" a partir do conteúdo) --
-     o <canvas> por cima usa dimensões fixas iguais a essas (ver
-     SCRATCH_WIDTH/SCRATCH_HEIGHT em ResgatarCupom.tsx), então nenhuma
-     medição em tempo real jamais dá errado. overflow:hidden garante que
-     o ticket por baixo nunca "vaza" pra fora dessa caixa, mesmo se o
-     conteúdo dele for um pouco mais alto (a página é pra caber inteira
-     numa tela de celular, sem rolagem nenhuma). */
-  position: relative;
-  width: 300px;
-  height: 380px;
-  max-width: 100%;
-  margin: 0 auto;
-  overflow: hidden;
-  border-radius: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.sunset-scratch-canvas {
-  /* <canvas> é elemento substituído (replaced element) -- os atributos
-     width/height (usados em JS pra resolução do buffer de desenho, em
-     pixels REAIS multiplicados pelo devicePixelRatio) também viram o
-     tamanho INTRÍNSECO dele. position:absolute + inset:0 sozinho NÃO
-     sobrescreve isso com confiabilidade num replaced element -- sem
-     width/height explícitos aqui, o navegador despreza o inset e
-     renderiza o canvas do tamanho do atributo (300*dpr, ex.: 600px num
-     aparelho com dpr 2), cortado só na parte que "cabe" no container por
-     causa do overflow:hidden do pai (era EXATAMENTE o bug relatado: só o
-     canto superior esquerdo do card aparecia, e o toque era medido contra
-     essa caixa gigante errada, raspando num lugar totalmente diferente
-     de onde o dedo realmente passava). width/height:100% aqui forçam o
-     tamanho CSS de exibição a bater com o container sempre, não importa
-     o valor dos atributos. */
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 10;
-  border-radius: 18px;
-  cursor: pointer;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.sunset-scratch-canvas-fade {
-  transition:
-    opacity 0.5s ease,
-    transform 0.5s ease;
-  opacity: 0;
-  transform: scale(1.04);
-  pointer-events: none;
-}
-.sunset-scratch-hint {
-  margin-top: 0.9rem;
-  font-size: 0.75rem;
-  color: var(--color-son-silver-dim);
-  text-align: center;
-}
-.sunset-scratch-progress-track {
-  margin-top: 0.6rem;
-  width: 320px;
-  max-width: 100%;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-}
-.sunset-scratch-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--color-son-orange), var(--color-son-gold));
-  transition: width 0.15s ease-out;
-}
 .sunset-pd-image {
   width: 100%;
   height: 160px;
@@ -2448,6 +2369,14 @@ a {
     transform: translateY(-7px) scale(1.02);
   }
 }
+/* Card fora de foco no carrossel — mesma aparência holográfica, zero
+   animação (nem a flutuação do card, nem o brilho deslizando por cima). */
+.sunset-t2-card-static {
+  animation: none;
+}
+.sunset-t2-card-static .sunset-t2-holographic::after {
+  animation: none;
+}
 .sunset-t2-filter {
   position: absolute;
   width: 0;
@@ -2707,20 +2636,19 @@ a {
      de reveal parcial, clique de saída total) */
   animation: sunset-cs-cycle 7s ease-in-out infinite;
 }
+/* Loop parado no toque de "espiando"/reveal parcial só -- a saída
+   completa (translateY(0)) não é mais um loop, é a animação de tela
+   cheia que dispara no clique (ver CuponsCliente.tsx). */
 @keyframes sunset-cs-cycle {
   0%,
-  12% {
+  20% {
     transform: translateY(calc(-1 * var(--cs-paper-height) + 100px));
   }
-  30%,
-  40% {
+  45%,
+  60% {
     transform: translateY(calc(-1 * var(--cs-paper-height) + 192px));
   }
-  58%,
-  78% {
-    transform: translateY(0);
-  }
-  96%,
+  85%,
   100% {
     transform: translateY(calc(-1 * var(--cs-paper-height) + 100px));
   }

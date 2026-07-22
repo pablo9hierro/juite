@@ -216,8 +216,8 @@ export interface CustomerCoupons {
   inactive: CustomerCouponEntry[]
   history: CustomerCouponHistoryEntry[]
 }
-// Retorno de customer_claim_coupon — só existe DEPOIS de raspar a
-// raspadinha em /cliente/resgatarcupom, nada disso é visível antes.
+// Retorno de customer_claim_coupon — só existe DEPOIS de confirmar o
+// resgate em /cliente/cupons, nada disso é visível antes.
 // (description NÃO entra aqui: é nota interna do admin, nunca vai pro cliente.)
 export interface ClaimedCoupon {
   grant_id: string

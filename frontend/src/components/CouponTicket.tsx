@@ -43,7 +43,7 @@ function discountHeadline(c: CouponTicketData) {
 // visual/holográfica) — campos do ticket viraram campos do cupom:
 // header = valor do desconto, corpo = "Cupom Exclusivo" / validade /
 // uso+usos, rodapé = código + código de barras decorativo.
-export default function CouponTicket({ coupon }: { coupon: CouponTicketData }) {
+export default function CouponTicket({ coupon, animated = true }: { coupon: CouponTicketData; animated?: boolean }) {
   return (
     <TicketCardVisual
       header={discountHeadline(coupon)}
@@ -54,6 +54,7 @@ export default function CouponTicket({ coupon }: { coupon: CouponTicketData }) {
       ]}
       footerLabel="Código"
       footerValue={coupon.code}
+      animated={animated}
     />
   )
 }
