@@ -71,7 +71,7 @@ export default function WhatsAppFab({ inline = false }: { inline?: boolean }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`sunset-bubbles group relative z-20 ${sizeClass}`}
+        className={`group relative z-20 ${sizeClass}`}
         aria-label="Falar no WhatsApp ou ver redes sociais"
         aria-expanded={open}
       >

@@ -208,7 +208,7 @@ a {
   padding: 0.95rem 1.75rem;
   font-weight: 800;
   background-color: var(--color-son-black);
-  animation: sunset-cta-pulse 3.2s ease-in-out infinite;
+  animation: sunset-cta-pulse 3.2s ease-in-out infinite, sunset-cta-float 5s ease-in-out infinite;
 }
 .sunset-cta-btn::before {
   content: '';
@@ -238,17 +238,28 @@ a {
   0%, 40% {
     color: var(--color-son-gold);
     box-shadow: 0 8px 15px rgba(0, 0, 0, 0.35);
-    transform: translateY(0);
   }
   60%, 85% {
     color: var(--color-son-black);
     box-shadow: 0 15px 24px rgba(0, 0, 0, 0.5);
-    transform: translateY(-4px);
   }
   100% {
     color: var(--color-son-gold);
     box-shadow: 0 8px 15px rgba(0, 0, 0, 0.35);
-    transform: translateY(0);
+  }
+}
+/* Uiverse.io by KhaledMatalkah — "floating" (translateY -5px) + o
+   scale(1.05) que só disparava no :hover, combinados numa respiração só
+   (sobe e cresce um pouco juntos), devagar ("loop lento" pedido) — o
+   translateY do mawi-man acima foi retirado de sunset-cta-pulse pra não
+   competir com esta (duas animações não podem controlar a mesma
+   propriedade `transform` ao mesmo tempo sem uma pisar na outra). */
+@keyframes sunset-cta-float {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-5px) scale(1.05);
   }
 }
 @keyframes sunset-cta-fill {
@@ -271,6 +282,52 @@ a {
   }
   85%, 100% {
     left: 125%;
+  }
+}
+/* Texto do botão "Resgatar cupom" com gradiente deslizante (era
+   background-clip:text só no :hover, na referência KhaledMatalkah) —
+   independente da cor animada do botão (sunset-cta-pulse), porque
+   background-clip:text com texto transparente ignora `color` por
+   completo pro preenchimento das letras, então os dois nunca competem. */
+.sunset-cta-shine-text {
+  background: linear-gradient(90deg, var(--color-son-gold), var(--color-son-orange), var(--color-son-gold));
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: sunset-cta-shine-text 5s ease-in-out infinite;
+}
+@keyframes sunset-cta-shine-text {
+  0%, 100% {
+    background-position: 0% center;
+  }
+  50% {
+    background-position: 100% center;
+  }
+}
+/* Partícula voando na diagonal (era .button::before, só que aqui é um
+   <span> real por fora do botão — overflow:hidden do botão cortaria os
+   190px de deslocamento). Devagar ("loop lento" pedido, era 2s). */
+.sunset-cta-particle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-son-orange);
+  z-index: -1;
+  pointer-events: none;
+  animation: sunset-cta-particle 4s ease-in-out infinite;
+}
+@keyframes sunset-cta-particle {
+  0% {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(190px, 50px);
+    opacity: 0;
   }
 }
 
@@ -1053,19 +1110,24 @@ a {
   }
 }
 
-/* Bolhas explodindo pra cima/baixo do botão de WhatsApp — reproduzido
-   fiel à referência (mesmos radial-gradient em camadas, mesmos
-   keyframes de posição/tamanho), recolorido pro dourado/laranja do
-   site (era roxo #7d2ae8). Na referência só disparava no :hover; aqui
-   vira loop automático e contínuo (pedido explícito — no celular não
-   tem hover, o botão precisa ficar "vivo" sozinho). */
-.sunset-bubbles {
+/* Bolhas explodindo pra cima/baixo — reproduzido fiel à referência
+   original do botão de WhatsApp (mesmos radial-gradient em camadas,
+   mesmos keyframes de posição/tamanho), recolorido pro dourado/laranja
+   do site (era roxo #7d2ae8). Removido do botão de WhatsApp (reportado)
+   e movido pro botão "Resgatar cupom" em /cliente/cupons — como esse
+   botão já usa ::before/::after pra outro efeito (círculo dourado +
+   brilho), as bolhas viraram dois <span> reais (.sunset-cta-bubble-top/
+   -bottom) num wrapper por fora do botão, em vez de pseudo-elementos —
+   o botão tem overflow:hidden (precisa, pro círculo/brilho ficarem
+   contidos na pílula) e cortaria as bolhas, que propositalmente saem
+   pra fora dos limites do botão (top/bottom: -70%). Loop automático e
+   contínuo (celular não tem hover). */
+.sunset-cta-bubble-wrap {
+  position: relative;
   isolation: isolate;
 }
-.sunset-bubbles::before,
-.sunset-bubbles::after {
+.sunset-cta-bubble {
   position: absolute;
-  content: '';
   width: 150%;
   left: 50%;
   height: 100%;
@@ -1074,7 +1136,7 @@ a {
   background-repeat: no-repeat;
   pointer-events: none;
 }
-.sunset-bubbles::before {
+.sunset-cta-bubble-top {
   top: -70%;
   background-image: radial-gradient(circle, var(--color-son-gold) 20%, transparent 20%),
     radial-gradient(circle, transparent 20%, var(--color-son-orange) 20%, transparent 30%),
@@ -1101,7 +1163,7 @@ a {
     background-size: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%;
   }
 }
-.sunset-bubbles::after {
+.sunset-cta-bubble-bottom {
   bottom: -70%;
   background-image: radial-gradient(circle, var(--color-son-gold) 20%, transparent 20%),
     radial-gradient(circle, var(--color-son-orange) 20%, transparent 20%),

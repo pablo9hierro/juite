@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
-import { Gift, Loader2, Tag } from 'lucide-react'
+import { Loader2, Tag } from 'lucide-react'
 import SiteHeader from '../../components/layout/SiteHeader'
 import PageTransition from '../../components/layout/PageTransition'
 import CartFab from '../../components/CartFab'
@@ -77,15 +77,20 @@ export default function CuponsCliente() {
 
         <div className="glass rounded-b-3xl p-4 sm:p-6">
           {tab === 'ativos' && (
-            <button
-              type="button"
-              onClick={handleResgatarCupom}
-              disabled={checkingClaim}
-              className="sunset-cta-btn w-full flex items-center justify-center gap-2 mb-4 disabled:opacity-60"
-            >
-              {checkingClaim ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gift className="w-4 h-4" />}
-              Resgatar cupom
-            </button>
+            <div className="sunset-cta-bubble-wrap mb-4 w-1/2 mx-auto">
+              <span className="sunset-cta-bubble sunset-cta-bubble-top" aria-hidden="true" />
+              <span className="sunset-cta-bubble sunset-cta-bubble-bottom" aria-hidden="true" />
+              <span className="sunset-cta-particle" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={handleResgatarCupom}
+                disabled={checkingClaim}
+                className="sunset-cta-btn w-full flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {checkingClaim && <Loader2 className="w-4 h-4 animate-spin" />}
+                <span className="sunset-cta-shine-text">Resgatar cupom</span>
+              </button>
+            </div>
           )}
           {loading || !data ? (
             <div className="flex justify-center py-20">
