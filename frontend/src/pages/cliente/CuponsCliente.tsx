@@ -7,13 +7,10 @@ import PageTransition from '../../components/layout/PageTransition'
 import CartFab from '../../components/CartFab'
 import NoCouponToggle from '../../components/NoCouponToggle'
 import CouponTicket from '../../components/CouponTicket'
+import CouponHistoryTicket from '../../components/CouponHistoryTicket'
 import { api } from '../../lib/api'
 import type { CustomerCoupons } from '../../lib/types'
 import { useCustomerAuth } from '../../store/customerAuth'
-
-function currency(v: number) {
-  return `R$ ${v.toFixed(2).replace('.', ',')}`
-}
 
 type Tab = 'ativos' | 'inativos' | 'historico'
 
@@ -90,6 +87,19 @@ export default function CuponsCliente() {
 
   if (!token) return <Navigate to="/" replace />
 
+  // Os 3 tabs (ativos/inativos/histórico) agora compartilham o mesmo
+  // carrossel horizontal com card central em destaque — só troca a
+  // fonte dos dados e o componente de ticket usado por item (histórico
+  // não tem kind/discount_type/validade/usos, só o que o pedido guardou
+  // na hora da compra, ver CouponHistoryTicket.tsx).
+  const items = data
+    ? tab === 'historico'
+      ? data.history.map((h) => ({ key: h.order_id, node: <CouponHistoryTicket entry={h} /> }))
+      : (tab === 'ativos' ? data.active : data.inactive).map((c) => ({ key: c.grant_id, node: <CouponTicket coupon={c} /> }))
+    : []
+  const emptyMessage =
+    tab === 'historico' ? 'Nenhum cupom usado ainda.' : tab === 'ativos' ? 'Nenhum cupom ativo no momento.' : 'Nenhum cupom inativo.'
+
   return (
     <main className="min-h-screen text-white">
       <SiteHeader showCart={false} />
@@ -137,53 +147,29 @@ export default function CuponsCliente() {
             <div className="flex justify-center py-20">
               <Loader2 className="w-6 h-6 animate-spin text-son-pink" />
             </div>
-          ) : tab === 'historico' ? (
-            data.history.length === 0 ? (
-              <div className="text-center py-16 text-son-silver-dim">
-                <Tag className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p>Nenhum cupom usado ainda.</p>
-              </div>
-            ) : (
-              <ul className="space-y-3">
-                {data.history.map((h) => (
-                  <li key={h.order_id} className="bg-son-surface border border-white/5 rounded-2xl p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-mono text-xs font-bold text-white">{h.coupon_code}</span>
-                      <span className="text-xs text-son-silver-dim">{new Date(h.created_at).toLocaleDateString('pt-BR')}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-son-silver-dim">Pedido #{h.order_id.slice(0, 8)}</span>
-                      <span className="sunset-text font-bold">{currency(h.total)}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )
+          ) : items.length === 0 ? (
+            <div className="text-center py-16 text-son-silver-dim">
+              <Tag className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p>{emptyMessage}</p>
+            </div>
           ) : (
-            (tab === 'ativos' ? data.active : data.inactive).length === 0 ? (
-              <div className="text-center py-16 text-son-silver-dim">
-                <Tag className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p>{tab === 'ativos' ? 'Nenhum cupom ativo no momento.' : 'Nenhum cupom inativo.'}</p>
-              </div>
-            ) : (
-              <ul
-                ref={listRef}
-                onScroll={handleCarouselScroll}
-                className="flex gap-10 overflow-x-auto scrollbar-hide snap-x snap-mandatory -mx-4 sm:-mx-6 px-12 sm:px-16 py-1"
-              >
-                {(tab === 'ativos' ? data.active : data.inactive).map((c, i) => (
-                  <li
-                    key={c.grant_id}
-                    ref={(el) => {
-                      cardRefs.current[i] = el
-                    }}
-                    className={`flex-shrink-0 snap-center sunset-coupon-card ${i === activeCardIndex ? 'sunset-coupon-card-active' : ''} ${tab === 'inativos' ? 'grayscale' : ''}`}
-                  >
-                    <CouponTicket coupon={c} />
-                  </li>
-                ))}
-              </ul>
-            )
+            <ul
+              ref={listRef}
+              onScroll={handleCarouselScroll}
+              className="flex gap-10 overflow-x-auto scrollbar-hide snap-x snap-mandatory -mx-4 sm:-mx-6 px-12 sm:px-16 py-1"
+            >
+              {items.map((item, i) => (
+                <li
+                  key={item.key}
+                  ref={(el) => {
+                    cardRefs.current[i] = el
+                  }}
+                  className={`flex-shrink-0 snap-center sunset-coupon-card ${i === activeCardIndex ? 'sunset-coupon-card-active' : ''} ${tab === 'inativos' ? 'grayscale' : ''}`}
+                >
+                  {item.node}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </PageTransition>
