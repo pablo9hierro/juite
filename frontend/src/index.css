@@ -671,9 +671,16 @@ a {
   background-size: cover;
   background-position: center;
 }
+/* transform ancora o CANTO INFERIOR central da caixa no ponto x%/y%, não
+   o centro geométrico — fumaça e fogo sobem a partir de bottom:0 do
+   próprio container (ver .sunset-decor-smoke-loader/.sunset-decor-fire),
+   então "onde arrasta" = onde a base do efeito nasce. Com o centro
+   geométrico como âncora, caixas altas (o fogo chega a 420px) faziam a
+   base visível cair até metade da altura abaixo do ponto arrastado —
+   imperceptível na fumaça (máx 60px), muito visível no fogo. */
 .sunset-decor-anchor {
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -100%);
   pointer-events: none;
 }
 

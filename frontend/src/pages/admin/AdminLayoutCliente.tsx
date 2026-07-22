@@ -63,6 +63,7 @@ export default function AdminLayoutCliente() {
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [selectedElId, setSelectedElId] = useState<string | null>(null)
+  const [previewNonce, setPreviewNonce] = useState(0)
   const bgInputRef = useRef<HTMLInputElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const draggingId = useRef<string | null>(null)
@@ -140,6 +141,9 @@ export default function AdminLayoutCliente() {
       const result = await api.admin.pageDecorations.save(pageKey, current.background_image_url, current.elements)
       setByPage((prev) => ({ ...prev, [pageKey]: result }))
       setSaved(true)
+      // Recarrega o preview pra refletir o que acabou de ser salvo — sem
+      // isso o iframe (mesmo src) continua mostrando o layout antigo.
+      setPreviewNonce((n) => n + 1)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Não foi possível salvar o layout.')
     } finally {
@@ -207,7 +211,8 @@ export default function AdminLayoutCliente() {
                 style={{ width: PREVIEW_W, height: PREVIEW_H, transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top left' }}
               >
                 <iframe
-                  src={activeTab.path}
+                  key={pageKey}
+                  src={`${activeTab.path}${activeTab.path.includes('?') ? '&' : '?'}_layoutPreview=${previewNonce}`}
                   title={`Preview ${activeTab.label}`}
                   className="absolute inset-0 w-full h-full border-0"
                   style={{ pointerEvents: 'none' }}
