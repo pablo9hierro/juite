@@ -8,6 +8,7 @@ import CartFab from '../../components/CartFab'
 import NoCouponToggle from '../../components/NoCouponToggle'
 import CouponTicket from '../../components/CouponTicket'
 import CouponHistoryTicket from '../../components/CouponHistoryTicket'
+import CouponSlot from '../../components/coupon/CouponSlot'
 import { api } from '../../lib/api'
 import type { CustomerCoupons } from '../../lib/types'
 import { useCustomerAuth } from '../../store/customerAuth'
@@ -128,19 +129,20 @@ export default function CuponsCliente() {
 
         <div className="glass rounded-b-3xl p-4 sm:p-6">
           {tab === 'ativos' && (
-            <div className="sunset-cta-bubble-wrap mb-4 w-1/2 mx-auto">
-              <span className="sunset-cta-bubble sunset-cta-bubble-top" aria-hidden="true" />
-              <span className="sunset-cta-bubble sunset-cta-bubble-bottom" aria-hidden="true" />
-              <span className="sunset-cta-particle" aria-hidden="true" />
-              <button
-                type="button"
+            // pb reserva espaço pro "papel" da referência, que estica bem
+            // além da caixinha de 60px do slot (--cs-paper-height:320px) —
+            // sem isso ele sobrepõe o carrossel de cupons logo abaixo.
+            <div className="pb-[240px]">
+              <CouponSlot
+                size="lg"
                 onClick={handleResgatarCupom}
                 disabled={checkingClaim}
-                className="sunset-cta-btn w-full flex items-center justify-center gap-2 disabled:opacity-60"
-              >
-                {checkingClaim && <Loader2 className="w-4 h-4 animate-spin" />}
-                <span className="sunset-cta-shine-text">Resgatar cupom</span>
-              </button>
+                ariaLabel="Resgatar cupom"
+                header={checkingClaim ? '...' : 'CUPOM'}
+                bodyLines={['Cupom Exclusivo', 'Toque pra resgatar', checkingClaim ? 'Verificando…' : 'Disponível agora']}
+                footerLabel="Ação"
+                footerValue="Resgatar"
+              />
             </div>
           )}
           {loading || !data ? (

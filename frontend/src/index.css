@@ -188,149 +188,6 @@ a {
   box-shadow: 0 0 16px 2px rgba(242, 193, 78, 0.16), 0 0 40px 8px rgba(201, 138, 44, 0.1);
 }
 
-/* Uiverse.io by mawi-man — botão "Resgatar cupom" em /cliente/cupons.
-   Na referência: círculo de destaque cresce do centro e o texto some de
-   cor no :hover, mais um brilho diagonal varrendo também só no :hover.
-   Celular não tem hover — os três viraram loop automático e contínuo,
-   sincronizados pela mesma duração/porcentagens de keyframe (o círculo
-   preenche exatamente quando o texto/sombra "trocam de estado"), pra
-   nunca dessincronizar. Recolorido pra paleta do site (era #1a1a2e navy
-   + #e94560 vermelho — virou preto/dourado sunset). O efeito de
-   "ondulação ao pressionar" da referência (:active) foi deixado de fora
-   — precisaria de um 3º pseudo-elemento (só temos ::before/::after, já
-   usados pelo círculo e pelo brilho) e não é o efeito central pedido. */
-.sunset-cta-btn {
-  position: relative;
-  z-index: 1;
-  overflow: hidden;
-  isolation: isolate;
-  border-radius: 9999px;
-  padding: 0.95rem 1.75rem;
-  font-weight: 800;
-  background-color: var(--color-son-black);
-  animation: sunset-cta-pulse 3.2s ease-in-out infinite, sunset-cta-float 5s ease-in-out infinite;
-}
-.sunset-cta-btn::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 300%;
-  height: 300%;
-  background: var(--color-son-gold);
-  border-radius: 50%;
-  z-index: -1;
-  transform: translate(-50%, -50%) scale(0);
-  animation: sunset-cta-fill 3.2s ease-in-out infinite;
-}
-.sunset-cta-btn::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -75%;
-  width: 50%;
-  height: 100%;
-  background: linear-gradient(120deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.7) 50%, rgba(255, 255, 255, 0) 100%);
-  transform: skewX(-25deg);
-  animation: sunset-cta-sweep 3.2s ease-in-out infinite;
-}
-@keyframes sunset-cta-pulse {
-  0%, 40% {
-    color: var(--color-son-gold);
-    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.35);
-  }
-  60%, 85% {
-    color: var(--color-son-black);
-    box-shadow: 0 15px 24px rgba(0, 0, 0, 0.5);
-  }
-  100% {
-    color: var(--color-son-gold);
-    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.35);
-  }
-}
-/* Uiverse.io by KhaledMatalkah — "floating" (translateY -5px) + o
-   scale(1.05) que só disparava no :hover, combinados numa respiração só
-   (sobe e cresce um pouco juntos), devagar ("loop lento" pedido) — o
-   translateY do mawi-man acima foi retirado de sunset-cta-pulse pra não
-   competir com esta (duas animações não podem controlar a mesma
-   propriedade `transform` ao mesmo tempo sem uma pisar na outra). */
-@keyframes sunset-cta-float {
-  0%, 100% {
-    transform: translateY(0) scale(1);
-  }
-  50% {
-    transform: translateY(-5px) scale(1.05);
-  }
-}
-@keyframes sunset-cta-fill {
-  0%, 40% {
-    transform: translate(-50%, -50%) scale(0);
-    opacity: 0.92;
-  }
-  60%, 85% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0.92;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(0);
-    opacity: 0.92;
-  }
-}
-@keyframes sunset-cta-sweep {
-  0%, 40% {
-    left: -75%;
-  }
-  85%, 100% {
-    left: 125%;
-  }
-}
-/* Texto do botão "Resgatar cupom" com gradiente deslizante (era
-   background-clip:text só no :hover, na referência KhaledMatalkah) —
-   independente da cor animada do botão (sunset-cta-pulse), porque
-   background-clip:text com texto transparente ignora `color` por
-   completo pro preenchimento das letras, então os dois nunca competem. */
-.sunset-cta-shine-text {
-  background: linear-gradient(90deg, var(--color-son-gold), var(--color-son-orange), var(--color-son-gold));
-  background-size: 200% auto;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: sunset-cta-shine-text 5s ease-in-out infinite;
-}
-@keyframes sunset-cta-shine-text {
-  0%, 100% {
-    background-position: 0% center;
-  }
-  50% {
-    background-position: 100% center;
-  }
-}
-/* Partícula voando na diagonal (era .button::before, só que aqui é um
-   <span> real por fora do botão — overflow:hidden do botão cortaria os
-   190px de deslocamento). Devagar ("loop lento" pedido, era 2s). */
-.sunset-cta-particle {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--color-son-orange);
-  z-index: -1;
-  pointer-events: none;
-  animation: sunset-cta-particle 4s ease-in-out infinite;
-}
-@keyframes sunset-cta-particle {
-  0% {
-    transform: translate(0, 0);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(190px, 50px);
-    opacity: 0;
-  }
-}
-
 /* Uiverse.io by dovatgabriel — na referência o card sob :hover crescia
    (flex:2) e os outros ficavam pequenos. Adaptado pro carrossel de
    cupons em /cliente/cupons: sem hover no celular, então é o card mais
@@ -1130,19 +987,17 @@ a {
    original do botão de WhatsApp (mesmos radial-gradient em camadas,
    mesmos keyframes de posição/tamanho), recolorido pro dourado/laranja
    do site (era roxo #7d2ae8). Removido do botão de WhatsApp (reportado)
-   e movido pro botão "Resgatar cupom" em /cliente/cupons — como esse
-   botão já usa ::before/::after pra outro efeito (círculo dourado +
-   brilho), as bolhas viraram dois <span> reais (.sunset-cta-bubble-top/
-   -bottom) num wrapper por fora do botão, em vez de pseudo-elementos —
-   o botão tem overflow:hidden (precisa, pro círculo/brilho ficarem
-   contidos na pílula) e cortaria as bolhas, que propositalmente saem
-   pra fora dos limites do botão (top/bottom: -70%). Loop automático e
-   contínuo (celular não tem hover). */
-.sunset-cta-bubble-wrap {
+   e movido pro botão "Resgatar cupom" — que desde então virou o
+   CouponSlot (ver coupon/CouponSlot.tsx), então as bolhas passaram a
+   decorar o wrapper do slot em vez do botão em si, como dois <span>
+   reais (não dá pra usar ::before/::after aqui, já ocupados pela
+   máscara/relevo do ticket dentro do papel). Loop automático e contínuo
+   (celular não tem hover). */
+.sunset-cs-bubble-wrap {
   position: relative;
   isolation: isolate;
 }
-.sunset-cta-bubble {
+.sunset-cs-bubble {
   position: absolute;
   width: 150%;
   left: 50%;
@@ -1152,7 +1007,7 @@ a {
   background-repeat: no-repeat;
   pointer-events: none;
 }
-.sunset-cta-bubble-top {
+.sunset-cs-bubble-top {
   top: -70%;
   background-image: radial-gradient(circle, var(--color-son-gold) 20%, transparent 20%),
     radial-gradient(circle, transparent 20%, var(--color-son-orange) 20%, transparent 30%),
@@ -1179,7 +1034,7 @@ a {
     background-size: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%;
   }
 }
-.sunset-cta-bubble-bottom {
+.sunset-cs-bubble-bottom {
   bottom: -70%;
   background-image: radial-gradient(circle, var(--color-son-gold) 20%, transparent 20%),
     radial-gradient(circle, var(--color-son-orange) 20%, transparent 20%),
@@ -2133,12 +1988,9 @@ a {
   margin: 0 auto;
   overflow: hidden;
   border-radius: 18px;
-}
-/* Ticket fica menor só aqui dentro da raspadinha (caber sem cortar nada
-   dentro dos 380px de altura fixa) -- em /cliente/cupons ele continua no
-   tamanho normal (10px), essa regra não alcança lá. */
-.sunset-scratch-wrap .sunset-ticket-wrapper {
-  font-size: 8.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .sunset-scratch-canvas {
   /* <canvas> é elemento substituído (replaced element) -- os atributos
@@ -2551,289 +2403,396 @@ a {
   background-color: rgba(255, 255, 255, 0.06);
 }
 
-/* Uiverse.io by zeeshan_2112 — ingresso "Dev Pass" com fundo em grade
-   animada, perfuração + canhoto com código de barras. Clone integral,
-   recolorido pro dourado/laranja sunset (era roxo). Usado como cartão do
-   cupom em /cliente/resgatarcupom (revelado) e em /cliente/cupons (aba
-   Ativos). :hover (desktop) mantém o tilt dramático da referência; sem
-   mouse, um loop suave contínuo assume (mobile não tem hover). */
-.sunset-ticket-canvas {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5em;
-  width: 100%;
-}
-.sunset-ticket-wrapper {
-  --t-bg: var(--color-son-surface);
-  --t-bg-light: var(--color-son-surface-light);
-  --t-accent: var(--color-son-gold);
-  --t-accent-glow: rgba(255, 210, 61, 0.5);
-  --t-text-main: var(--color-son-silver);
-  --t-text-muted: var(--color-son-silver-dim);
-  font-size: 10px;
-  display: inline-block;
-  max-width: 100%;
-}
-/* O tilt 3D (perspective + transform-style:preserve-3d + rotateX/rotateY
-   em loop) da referência saiu -- essa tela é só pra celular (sem mouse,
-   sem :hover pra acionar o tilt de verdade) e, pior, perspective+preserve-3d
-   com transform animando sem parar é um caso conhecido de instabilidade
-   de layout em alguns motores de renderização mobile: o tamanho
-   calculado do elemento incha/oscila (foi exatamente o que apareceu --
-   card virando um retângulo gigante fora de proporção). Fica só um glow
-   pulsando (2D puro, sem 3D nenhum envolvido) -- sem risco nenhum de
-   afetar layout, só opacity/box-shadow. */
-.sunset-ticket {
+/* Uiverse.io by dexter-st — ticket holográfico com corte/perfuração via
+   máscara CSS (mask com radial-gradients simulando os furos + recorte
+   picotado nas bordas) e relevo falso em 3D (feTurbulence +
+   feSpecularLighting num filtro SVG, luz batendo no "papel" perfurado).
+   Clone fiel da técnica; a paleta do holográfico (originalmente
+   roxo/ciano) foi deslocada pro dourado/laranja/rosa do site — como boa
+   parte usa mix-blend-mode (difference/color-burn), troca de matiz não é
+   1:1 previsível só na fórmula, o resultado foi conferido visualmente.
+   Usado tanto sozinho (TicketCardVisual, dentro de CouponTicket/
+   CouponHistoryTicket no carrossel de /cliente/cupons) quanto dentro do
+   slot que puxa o papel (CouponSlot — botão "Resgatar cupom" e o card da
+   landing). Tamanho ajustável via --t2-width/--t2-height (px fixos, a
+   máscara/relevo são todos em px reais, não dá pra escalar só com
+   font-size como no ticket antigo). */
+.sunset-t2-card {
+  --t2-width: 180px;
+  --t2-height: 320px;
+  --t2-perforation: 12px;
+  --t2-cutouts-adjust: 70px;
+
   position: relative;
-  width: 22em;
-  max-width: 100%;
-  color: var(--t-text-main);
-  box-shadow:
-    0 20px 40px rgba(0, 0, 0, 0.8),
-    0 0 0 1px rgba(255, 255, 255, 0.05);
-  background: transparent;
-  animation: sunset-ticket-glow 3.5s ease-in-out infinite;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 1rem;
+  grid-template-areas: 'header' 'body' 'footer';
+
+  width: var(--t2-width);
+  height: var(--t2-height);
+  padding: var(--t2-perforation) 0;
+
+  font-family: 'Poppins', sans-serif;
+  user-select: none;
+  overflow: hidden;
+
+  filter: drop-shadow(0 2px 1px #00000025) drop-shadow(0 4px 3px #00000025) drop-shadow(0 10px 9px #00000025)
+    drop-shadow(0 20px 20px #00000025) drop-shadow(0 40px 40px #00000025);
+  animation: sunset-t2-hover 3s ease infinite;
 }
-@keyframes sunset-ticket-glow {
-  0%,
-  100% {
-    box-shadow:
-      0 20px 40px rgba(0, 0, 0, 0.8),
-      0 0 0 1px rgba(255, 255, 255, 0.05);
-  }
+@keyframes sunset-t2-hover {
   50% {
-    box-shadow:
-      0 20px 40px rgba(0, 0, 0, 0.8),
-      0 0 0 1px rgba(255, 255, 255, 0.05),
-      0 0 24px var(--t-accent-glow);
+    filter: drop-shadow(0 4px 3px #00000015) drop-shadow(0 6px 6px #00000015) drop-shadow(0 16px 14px #00000015)
+      drop-shadow(0 30px 28px #00000015) drop-shadow(0 60px 60px #00000015);
+    transform: translateY(-7px) scale(1.02);
   }
 }
-.sunset-ticket::after {
+.sunset-t2-filter {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.sunset-t2-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: #fff;
+  mask:
+    radial-gradient(circle at 50% 0, #fff0 calc(var(--t2-perforation) - 5px), #000 calc(var(--t2-perforation) - 4px)),
+    radial-gradient(
+      circle at 50% 100%,
+      #fff0 calc(var(--t2-perforation) - 5px),
+      #000 calc(var(--t2-perforation) - 4px)
+    ),
+    radial-gradient(circle 8px at left center, #000 98%, #0000 100%),
+    radial-gradient(circle 8px at right center, #000 98%, #0000 100%),
+    repeating-linear-gradient(90deg, #000 10px, #000 15px, #0000 16px, #0000 24px);
+  mask-repeat: repeat-x, repeat-x, no-repeat, no-repeat, repeat-x;
+  mask-size:
+    calc(var(--t2-perforation) * 2) 100%,
+    calc(var(--t2-perforation) * 2) 100%,
+    16px 16px,
+    16px 16px,
+    10px 2px;
+  mask-position:
+    calc(0.5 * var(--t2-perforation)) top,
+    calc(0.5 * var(--t2-perforation)) bottom,
+    left var(--t2-cutouts-adjust),
+    right var(--t2-cutouts-adjust),
+    0 calc(var(--t2-cutouts-adjust) + 7px);
+  mask-composite: intersect, exclude, add, add;
+}
+.sunset-t2-holographic {
+  background-image: linear-gradient(to bottom, #fe58, 90%, #0002),
+    conic-gradient(
+      at 60% 50%,
+      var(--color-son-silver),
+      var(--color-son-pink),
+      var(--color-son-gold),
+      var(--color-son-silver),
+      var(--color-son-orange),
+      #fff4c2,
+      var(--color-son-orange),
+      var(--color-son-pink),
+      #0002,
+      var(--color-son-orange),
+      var(--color-son-silver),
+      var(--color-son-gold),
+      var(--color-son-silver)
+    );
+}
+.sunset-t2-holographic::before {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 1em;
-  pointer-events: none;
-  background: linear-gradient(
-    115deg,
-    transparent 0%,
-    transparent 40%,
-    rgba(255, 255, 255, 0.1) 45%,
-    rgba(255, 255, 255, 0.3) 50%,
-    rgba(255, 255, 255, 0.1) 55%,
-    transparent 60%,
-    transparent 100%
-  );
-  z-index: 10;
-  background-size: 250% 250%;
-  background-position: 100% 100%;
-  transition: background-position 0.6s cubic-bezier(0.23, 1, 0.32, 1);
-  mix-blend-mode: overlay;
+  border-radius: inherit;
+  background: radial-gradient(circle at 70% 20%, var(--color-son-pink), #0000),
+    repeating-radial-gradient(circle at 30% 80%, #fff, var(--color-son-gold) 48px, #eeeeee 150px);
+  mix-blend-mode: color-burn;
 }
-.sunset-ticket-wrapper:hover .sunset-ticket::after {
-  background-position: 0% 0%;
-}
-.sunset-t-main {
-  padding: 2em;
-  position: relative;
-  overflow: hidden;
-  background: radial-gradient(circle at bottom left, transparent 1em, var(--t-bg) 1.05em),
-    radial-gradient(circle at bottom right, transparent 1em, var(--t-bg) 1.05em);
-  background-size: 51% 100%;
-  background-position: bottom left, bottom right;
-  background-repeat: no-repeat;
-  border-top-left-radius: 1em;
-  border-top-right-radius: 1em;
-}
-.sunset-t-main::after {
+.sunset-t2-holographic::after {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-image: linear-gradient(rgba(255, 210, 61, 0.15) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 210, 61, 0.15) 1px, transparent 1px);
-  background-size: 2em 2em;
-  opacity: 0.6;
-  z-index: 0;
-  pointer-events: none;
-  transform: perspective(500px) rotateX(20deg) scale(1.5);
-  animation: sunset-ticket-grid-scroll 20s linear infinite;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, #f905, var(--color-son-orange), var(--color-son-gold), #f905);
+  mix-blend-mode: difference;
+
+  animation: sunset-t2-bg-pos 3s ease-in-out infinite alternate;
+  background-position: 0 0;
+  background-size: 100% 300%;
+  background-repeat: repeat;
 }
-@keyframes sunset-ticket-grid-scroll {
-  0% {
-    background-position: 0 0;
-  }
-  100% {
-    background-position: 0 4em;
+@keyframes sunset-t2-bg-pos {
+  to {
+    background-position: 0 500px;
   }
 }
-.sunset-t-content {
+.sunset-t2-header {
   position: relative;
+  grid-area: header;
+  margin: 0 8px;
+  text-align: center;
   z-index: 1;
-}
-.sunset-t-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 2em;
-}
-.sunset-t-logo {
-  display: flex;
-  align-items: center;
-  gap: 0.5em;
   font-weight: 900;
-  font-size: 1.2em;
-  letter-spacing: -0.05em;
+  font-size: 2.1rem;
+  letter-spacing: 1px;
+  color: #ffffff9f;
+  text-shadow: 0 0 0 #000;
+  -webkit-text-stroke: #fff 0.5px;
+  mix-blend-mode: difference;
+}
+.sunset-t2-body {
+  grid-area: body;
+  margin: 0 1em;
+  padding: 0.5em;
+  font-weight: 300;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  text-align: center;
   color: #fff;
+  z-index: 1;
+  position: relative;
 }
-.sunset-t-logo svg {
-  width: 1.5em;
-  height: 1.5em;
-  stroke: var(--t-accent);
-  filter: drop-shadow(0 0 5px var(--t-accent));
-  animation: sunset-ticket-logo-pulse 3s ease-in-out infinite alternate;
+.sunset-t2-footer {
+  grid-area: footer;
+  z-index: 1;
+  position: relative;
+  margin: 0 1em 1em 1em;
 }
-@keyframes sunset-ticket-logo-pulse {
-  0% {
-    filter: drop-shadow(0 0 2px var(--t-accent));
-  }
-  100% {
-    filter: drop-shadow(0 0 10px var(--t-accent)) brightness(1.2);
-  }
+.sunset-t2-number {
+  margin-bottom: 0.75rem;
+  text-align: center;
+  color: #000;
+  font-weight: 300;
+  font-size: 0.85rem;
 }
-.sunset-t-type {
-  font-size: 0.6em;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  color: var(--t-accent);
-  border: 1px solid var(--t-accent);
-  padding: 0.4em 0.8em;
-  border-radius: 99em;
+.sunset-t2-bold {
   font-weight: 700;
-  white-space: nowrap;
 }
-.sunset-t-title {
-  font-size: 2.2em;
-  font-weight: 900;
-  line-height: 1.1;
-  margin-bottom: 0.2em;
-  text-transform: uppercase;
-  background: linear-gradient(135deg, #fff 0%, var(--t-accent) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+.sunset-t2-barcode {
+  margin: 0 auto;
+  width: 0;
+  height: 32px;
+  box-shadow:
+    0px 0 0 1px #000,
+    5px 0 0 1px #000,
+    7px 0 0 1px #000,
+    11px 0 0 1px #000,
+    15px 0 0 1px #000,
+    16px 0 0 1px #000,
+    22px 0 0 1px #000,
+    27px 0 0 1px #000,
+    30px 0 0 1px #000,
+    35px 0 0 1px #000,
+    36px 0 0 1px #000,
+    39px 0 0 1px #000,
+    43px 0 0 1px #000,
+    47px 0 0 1px #000,
+    50px 0 0 1px #000,
+    55px 0 0 1px #000,
+    59px 0 0 1px #000,
+    60px 0 0 1px #000,
+    64px 0 0 1px #000,
+    69px 0 0 1px #000,
+    70px 0 0 1px #000,
+    74px 0 0 1px #000;
+  transform: translateX(37px);
 }
-.sunset-t-subtitle {
-  color: var(--t-text-muted);
-  font-size: 0.9em;
-  margin-bottom: 2.5em;
-}
-.sunset-t-details {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5em;
-  margin-bottom: 1em;
-}
-.sunset-t-detail-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2em;
-}
-.sunset-t-label {
-  font-size: 0.6em;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--t-text-muted);
-}
-.sunset-t-value {
+.sunset-t2-symbol {
+  position: absolute;
+  top: 1.1em;
+  right: 0px;
+  rotate: 185deg;
   font-size: 1.1em;
-  font-weight: 700;
-  color: var(--t-text-main);
+  color: #fff;
+  line-height: 0.5;
+  opacity: 0.2;
 }
-.sunset-t-perforation {
-  display: flex;
-  justify-content: space-between;
-  height: 1em;
-  align-items: center;
+
+/* Uiverse.io by dexter-st — "papel" (aqui, o TicketCardVisual acima)
+   espiando pra fora de um corte na parede, em loop contínuo cobrindo
+   peek/reveal-parcial/saída-total (ver CouponSlot.tsx). --cs-width/
+   --cs-paper-height vêm do componente (prop size); o resto (corte,
+   sombra, perspectiva 3D) é fixo. O ticket de dentro (.sunset-t2-card)
+   é forçado a 100% do papel, em vez do tamanho intrínseco (180x320)
+   que ele tem quando renderizado sozinho no carrossel. */
+.sunset-cs-wrapper {
+  --cs-width: 190px;
+  --cs-paper-height: 320px;
+  --cs-cut-size: 5px;
+  --cs-perspective: 200px;
+  --cs-paper-width-multiplier: 0.95;
+
   position: relative;
-  z-index: 2;
+  display: grid;
+  place-items: center;
+
+  width: var(--cs-width);
+  height: 60px;
+  margin: 0 auto;
+  flex-shrink: 0;
+
+  user-select: none;
+  pointer-events: none;
 }
-.sunset-t-perf-line {
-  flex-grow: 1;
-  height: 0;
-  border-top: 2px dashed rgba(255, 255, 255, 0.2);
-  margin: 0 1.5em;
+.sunset-cs-cutout-wrapper {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  height: 60px;
+  transform-style: preserve-3d;
+  perspective: var(--cs-perspective);
 }
-.sunset-t-stub {
-  padding: 2em;
-  background: radial-gradient(circle at top left, transparent 1em, var(--t-bg-light) 1.05em),
-    radial-gradient(circle at top right, transparent 1em, var(--t-bg-light) 1.05em);
-  background-size: 51% 100%;
-  background-position: top left, top right;
-  background-repeat: no-repeat;
-  border-bottom-left-radius: 1em;
-  border-bottom-right-radius: 1em;
+.sunset-cs-cutout {
+  position: absolute;
+  width: 100%;
+  height: 60px;
+  transform: rotateX(-10deg);
+  box-sizing: border-box;
+
+  border: 1px solid #0004;
+  box-shadow:
+    inset 0 1px 1px 0px #0017,
+    inset 0 2px 2px 0px #0017,
+    inset 0 4px 4px 0px #0017,
+    inset 0 12px 12px 0px #0017,
+    inset 0 24px 24px 0px #0017;
+}
+.sunset-cs-paper-wrapper {
+  position: absolute;
+  width: calc(var(--cs-width) * var(--cs-paper-width-multiplier));
+  height: var(--cs-paper-height);
+  top: 2px;
+  filter: drop-shadow(0 1px 1px #0003) drop-shadow(0 6px 3px #0004) drop-shadow(0 16px 16px #0003);
+  overflow: hidden;
+}
+.sunset-cs-paper {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+
+  border: none;
+  background: transparent;
+  padding: 0;
+  box-sizing: border-box;
+
+  mask-image: linear-gradient(
+      #000 calc(var(--cs-paper-height) - var(--cs-cut-size)),
+      #0000 calc(var(--cs-paper-height) - var(--cs-cut-size) + 2px)
+    ),
+    conic-gradient(#000 135deg, #0000 135.5deg, #0000 224.5deg, #000 225deg);
+  mask-position:
+    0,
+    0 calc(var(--cs-paper-height) - var(--cs-cut-size));
+  mask-repeat: no-repeat, repeat-x;
+  mask-size:
+    100%,
+    var(--cs-cut-size) var(--cs-cut-size);
+
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  position: relative;
+  align-items: flex-end;
+  justify-content: center;
 }
-.sunset-t-barcode-container {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5em;
+.sunset-cs-paper .sunset-t2-card {
+  width: 100%;
+  height: 100%;
 }
-.sunset-t-barcode {
-  width: 10em;
-  height: 3em;
-  background: repeating-linear-gradient(
-    90deg,
-    #fff 0,
-    #fff 2px,
-    transparent 2px,
-    transparent 4px,
-    #fff 4px,
-    #fff 5px,
-    transparent 5px,
-    transparent 8px,
-    #fff 8px,
-    #fff 12px,
-    transparent 12px,
-    transparent 15px,
-    #fff 15px,
-    #fff 16px,
-    transparent 16px,
-    transparent 18px
-  );
-  opacity: 0.8;
+.sunset-cs-sec {
+  height: 100%;
+  transform: translateY(calc(-1 * var(--cs-paper-height) + 100px));
+
+  /* loop único cobrindo os 3 estados da referência (peek parado, hover
+     de reveal parcial, clique de saída total) */
+  animation: sunset-cs-cycle 7s ease-in-out infinite;
 }
-.sunset-t-barcode-id {
-  font-family: monospace;
-  font-size: 0.7em;
-  color: var(--t-text-muted);
-  letter-spacing: 0.15em;
-  text-align: left;
+@keyframes sunset-cs-cycle {
+  0%,
+  12% {
+    transform: translateY(calc(-1 * var(--cs-paper-height) + 100px));
+  }
+  30%,
+  40% {
+    transform: translateY(calc(-1 * var(--cs-paper-height) + 192px));
+  }
+  58%,
+  78% {
+    transform: translateY(0);
+  }
+  96%,
+  100% {
+    transform: translateY(calc(-1 * var(--cs-paper-height) + 100px));
+  }
 }
-.sunset-t-admit {
-  text-align: right;
+/* Variante 'sm' (card decorativo da landing, sem espaço reservado ao
+   redor pro papel esticar até sair todo pra fora) — mesma ideia, mas o
+   avanço máximo fica bem mais curto (~78px, igual ao :focus da versão
+   antiga desse card), nunca chega a sobrepor o texto ao lado. */
+.sunset-cs-sec-sm {
+  animation-name: sunset-cs-cycle-sm;
 }
-.sunset-t-admit-text {
-  font-size: 0.7em;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--t-text-muted);
+@keyframes sunset-cs-cycle-sm {
+  0%,
+  20% {
+    transform: translateY(calc(-1 * var(--cs-paper-height) + 50px));
+  }
+  45%,
+  60% {
+    transform: translateY(calc(-1 * var(--cs-paper-height) + 78px));
+  }
+  85%,
+  100% {
+    transform: translateY(calc(-1 * var(--cs-paper-height) + 50px));
+  }
 }
-.sunset-t-admit-num {
-  font-size: 3em;
-  font-weight: 900;
-  line-height: 1;
-  color: var(--t-accent);
-  text-shadow: 0 0 15px var(--t-accent-glow);
+.sunset-cs-shadow-wrapper {
+  position: absolute;
+  width: 100%;
+  height: 32px;
+  top: 0;
+
+  transform-style: preserve-3d;
+  perspective: calc(var(--cs-perspective) / 1.33);
 }
-.sunset-ticket-wrapper:active .sunset-ticket {
-  transform: scale(0.98);
-  transition: transform 0.15s ease;
+.sunset-cs-shadow {
+  position: absolute;
+  top: 1px;
+  width: 100%;
+  height: 32px;
+  background-color: #0005;
+  background-image: linear-gradient(#000, #0000 8px);
+  mask-image: linear-gradient(#000 0, #0000 70%);
+  transform: rotateX(-10deg);
+}
+.sunset-cs-cutter-wrapper {
+  position: absolute;
+  width: 100%;
+  height: 32px;
+  top: 0;
+  transform-style: preserve-3d;
+  perspective: calc(var(--cs-perspective) / 1.33);
+  mix-blend-mode: screen;
+}
+.sunset-cs-cutter {
+  position: absolute;
+  top: 1px;
+  width: 100%;
+  height: calc(var(--cs-cut-size) + 3px);
+  background-color: #ddd;
+  background-image: linear-gradient(#000, #0000 8px);
+  mask-image: linear-gradient(
+      #000 calc(calc(var(--cs-cut-size) + 3px) - var(--cs-cut-size)),
+      #0000 calc(calc(var(--cs-cut-size) + 3px) - var(--cs-cut-size) + 2px)
+    ),
+    conic-gradient(#000 135deg, #0000 135.5deg, #0000 224.5deg, #000 225deg);
+  mask-position:
+    0,
+    calc(var(--cs-cut-size) / 2) 3px;
+  mask-repeat: no-repeat, repeat-x;
+  mask-size:
+    100%,
+    var(--cs-cut-size) var(--cs-cut-size);
+
+  transform: rotateX(-10deg);
 }

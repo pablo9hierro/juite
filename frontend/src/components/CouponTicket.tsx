@@ -1,14 +1,17 @@
 import type { CouponKind, DiscountType } from '../lib/types'
+import TicketCardVisual from './coupon/TicketCardVisual'
 
 function currency(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
 }
 
-const KIND_LABEL: Record<CouponKind, string> = {
-  desconto: 'Desconto',
-  frete: 'Frete grátis',
-  aniversario: 'Aniversário',
-  produto: 'Produto',
+// "Uso em X" — em que tipo de coisa o cupom se aplica, texto pedido
+// explicitamente ao lado do código/validade/usos no card.
+const KIND_SCOPE: Record<CouponKind, string> = {
+  desconto: 'compras',
+  frete: 'frete',
+  aniversario: 'aniversário',
+  produto: 'produtos',
 }
 
 export interface CouponTicketData {
@@ -23,86 +26,34 @@ export interface CouponTicketData {
   expires_at: string | null
 }
 
+// Só o valor numérico (sem "frete" no fim) -- o header do ticket é
+// grande e estreito (~180px), string longa estoura; o alcance já fica
+// claro pela linha "Uso em X" do corpo.
 function discountHeadline(c: CouponTicketData) {
   if (c.discount_type && c.discount_value != null) {
     return c.discount_type === 'percent' ? `-${c.discount_value}%` : `-${currency(c.discount_value)}`
   }
   if (c.shipping_discount_type && c.shipping_discount_value != null) {
-    return c.shipping_discount_type === 'percent' ? `-${c.shipping_discount_value}% frete` : `-${currency(c.shipping_discount_value)} frete`
+    return c.shipping_discount_type === 'percent' ? `-${c.shipping_discount_value}%` : `-${currency(c.shipping_discount_value)}`
   }
   return 'Cupom'
 }
 
-// Uiverse.io by zeeshan_2112 — "Dev Pass" ticket com fundo em grade
-// animada, brilho diagonal cruzando no hover, recorte perfurado e canhoto
-// com código de barras + número em destaque. Clone integral, recolorido
-// pro dourado/laranja sunset (era roxo). Campos do ingresso viraram campos
-// do cupom: título = valor do desconto, detalhes = código/validade/tipo/
-// usos, "assento" do canhoto = quantos usos ainda restam. Sem mouse
-// (mobile), o tilt vira um loop suave contínuo; com mouse (desktop), o
-// :hover assume o tilt dramático da referência.
+// Uiverse.io by dexter-st (ver TicketCardVisual.tsx pro clone da parte
+// visual/holográfica) — campos do ticket viraram campos do cupom:
+// header = valor do desconto, corpo = "Cupom Exclusivo" / validade /
+// uso+usos, rodapé = código + código de barras decorativo.
 export default function CouponTicket({ coupon }: { coupon: CouponTicketData }) {
-  const remaining = Math.max(0, coupon.granted_uses - coupon.used_count)
   return (
-    <div className="sunset-ticket-canvas">
-      <div className="sunset-ticket-wrapper">
-        <div className="sunset-ticket">
-          <div className="sunset-t-main">
-            <div className="sunset-t-content">
-              <div className="sunset-t-header">
-                <div className="sunset-t-logo">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  SUNSET
-                </div>
-                <div className="sunset-t-type">{KIND_LABEL[coupon.kind]}</div>
-              </div>
-              <div className="sunset-t-title">{discountHeadline(coupon)}</div>
-              <div className="sunset-t-subtitle">Cupom Sunset Tabas</div>
-              <div className="sunset-t-details">
-                <div className="sunset-t-detail-item">
-                  <span className="sunset-t-label">Código</span>
-                  <span className="sunset-t-value font-mono">{coupon.code}</span>
-                </div>
-                <div className="sunset-t-detail-item">
-                  <span className="sunset-t-label">Validade</span>
-                  <span className="sunset-t-value">{coupon.expires_at ? new Date(coupon.expires_at).toLocaleDateString('pt-BR') : 'Sem validade'}</span>
-                </div>
-                <div className="sunset-t-detail-item">
-                  <span className="sunset-t-label">Tipo</span>
-                  <span className="sunset-t-value">{KIND_LABEL[coupon.kind]}</span>
-                </div>
-                <div className="sunset-t-detail-item">
-                  <span className="sunset-t-label">Usos</span>
-                  <span className="sunset-t-value">
-                    {coupon.used_count}/{coupon.granted_uses}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="sunset-t-perforation">
-              <div className="sunset-t-perf-line" />
-            </div>
-          </div>
-          <div className="sunset-t-stub">
-            <div className="sunset-t-barcode-container">
-              <div className="sunset-t-barcode" />
-              <div className="sunset-t-barcode-id">{coupon.code}</div>
-            </div>
-            <div className="sunset-t-admit">
-              <div className="sunset-t-admit-text">Restam</div>
-              <div className="sunset-t-admit-num">{remaining}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <TicketCardVisual
+      header={discountHeadline(coupon)}
+      bodyLines={[
+        'Cupom Exclusivo',
+        `Válido até: ${coupon.expires_at ? new Date(coupon.expires_at).toLocaleDateString('pt-BR') : 'Sem validade'}`,
+        `Uso em ${KIND_SCOPE[coupon.kind]} · Usos: ${coupon.used_count}/${coupon.granted_uses}`,
+      ]}
+      footerLabel="Código"
+      footerValue={coupon.code}
+    />
   )
 }
