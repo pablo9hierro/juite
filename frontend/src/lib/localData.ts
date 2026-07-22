@@ -5,6 +5,7 @@ import type {
   BgFit,
   BgMode,
   CampanhaOrientation,
+  CarouselStyle,
   Category,
   Coupon,
   CrmFilterCriteria,
@@ -141,6 +142,7 @@ export interface LocalDb {
   badgesLayout: BadgesLayout
   badgesGap: number
   badgesOffsetY: number
+  carouselStyle: CarouselStyle
   storeHours: StoreHourDay[]
   storeManuallyClosed: boolean
   storeManualClosedReason: string | null
@@ -242,6 +244,7 @@ function seedDb(): LocalDb {
     badgesLayout: 'row',
     badgesGap: 8,
     badgesOffsetY: 0,
+    carouselStyle: 'atual',
     storeHours: Array.from({ length: 7 }, (_, day_of_week) => ({
       day_of_week,
       is_open: true,

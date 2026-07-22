@@ -505,6 +505,12 @@ export interface BadgesSettings {
   badges_offset_y: number
 }
 
+// Estilo do carrossel de banners/promoções da landing, escolhido em
+// /admin/promocoes — 'atual': um card só que troca de conteúdo sozinho;
+// 'cards': cada card fica alguns segundos na tela e desliza pra esquerda
+// pro próximo. Os dois aceitam arrastar manualmente (loop).
+export type CarouselStyle = 'atual' | 'cards'
+
 export interface StoreHourInterval {
   opens_at: string // 'HH:MM', formato 24h (0-24)
   closes_at: string

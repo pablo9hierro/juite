@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import BrandHeader from '../components/landing/BrandHeader'
@@ -8,8 +8,12 @@ import LiveTrackingMapMock from '../components/landing/LiveTrackingMapMock'
 import CouponTicketCard from '../components/landing/CouponTicketCard'
 import LandingWhatsAppCard from '../components/landing/LandingWhatsAppCard'
 import { api } from '../lib/api'
-import type { BadgesLayout, LandingBadge, Promotion, StoreStatus } from '../lib/types'
+import type { BadgesLayout, CarouselStyle, LandingBadge, Promotion, StoreStatus } from '../lib/types'
 import { getStoreOpenState } from '../lib/storeHours'
+
+// Limiar de arrasto (px) pra contar como swipe de navegação em vez de tap
+// ou rolagem vertical da página — usado nos dois estilos de carrossel.
+const SWIPE_THRESHOLD = 40
 
 const DEFAULT_BADGES: LandingBadge[] = [
   { id: '1', text: 'SUNSET • Desde 2023', bold: true },
@@ -21,9 +25,16 @@ function BannerCarousel() {
   const navigate = useNavigate()
   const [heroUrl, setHeroUrl] = useState<string | null>(null)
   const [promotions, setPromotions] = useState<Promotion[]>([])
+  const [carouselStyle, setCarouselStyle] = useState<CarouselStyle>('atual')
 
   useEffect(() => {
-    api.siteSettings.get().then((s) => setHeroUrl(s.hero_image_url)).catch(() => setHeroUrl(null))
+    api.siteSettings
+      .get()
+      .then((s) => {
+        setHeroUrl(s.hero_image_url)
+        setCarouselStyle(s.carousel_style)
+      })
+      .catch(() => setHeroUrl(null))
     api.promotions.listActive().then(setPromotions).catch(() => setPromotions([]))
   }, [])
 
@@ -42,19 +53,104 @@ function BannerCarousel() {
     ...restPromos.map((p) => ({ key: p.id, image: p.image_url, label: p.title, subtitle: p.subtitle || 'Promoções', onClick: () => navigate(`/banner?promocao=${p.id}`) })),
   ].filter((it) => it.image)
 
-  // Um card só que AGRUPA todos os banners/promoções — não um card por
-  // item lado a lado (isso lia como "duplicado" com só 2 itens ativos).
-  // Troca o conteúdo (imagem/título) sozinho a cada 4.5s quando há mais
-  // de um item; clique sempre leva pro item que está em tela no momento.
+  // No modo 'atual': um card só que AGRUPA todos os banners/promoções —
+  // troca o conteúdo (imagem/título) sozinho a cada 4.5s. No modo 'cards':
+  // uma faixa com TODOS os cards lado a lado, um por vez em tela, que
+  // desliza pra esquerda a cada 3s. Nos dois, activeIndex também responde
+  // a arrastar manualmente (loop pros dois lados).
   const [activeIndex, setActiveIndex] = useState(0)
+  const goNext = () => setActiveIndex((i) => (i + 1) % items.length)
+  const goPrev = () => setActiveIndex((i) => (i - 1 + items.length) % items.length)
+
   useEffect(() => {
     if (items.length < 2) return
-    const timer = setInterval(() => setActiveIndex((i) => (i + 1) % items.length), 4500)
+    const delay = carouselStyle === 'cards' ? 3000 : 4500
+    const timer = setInterval(goNext, delay)
     return () => clearInterval(timer)
-  }, [items.length])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length, carouselStyle])
+
+  // Detecção de swipe por pointer events (mouse + touch num só código) —
+  // só refs, sem re-render a cada movimento. Um arrasto horizontal maior
+  // que SWIPE_THRESHOLD conta como navegação e cancela o clique/tap que
+  // viria em seguida; um toque curto sem arrasto conta como clique normal.
+  const swipeStart = useRef<{ x: number; y: number } | null>(null)
+  const swiped = useRef(false)
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (items.length < 2) return
+    swipeStart.current = { x: e.clientX, y: e.clientY }
+    swiped.current = false
+  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    const start = swipeStart.current
+    if (!start || swiped.current) return
+    const dx = e.clientX - start.x
+    const dy = e.clientY - start.y
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) swiped.current = true
+  }
+  const onPointerUp = (e: React.PointerEvent) => {
+    const start = swipeStart.current
+    swipeStart.current = null
+    if (!start) return
+    const dx = e.clientX - start.x
+    const dy = e.clientY - start.y
+    if (Math.abs(dx) >= SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+      if (dx < 0) goNext()
+      else goPrev()
+    }
+  }
+  const swipeHandlers = { onPointerDown, onPointerMove, onPointerUp }
+
   const active = items[activeIndex] ?? items[0]
 
   if (!active) return null
+
+  if (carouselStyle === 'cards') {
+    return (
+      <div className="sunset-book-row">
+        <div className="sunset-slide-wrap">
+          {/* Card inspirado em Uiverse.io by 05akalan57 (halo borrado no
+              canto + rodapé), recolorido pro tema — aqui a faixa inteira
+              (todos os itens) desliza, mostrando um card por vez, 3s cada. */}
+          <div className="sunset-slide-carousel" {...swipeHandlers}>
+            <div className="sunset-slide-track" style={{ transform: `translateX(-${activeIndex * 100}%)` }}>
+              {items.map((it) => (
+                <div
+                  key={it.key}
+                  className="sunset-slide-card"
+                  role={it.onClick ? 'button' : undefined}
+                  tabIndex={it.onClick ? 0 : undefined}
+                  aria-label={it.label}
+                  onClick={() => {
+                    if (swiped.current) {
+                      swiped.current = false
+                      return
+                    }
+                    it.onClick?.()
+                  }}
+                >
+                  <div className="sunset-slide-card-halo" />
+                  <div className="sunset-slide-card-inner" style={{ backgroundImage: `url(${it.image})` }}>
+                    <div className="sunset-slide-card-footer">
+                      <p>{it.label}</p>
+                      <p>{it.subtitle}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {items.length > 1 && (
+            <div className="sunset-slide-dots">
+              {items.map((it, i) => (
+                <span key={it.key} className={`sunset-slide-dot ${i === activeIndex ? 'sunset-slide-dot-active' : ''}`} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="sunset-book-row">
@@ -62,14 +158,22 @@ function BannerCarousel() {
           branca com brilho passando de raspão (era só no :hover; aqui
           é loop contínuo) e rodapé título+seta. O carrossel continua
           sendo UM card só que troca de conteúdo sozinho (activeIndex
-          acima) — clique leva pro item que está em tela no momento. */}
+          acima) — clique leva pro item que está em tela no momento, e
+          arrastar pra esquerda/direita também navega manualmente. */}
       <div
         key={active.key}
         className="sunset-jcard"
         role={active.onClick ? 'button' : undefined}
         tabIndex={active.onClick ? 0 : undefined}
-        onClick={active.onClick}
+        onClick={() => {
+          if (swiped.current) {
+            swiped.current = false
+            return
+          }
+          active.onClick?.()
+        }}
         aria-label={active.label}
+        {...swipeHandlers}
       >
         <div className="sunset-jcard-glow" />
         <div className="sunset-jcard-inner">

@@ -33,6 +33,7 @@ import type {
   BgFit,
   BgMode,
   BgSettings,
+  CarouselStyle,
   LandingBadge,
   Promotion,
   Category,
@@ -2168,10 +2169,12 @@ async function getSiteSettings(): Promise<{
   badges_layout: BadgesLayout
   badges_gap: number
   badges_offset_y: number
+  carousel_style: CarouselStyle
 }> {
   const db = loadDb()
   return {
     hero_image_url: db.heroImageUrl ?? null,
+    carousel_style: db.carouselStyle ?? 'atual',
     bg_mode: db.bgMode ?? 'svg1',
     bg_image_url: db.bgImageUrl ?? null,
     bg_scale: db.bgScale ?? 1,
@@ -2227,6 +2230,13 @@ async function updateBadges(settings: BadgesSettings): Promise<BadgesSettings> {
   db.badgesOffsetY = settings.badges_offset_y
   saveDb(db)
   return settings
+}
+
+async function updateCarouselStyle(style: CarouselStyle): Promise<{ carousel_style: CarouselStyle }> {
+  const db = loadDb()
+  db.carouselStyle = style
+  saveDb(db)
+  return { carousel_style: style }
 }
 
 const DEFAULT_STORE_HOURS: StoreHourDay[] = Array.from({ length: 7 }, (_, day_of_week) => ({
@@ -2697,7 +2707,7 @@ export const localApi = {
     },
     orders: { list: adminListOrders, updateStatus: adminUpdateStatus, notifyReady: async () => {} },
     shippingSettings: { get: getShippingSettings, update: updateShippingSettings },
-    siteSettings: { updateHeroImage, updateBackground, updateSmoke: updateSmokeSettings, updateBadges },
+    siteSettings: { updateHeroImage, updateBackground, updateSmoke: updateSmokeSettings, updateBadges, updateCarouselStyle },
     storeStatus: { get: getStoreStatus, setHours: setStoreHours, setManualStatus: setStoreManualStatus },
     financeiro: { get: financeiro, timeseries: financeiroTimeseries },
     crm: { customers: adminCrmCustomers },

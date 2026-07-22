@@ -9,6 +9,7 @@ import type {
   BadgesSettings,
   BgSettings,
   CampanhaOrientation,
+  CarouselStyle,
   Category,
   Coupon,
   CouponGrant,
@@ -656,6 +657,8 @@ const remoteApi = {
           p_gap: settings.badges_gap,
           p_offset_y: settings.badges_offset_y,
         }),
+      updateCarouselStyle: (style: CarouselStyle) =>
+        rpc<{ carousel_style: CarouselStyle }>('admin_update_carousel_style', { p_token: adminToken(), p_style: style }),
     },
     storeStatus: {
       get: () => supabasePublicApi.storeStatus.get(),

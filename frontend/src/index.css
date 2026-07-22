@@ -447,6 +447,9 @@ a {
   box-shadow: 0 20px 45px -12px rgba(0, 0, 0, 0.65);
   cursor: pointer;
   overflow: hidden;
+  /* Deixa o gesto vertical (rolagem da página) passar direto pro browser
+     e só captura o horizontal via pointer events (swipe manual). */
+  touch-action: pan-y;
 }
 .sunset-jcard-glow {
   position: absolute;
@@ -550,6 +553,105 @@ a {
     transform: translateX(4px);
     opacity: 1;
   }
+}
+
+/* Estilo alternativo do carrossel da landing (escolhido em
+   /admin/promocoes): card inspirado em Uiverse.io by 05akalan57 (base
+   escura + halo borrado no canto), recolorido pro tema. A faixa inteira
+   (todos os cards) desliza pra esquerda — um card por vez em tela, 3s
+   cada — e também aceita arrastar manualmente (swipe via pointer events
+   em Landing.tsx), em loop pros dois lados. */
+.sunset-slide-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+.sunset-slide-carousel {
+  position: relative;
+  width: min(340px, calc(100vw - 3rem));
+  aspect-ratio: 2 / 1;
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 20px 45px -12px rgba(0, 0, 0, 0.65);
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.sunset-slide-track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.5s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.sunset-slide-card {
+  position: relative;
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  background-color: #1a1611;
+  overflow: hidden;
+}
+.sunset-slide-card-halo {
+  position: absolute;
+  z-index: 0;
+  width: 65%;
+  height: 70%;
+  left: -25%;
+  top: -25%;
+  background: var(--color-son-gold);
+  filter: blur(50px);
+  opacity: 0.5;
+}
+.sunset-slide-card-inner {
+  position: absolute;
+  z-index: 1;
+  inset: 3px;
+  border-radius: calc(1rem - 3px);
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.sunset-slide-card-inner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(8, 25, 18, 0.88) 0%, rgba(8, 25, 18, 0.2) 45%, transparent 72%);
+}
+.sunset-slide-card-footer {
+  position: relative;
+  z-index: 1;
+  padding: 0.75rem 0.9rem;
+  color: #fff;
+}
+.sunset-slide-card-footer p:first-child {
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+.sunset-slide-card-footer p:last-child {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.65);
+  margin-top: 1px;
+}
+.sunset-slide-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.sunset-slide-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.25);
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+.sunset-slide-dot-active {
+  width: 16px;
+  background: var(--color-son-gold);
 }
 
 /* From Uiverse.io by devkatyall — cores trocadas pra paleta sunset (era

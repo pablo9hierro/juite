@@ -6,7 +6,7 @@ import ProductDiscountList from '../../components/admin/ProductDiscountList'
 import ToggleSwitch from '../../components/admin/ToggleSwitch'
 import { useConfirmDialog } from '../../components/admin/useConfirmDialog'
 import { api, ApiError } from '../../lib/api'
-import type { Category, Product, ProductDiscount, Promotion } from '../../lib/types'
+import type { CarouselStyle, Category, Product, ProductDiscount, Promotion } from '../../lib/types'
 
 const MAX_BANNER_MB = 10
 
@@ -107,6 +107,71 @@ function HeroImageCard() {
         arquivo: {MAX_BANNER_MB}MB.
       </p>
       {error && <p className="error-msg mt-1">{error}</p>}
+    </Card>
+  )
+}
+
+// Estilo do carrossel de banners da landing — 'atual' (um card só, troca
+// de conteúdo sozinho) ou 'cards' (cada card fica 3s na tela e desliza pra
+// esquerda pro próximo). Nos dois o cliente também pode arrastar
+// manualmente pra esquerda/direita, em loop.
+function CarouselStyleCard() {
+  const [style, setStyle] = useState<CarouselStyle>('atual')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    api.siteSettings.get().then((s) => setStyle(s.carousel_style))
+  }, [])
+
+  const choose = async (next: CarouselStyle) => {
+    if (next === style || saving) return
+    setError(null)
+    setSaving(true)
+    const previous = style
+    setStyle(next)
+    try {
+      await api.admin.siteSettings.updateCarouselStyle(next)
+    } catch (err) {
+      setStyle(previous)
+      setError(err instanceof ApiError ? err.message : 'Não foi possível salvar o estilo do carrossel.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card className="p-5 mb-6">
+      <p className="font-bold text-white mb-1">Estilo do carrossel da landing</p>
+      <p className="text-xs text-son-silver-dim mb-3">
+        Escolha como o carrossel de banners/promoções se comporta na página inicial. Nos dois formatos o cliente também pode
+        arrastar pra esquerda ou direita pra navegar manualmente, em loop.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => choose('atual')}
+          disabled={saving}
+          className={`text-left rounded-xl border p-3 transition-colors ${
+            style === 'atual' ? 'border-son-gold bg-son-gold/10' : 'border-white/10 bg-son-surface-light hover:border-white/20'
+          }`}
+        >
+          <p className="text-sm font-semibold text-white mb-1">Atual</p>
+          <p className="text-xs text-son-silver-dim">Um card só, troca de conteúdo sozinho a cada 4,5s.</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => choose('cards')}
+          disabled={saving}
+          className={`text-left rounded-xl border p-3 transition-colors ${
+            style === 'cards' ? 'border-son-gold bg-son-gold/10' : 'border-white/10 bg-son-surface-light hover:border-white/20'
+          }`}
+        >
+          <p className="text-sm font-semibold text-white mb-1">Cards deslizantes</p>
+          <p className="text-xs text-son-silver-dim">Cada card fica 3s na tela e desliza pra esquerda pro próximo.</p>
+        </button>
+      </div>
+      {error && <p className="error-msg mt-2">{error}</p>}
     </Card>
   )
 }
@@ -266,6 +331,7 @@ export default function AdminPromocoes() {
   return (
     <div>
       <HeroImageCard />
+      <CarouselStyleCard />
 
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-black">Promoções</h1>

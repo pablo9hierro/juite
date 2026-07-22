@@ -1,6 +1,6 @@
 import { ApiError } from './apiError'
 import { supabase } from './supabaseClient'
-import type { BadgesLayout, BgFit, BgMode, Category, ClaimedCoupon, Coupon, Customer, CustomerAuthResult, CustomerCoupons, DeliveryPosition, LandingBadge, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
+import type { BadgesLayout, BgFit, BgMode, CarouselStyle, Category, ClaimedCoupon, Coupon, Customer, CustomerAuthResult, CustomerCoupons, DeliveryPosition, LandingBadge, Order, Product, Promotion, ShippingEstimate, ShippingSettings, StoreHourDay, StoreStatus } from './types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new ApiError(400, result.error.message)
@@ -55,11 +55,12 @@ export const supabasePublicApi = {
       const { data } = await supabase
         .from('site_settings')
         .select(
-          'hero_image_url, bg_mode, bg_image_url, bg_scale, bg_x, bg_y, bg_fit, smoke_speed, smoke_count, smoke_width, smoke_height, badges, badges_layout, badges_gap, badges_offset_y'
+          'hero_image_url, bg_mode, bg_image_url, bg_scale, bg_x, bg_y, bg_fit, smoke_speed, smoke_count, smoke_width, smoke_height, badges, badges_layout, badges_gap, badges_offset_y, carousel_style'
         )
         .single()
       return {
         hero_image_url: (data?.hero_image_url as string | null) ?? null,
+        carousel_style: (data?.carousel_style as CarouselStyle | undefined) ?? 'atual',
         bg_mode: (data?.bg_mode as BgMode | undefined) ?? 'svg1',
         bg_image_url: (data?.bg_image_url as string | null) ?? null,
         bg_scale: (data?.bg_scale as number | undefined) ?? 1,
