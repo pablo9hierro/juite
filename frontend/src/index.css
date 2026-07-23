@@ -2358,24 +2358,11 @@ a {
   user-select: none;
   overflow: hidden;
 
-  filter: drop-shadow(0 2px 1px #00000025) drop-shadow(0 4px 3px #00000025) drop-shadow(0 10px 9px #00000025)
-    drop-shadow(0 20px 20px #00000025) drop-shadow(0 40px 40px #00000025);
-  animation: sunset-t2-hover 3s ease infinite;
-}
-@keyframes sunset-t2-hover {
-  50% {
-    filter: drop-shadow(0 4px 3px #00000015) drop-shadow(0 6px 6px #00000015) drop-shadow(0 16px 14px #00000015)
-      drop-shadow(0 30px 28px #00000015) drop-shadow(0 60px 60px #00000015);
-    transform: translateY(-7px) scale(1.02);
-  }
-}
-/* Card fora de foco no carrossel — mesma aparência holográfica, zero
-   animação (nem a flutuação do card, nem o brilho deslizando por cima). */
-.sunset-t2-card-static {
-  animation: none;
-}
-.sunset-t2-card-static .sunset-t2-holographic::after {
-  animation: none;
+  /* Era animado (flutuação + 5 camadas de drop-shadow trocando a cada
+     frame) -- drop-shadow empilhado é caro de recompor, e MUITOS cards
+     assim no carrossel ao mesmo tempo pesava demais pra renderizar
+     (reportado). Sombra única, estática. */
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
 }
 .sunset-t2-filter {
   position: absolute;
@@ -2440,6 +2427,10 @@ a {
     repeating-radial-gradient(circle at 30% 80%, #fff, var(--color-son-gold) 48px, #eeeeee 150px);
   mix-blend-mode: color-burn;
 }
+/* Era animado (faixa deslizando de cima pra baixo em loop, via
+   background-position) -- mix-blend-mode recompondo a cada frame pesava
+   demais junto com os outros cards do carrossel (reportado). Faixa
+   parada -- ainda contribui pro efeito holográfico, só sem o motion. */
 .sunset-t2-holographic::after {
   content: '';
   position: absolute;
@@ -2447,16 +2438,9 @@ a {
   border-radius: inherit;
   background: linear-gradient(to bottom, #f905, var(--color-son-orange), var(--color-son-gold), #f905);
   mix-blend-mode: difference;
-
-  animation: sunset-t2-bg-pos 3s ease-in-out infinite alternate;
   background-position: 0 0;
   background-size: 100% 300%;
   background-repeat: repeat;
-}
-@keyframes sunset-t2-bg-pos {
-  to {
-    background-position: 0 500px;
-  }
 }
 .sunset-t2-header {
   position: relative;
@@ -2549,7 +2533,7 @@ a {
    que ele tem quando renderizado sozinho no carrossel. */
 .sunset-cs-wrapper {
   --cs-width: 190px;
-  --cs-paper-height: 320px;
+  --cs-paper-height: 220px;
   --cs-cut-size: 5px;
   --cs-perspective: 200px;
   --cs-paper-width-multiplier: 0.95;
@@ -2630,27 +2614,28 @@ a {
 }
 .sunset-cs-sec {
   height: 100%;
-  transform: translateY(calc(-1 * var(--cs-paper-height) + 100px));
+  transform: translateY(calc(-1 * var(--cs-paper-height) + 70px));
 
-  /* loop único cobrindo os 3 estados da referência (peek parado, hover
-     de reveal parcial, clique de saída total) */
-  animation: sunset-cs-cycle 7s ease-in-out infinite;
+  /* Loop parado no "espiando"/reveal parcial só -- a saída completa
+     (translateY(0)) não é mais um loop nem uma ação de toque: agora só
+     acontece arrastando o papel pra baixo até o fim (ver
+     onPointerDown/Move/Up em CouponSlot.tsx), que assume o controle via
+     transform inline e desliga esta animação enquanto isso. Duração
+     reduzida à metade (era 7s). */
+  animation: sunset-cs-cycle 3.5s ease-in-out infinite;
 }
-/* Loop parado no toque de "espiando"/reveal parcial só -- a saída
-   completa (translateY(0)) não é mais um loop, é a animação de tela
-   cheia que dispara no clique (ver CuponsCliente.tsx). */
 @keyframes sunset-cs-cycle {
   0%,
   20% {
-    transform: translateY(calc(-1 * var(--cs-paper-height) + 100px));
+    transform: translateY(calc(-1 * var(--cs-paper-height) + 70px));
   }
   45%,
   60% {
-    transform: translateY(calc(-1 * var(--cs-paper-height) + 192px));
+    transform: translateY(calc(-1 * var(--cs-paper-height) + 130px));
   }
   85%,
   100% {
-    transform: translateY(calc(-1 * var(--cs-paper-height) + 100px));
+    transform: translateY(calc(-1 * var(--cs-paper-height) + 70px));
   }
 }
 /* Variante 'sm' (card decorativo da landing, sem espaço reservado ao
@@ -2659,6 +2644,11 @@ a {
    antiga desse card), nunca chega a sobrepor o texto ao lado. */
 .sunset-cs-sec-sm {
   animation-name: sunset-cs-cycle-sm;
+  /* Card decorativo da landing não foi pedido pra ficar mais rápido —
+     só o botão "Resgatar cupom" (.sunset-cs-sec base, 3.5s); sem isso
+     herdaria a duração reduzida do shorthand `animation` da regra
+     base junto com o resto das propriedades. */
+  animation-duration: 7s;
 }
 @keyframes sunset-cs-cycle-sm {
   0%,

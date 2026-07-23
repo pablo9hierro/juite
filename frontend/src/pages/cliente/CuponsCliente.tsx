@@ -142,10 +142,10 @@ export default function CuponsCliente() {
   // na hora da compra, ver CouponHistoryTicket.tsx).
   const items = data
     ? tab === 'historico'
-      ? data.history.map((h) => ({ key: h.order_id, node: (active: boolean) => <CouponHistoryTicket entry={h} animated={active} /> }))
+      ? data.history.map((h) => ({ key: h.order_id, node: <CouponHistoryTicket entry={h} /> }))
       : (tab === 'ativos' ? data.active : data.inactive).map((c) => ({
           key: c.grant_id,
-          node: (active: boolean) => <CouponTicket coupon={c} animated={active} />,
+          node: <CouponTicket coupon={c} />,
         }))
     : []
   const emptyMessage =
@@ -160,22 +160,22 @@ export default function CuponsCliente() {
 
       {/* Só aparece quando o cliente TEM cupom exclusivo pra resgatar --
           nada de botão morto sem função nenhuma. Fica entre o navbar e
-          as abas (ver print de referência), centralizado. pb grande de
-          propósito: .sunset-cs-paper-wrapper é sempre 320px de altura
-          (top:2px + height:320px), independente do estado da animação
+          as abas (ver print de referência), centralizado. pb de
+          propósito: .sunset-cs-paper-wrapper é sempre 220px de altura
+          (top:2px + height:220px), independente do estado da animação
           -- só o conteúdo DENTRO dela desliza; a caixa em si nunca
           encolhe. Sem esse respiro, ela sobrepõe as abas logo abaixo. */}
       {hasClaimable && (
-        <div className="flex justify-center px-5 sm:px-10" style={{ paddingBottom: 270 }}>
+        <div className="flex justify-center px-5 sm:px-10" style={{ paddingBottom: 170 }}>
           <CouponSlot
             size="lg"
-            onClick={handleSlotClick}
+            onReveal={handleSlotClick}
             disabled={revealStage !== 'idle'}
             ariaLabel="Resgatar cupom"
             header="CUPOM"
-            bodyLines={['Cupom Exclusivo', 'Toque pra resgatar', 'Disponível agora']}
-            footerLabel="Ação"
-            footerValue="Resgatar"
+            bodyLines={['Cupom Exclusivo', 'Disponível agora']}
+            footerLabel=""
+            footerValue="Arraste o cupom para baixo para resgatar"
           />
         </div>
       )}
@@ -226,7 +226,7 @@ export default function CuponsCliente() {
                   }}
                   className={`flex-shrink-0 snap-center sunset-coupon-card ${i === activeCardIndex ? 'sunset-coupon-card-active' : ''} ${tab === 'inativos' ? 'grayscale' : ''}`}
                 >
-                  {item.node(i === activeCardIndex)}
+                  {item.node}
                 </li>
               ))}
             </ul>
@@ -254,7 +254,7 @@ export default function CuponsCliente() {
                 exit={{ scale: 0.2, opacity: 0, x: -130, y: 280 }}
                 transition={{ type: 'spring', stiffness: 240, damping: 22 }}
               >
-                <CouponTicket coupon={previewCoupon} animated />
+                <CouponTicket coupon={previewCoupon} />
               </motion.div>
             )}
 

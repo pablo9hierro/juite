@@ -15,18 +15,11 @@ export default function TicketCardVisual({
   bodyLines,
   footerLabel,
   footerValue,
-  animated = true,
 }: {
   header: ReactNode
   bodyLines: ReactNode[]
   footerLabel: string
   footerValue: string
-  // Flutuação + brilho holográfico deslizando são CSS animations sempre
-  // rodando — várias ao mesmo tempo (um card por item do carrossel) foi
-  // reportado como pesado demais pra renderizar. Só o card em foco
-  // (centralizado no scroll) anima; os outros ficam parados (ainda com
-  // a aparência holográfica, só sem as animações).
-  animated?: boolean
 }) {
   // useId() em vez de um id fixo — a referência usa <filter id="bump">
   // fixo, mas com vários tickets na mesma página (carrossel) isso
@@ -34,7 +27,7 @@ export default function TicketCardVisual({
   // "original" do id for desmontado antes dos outros).
   const filterId = useId()
   return (
-    <div className={`sunset-t2-card ${animated ? '' : 'sunset-t2-card-static'}`}>
+    <div className="sunset-t2-card">
       <div className="sunset-t2-header">
         {header}
         <div className="sunset-t2-symbol">✁</div>
