@@ -2539,6 +2539,11 @@ a {
   --cs-paper-width-multiplier: 0.95;
 
   position: relative;
+  /* O papel puxado no arrasto pode se estender bem além desses 60px
+     (ver .sunset-cs-paper-wrapper) e agora tem permissão de sobrepor
+     as abas logo abaixo -- z-index garante que ele desenha por cima
+     em vez de ficar por baixo do conteúdo seguinte. */
+  z-index: 5;
   display: grid;
   place-items: center;
 

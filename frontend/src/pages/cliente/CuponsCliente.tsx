@@ -125,6 +125,10 @@ export default function CuponsCliente() {
         setTab('ativos')
         setRevealStage('idle')
         setPreviewCoupon(null)
+        // Esconde o botão na hora (sem esperar o round-trip abaixo) --
+        // some assim que a modal fecha; se ainda sobrar outro cupom pra
+        // resgatar, checkHasClaimable() traz ele de volta em seguida.
+        setHasClaimable(false)
         checkHasClaimable()
       })
       .catch((err) => {
@@ -160,13 +164,13 @@ export default function CuponsCliente() {
 
       {/* Só aparece quando o cliente TEM cupom exclusivo pra resgatar --
           nada de botão morto sem função nenhuma. Fica entre o navbar e
-          as abas (ver print de referência), centralizado. pb de
-          propósito: .sunset-cs-paper-wrapper é sempre 220px de altura
-          (top:2px + height:220px), independente do estado da animação
-          -- só o conteúdo DENTRO dela desliza; a caixa em si nunca
-          encolhe. Sem esse respiro, ela sobrepõe as abas logo abaixo. */}
+          as abas (ver print de referência), centralizado. pb reduzido
+          de propósito pra ficar rente às abas -- o card puxado durante
+          o arrasto pode sim sobrepor as abas logo abaixo, faz parte da
+          animação (z-index do .sunset-cs-wrapper garante que ele
+          desenha por cima). */}
       {hasClaimable && (
-        <div className="flex justify-center px-5 sm:px-10" style={{ paddingBottom: 170 }}>
+        <div className="flex justify-center px-5 sm:px-10" style={{ paddingBottom: 42 }}>
           <CouponSlot
             size="lg"
             onReveal={handleSlotClick}
